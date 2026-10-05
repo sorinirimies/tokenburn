@@ -148,8 +148,10 @@ mod tests {
 
     #[test]
     fn adjust_steps_sliders_within_bounds() {
-        let mut o = Options::default();
-        o.cursor = OptionRow::RefreshSecs;
+        let mut o = Options {
+            cursor: OptionRow::RefreshSecs,
+            ..Options::default()
+        };
         o.adjust(1);
         assert_eq!(o.refresh_interval(), Duration::from_secs(20));
         for _ in 0..100 {
@@ -169,8 +171,10 @@ mod tests {
 
     #[test]
     fn adjust_on_a_checkbox_toggles_it() {
-        let mut o = Options::default();
-        o.cursor = OptionRow::ShowPie;
+        let mut o = Options {
+            cursor: OptionRow::ShowPie,
+            ..Options::default()
+        };
         o.adjust(1);
         assert!(!o.show_pie);
     }
