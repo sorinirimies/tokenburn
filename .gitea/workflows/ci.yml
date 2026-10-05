@@ -123,6 +123,77 @@ jobs:
       - name: cargo test --workspace
         run: cargo test --workspace --all-features --all-targets
 
+  # ── 3b. Static musl build (CLI / TUI / web) ──────────────────────────────────
+  musl:
+    name: musl (static)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends musl-tools
+
+      - name: Install Rust stable + musl target
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          . "$HOME/.cargo/env"
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build static binaries
+        run: cargo build --release --target x86_64-unknown-linux-musl -p tokenburn -p tokenburn-tui -p tokenburn-web
+
+      - name: Verify they are statically linked and run
+        run: |
+          for b in tokenburn tokenburn-tui tokenburn-web; do
+            f=target/x86_64-unknown-linux-musl/release/$b
+            if ldd "$f" 2>&1 | grep -qv -e 'not a dynamic' -e 'statically linked'; then
+              echo "❌ $f is dynamically linked"; ldd "$f"; exit 1
+            fi
+            "$f" --version
+          done
+
+  # ── 3c. Live web dashboard smoke test ────────────────────────────────────────
+  web-smoke:
+    name: web (live smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Topcoat CLI
+        run: cargo install topcoat-cli --locked
+
+      - name: Bundle web runtime assets
+        run: bash scripts/ci/bundle_web.sh dist/web-assets
+
+      - name: Build web (release)
+        run: cargo build --release -p tokenburn-web
+
+      # Start the real binary and check the live mode really comes up.
+      - name: Smoke test the live dashboard
+        run: |
+          TOKENBURN_WEB_ASSETS=dist/web-assets target/release/tokenburn-web --port 3999 --no-open > web.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3999/api/health >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:3999/api/health
+          curl -sf http://127.0.0.1:3999/ | grep -q 'topcoat::shard::start' || { echo "live mode not active"; cat web.log; kill $PID; exit 1; }
+          curl -sf http://127.0.0.1:3999/api/report >/dev/null
+          kill $PID
+          grep -q '(live)' web.log || { cat web.log; exit 1; }
+
   # ── 4. Build (dev) ───────────────────────────────────────────────────────────
   build:
     name: build

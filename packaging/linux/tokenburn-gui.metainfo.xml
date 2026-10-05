@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>tokenburn-gui</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>TokenBurn</name>
+  <summary>Local AI token and cost usage for pi and Zed</summary>
+  <description>
+    <p>TokenBurn reads the session logs that pi and Zed already keep on disk and shows how many tokens you burned and what it cost — per month, day or hour, per tool and per project. Everything stays local: there are no network calls.</p>
+  </description>
+  <launchable type="desktop-id">tokenburn-gui.desktop</launchable>
+  <url type="homepage">https://github.com/sorinirimies/tokenburn</url>
+  <provides><binary>tokenburn-gui</binary></provides>
+  <categories><category>Development</category><category>Utility</category></categories>
+  <content_rating type="oars-1.1"/>
+</component>

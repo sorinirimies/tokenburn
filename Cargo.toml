@@ -36,7 +36,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # CLI (clap)
 clap         = { version = "4", features = ["derive", "env"] }
 
-# GUI (Iced)
+# GUI (Iced). Default features are kept on purpose: `x11` + `wayland` (both
+# dlopen'ed at runtime, so one Linux binary runs on either session type and on
+# any distro) and `wgpu` + `tiny-skia` (GPU rendering with a software fallback).
 iced         = { version = "0.14", features = ["advanced", "canvas"] }
 
 # TUI (Ratatui)

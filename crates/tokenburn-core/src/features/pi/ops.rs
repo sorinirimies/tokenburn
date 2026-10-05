@@ -9,9 +9,28 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::time::parse_ts;
 
-/// `~/.pi/agent/sessions`, if a home directory can be determined.
+/// Where pi stores its sessions, honouring pi's own overrides.
+///
+/// Resolution order (first hit wins):
+///
+/// 1. `TOKENBURN_PI_SESSIONS` — tokenburn-specific escape hatch
+/// 2. `PI_CODING_AGENT_SESSION_DIR` — pi's session-directory override
+/// 3. `$PI_CODING_AGENT_DIR/sessions` — pi's agent-directory override
+/// 4. `~/.pi/agent/sessions` (`%USERPROFILE%\.pi\agent\sessions` on Windows)
 pub fn sessions_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".pi").join("agent").join("sessions"))
+    resolve_sessions_dir(|k| std::env::var_os(k), dirs::home_dir())
+}
+
+/// [`sessions_dir`] with the environment and home directory injected (for tests).
+pub(crate) fn resolve_sessions_dir(
+    env: impl Fn(&str) -> Option<std::ffi::OsString>,
+    home: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let non_empty = |k: &str| env(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    non_empty("TOKENBURN_PI_SESSIONS")
+        .or_else(|| non_empty("PI_CODING_AGENT_SESSION_DIR"))
+        .or_else(|| non_empty("PI_CODING_AGENT_DIR").map(|d| d.join("sessions")))
+        .or_else(|| home.map(|h| h.join(".pi").join("agent").join("sessions")))
 }
 
 /// Collect pi usage rows from the default sessions directory.
@@ -123,6 +142,57 @@ mod tests {
         assert!(parse_line(r#"{"message":{"role":"user"}}"#, "p", "i").is_none());
         assert!(parse_line(r#"{"message":{"usage":{"input":1}}}"#, "p", "i").is_none());
         assert!(parse_line("not json", "p", "i").is_none());
+    }
+
+    fn env_of<'a>(
+        pairs: &'a [(&'a str, &'a str)],
+    ) -> impl Fn(&str) -> Option<std::ffi::OsString> + 'a {
+        move |k| {
+            pairs
+                .iter()
+                .find(|(n, _)| *n == k)
+                .map(|(_, v)| std::ffi::OsString::from(*v))
+        }
+    }
+
+    #[test]
+    fn sessions_dir_defaults_to_home() {
+        let d = resolve_sessions_dir(env_of(&[]), Some(PathBuf::from("/home/u"))).unwrap();
+        assert_eq!(d, PathBuf::from("/home/u/.pi/agent/sessions"));
+    }
+
+    #[test]
+    fn sessions_dir_honours_pi_overrides_in_order() {
+        let home = Some(PathBuf::from("/home/u"));
+        let d = resolve_sessions_dir(env_of(&[("PI_CODING_AGENT_DIR", "/agent")]), home.clone());
+        assert_eq!(d.unwrap(), PathBuf::from("/agent/sessions"));
+
+        let d = resolve_sessions_dir(
+            env_of(&[
+                ("PI_CODING_AGENT_DIR", "/agent"),
+                ("PI_CODING_AGENT_SESSION_DIR", "/sess"),
+            ]),
+            home.clone(),
+        );
+        assert_eq!(d.unwrap(), PathBuf::from("/sess"));
+
+        let d = resolve_sessions_dir(
+            env_of(&[
+                ("PI_CODING_AGENT_SESSION_DIR", "/sess"),
+                ("TOKENBURN_PI_SESSIONS", "/mine"),
+            ]),
+            home,
+        );
+        assert_eq!(d.unwrap(), PathBuf::from("/mine"));
+    }
+
+    #[test]
+    fn empty_override_is_ignored() {
+        let d = resolve_sessions_dir(
+            env_of(&[("TOKENBURN_PI_SESSIONS", "")]),
+            Some(PathBuf::from("/h")),
+        );
+        assert_eq!(d.unwrap(), PathBuf::from("/h/.pi/agent/sessions"));
     }
 
     #[test]

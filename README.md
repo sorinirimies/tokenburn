@@ -30,13 +30,52 @@ One Rust workspace, four front-ends sharing one core:
 
 No `python3` or `zstd` binary needed (sqlite and zstd are bundled).
 
+## Platform support
+
+TokenBurn runs on **macOS, Linux and Windows**. The log locations are found per platform, and every one can be overridden with an environment variable:
+
+| Source | macOS | Linux | Windows | Override |
+|--------|-------|-------|---------|----------|
+| pi sessions | `~/.pi/agent/sessions` | `~/.pi/agent/sessions` | `%USERPROFILE%\.pi\agent\sessions` | `TOKENBURN_PI_SESSIONS`, or pi's own `PI_CODING_AGENT_SESSION_DIR` / `PI_CODING_AGENT_DIR` |
+| Zed threads | `~/Library/Application Support/Zed/threads/threads.db` | `$XDG_DATA_HOME/zed/…` (default `~/.local/share/zed/…`), Flatpak `~/.var/app/dev.zed.Zed/…` | `%LOCALAPPDATA%\Zed\threads\threads.db` | `TOKENBURN_ZED_DB` |
+
+| Binary | macOS (arm64 + x86_64) | Linux (x86_64 + aarch64) | Windows (x86_64) |
+|--------|:---:|:---:|:---:|
+| `tokenburn` (CLI) | ✅ | ✅ | ✅ |
+| `tokenburn-tui` | ✅ | ✅ | ✅ |
+| `tokenburn-web` | ✅ | ✅ | ✅ |
+| `tokenburn-gui` | ✅ `.app` in a universal DMG | ✅ X11 **and** Wayland | ✅ |
+
+### Linux: any distro, X11 and Wayland
+
+- **One GUI binary serves both X11 and Wayland.** It links only libc/libm; X11, Wayland, xkbcommon and the GPU libraries are loaded at runtime. It picks Wayland when `WAYLAND_DISPLAY` is set and X11 otherwise. Force X11 under a Wayland session (XWayland) with `env -u WAYLAND_DISPLAY tokenburn-gui`.
+- **Rendering falls back to software** when there is no usable GPU/Vulkan (VMs, remote desktops). Force it with `ICED_BACKEND=tiny-skia tokenburn-gui`.
+- The window sets its Wayland `app_id` / X11 `WM_CLASS` to `tokenburn-gui`, matching the installed `tokenburn-gui.desktop`, so panels show the right icon.
+- **glibc builds** (`*-unknown-linux-gnu`, AppImage, `.deb`, `.rpm`) are linked on Ubuntu 22.04, so they need glibc ≥ 2.35 (Debian 12+, Ubuntu 22.04+, Fedora, Arch, openSUSE, …).
+- **Fully static builds** (`x86_64-unknown-linux-musl`: CLI, TUI and web) have no glibc requirement at all — they run on Alpine, old enterprise distros, containers, NixOS, …
+- The GUI needs `libxkbcommon` at runtime; a Wayland or X11 session library and fonts are expected as on any desktop Linux.
+
 ## Installation
+
+### Prebuilt (GitHub / Gitea releases)
+
+| Platform | Artifacts |
+|----------|-----------|
+| macOS | `tokenburn-<v>-macos.dmg` — `TokenBurn.app` + `Command Line Tools/` (CLI, TUI, web) |
+| Windows | `tokenburn-<v>-windows-x86_64-setup.exe` (installer, optional PATH entry) or `…-x86_64-pc-windows-msvc.zip` |
+| Linux | `.deb` / `.rpm` per app, `tokenburn-{tui,gui}-<v>-<arch>.AppImage`, and portable `.tar.gz` for `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` and static `x86_64-unknown-linux-musl` |
+
+Every portable archive holds all binaries built for that target, the web runtime in `assets/` (so `tokenburn-web` runs live), the README and the licence, plus a `.sha256`.
+
+macOS note: the app is ad-hoc signed, not notarised — right-click → Open the first time, or `xattr -dr com.apple.quarantine TokenBurn.app`.
+
+### From crates.io
 
 ```sh
 cargo install tokenburn        # CLI
 cargo install tokenburn-tui    # Terminal UI
 cargo install tokenburn-gui    # Desktop GUI
-cargo install tokenburn-web    # Web dashboard
+cargo install tokenburn-web    # Web dashboard (static mode — see below for live mode)
 ```
 
 ## CLI usage
@@ -64,7 +103,7 @@ Binds `127.0.0.1` by default; `--host 0.0.0.0` exposes it on the network (there 
 
 The page is **live**: the filters are [Topcoat signals](https://github.com/tokio-rs/topcoat), changing one re-renders the dashboard without a page reload, and while the page is open the data refreshes itself every 5 s over a WebSocket (the footer shows `● live` and the last update time).
 
-The live mode needs Topcoat's browser runtime bundle (`cargo install topcoat-cli`, then `just run-web`, or `topcoat asset bundle` and ship `assets/` beside the binary). Without a bundle `tokenburn-web` still works and serves a static dashboard (GET-form filters, reload every 60 s).
+The live mode needs Topcoat's browser runtime bundle. Release archives, the DMG, the Windows installer and the `.deb`/`.rpm` already include it. When you build yourself, run `just run-web` (needs `cargo install topcoat-cli`), or run `topcoat asset bundle` and point `TOKENBURN_WEB_ASSETS` at the result. The bundle is searched in this order: `$TOKENBURN_WEB_ASSETS`, `<exe dir>/assets`, `<exe dir>/../share/tokenburn-web/assets`, `/usr/share/tokenburn-web/assets`, `/usr/local/share/tokenburn-web/assets`. Without a bundle `tokenburn-web` still works and serves a static dashboard (GET-form filters, reload every 60 s), which is what `cargo install tokenburn-web` gives you.
 
 | URL | Description |
 |-----|-------------|

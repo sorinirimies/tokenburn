@@ -1,13 +1,25 @@
 #!/usr/bin/env nu
 # ──────────────────────────────────────────────────────────────────────────────
-# TokenBurn — Linux packaging: .deb, .rpm, AppImage
+# TokenBurn — Linux packaging: .deb and .rpm for CLI, TUI, GUI and web
 # ──────────────────────────────────────────────────────────────────────────────
 # Usage:
 #   nu scripts/ci/package_linux.nu <version> <target>
 #
-# Requires: dpkg-deb (for .deb), alien (for .deb -> .rpm conversion),
-# appimagetool (for AppImage). Tools are installed in the CI job that calls
-# this script.
+# Requires: dpkg-deb (for .deb), alien (for .deb -> .rpm conversion).
+# Tools are installed in the CI job that calls this script.
+#
+# Packages (one per binary):
+#   tokenburn        /usr/bin/tokenburn                      (clap CLI)
+#   tokenburn-tui    /usr/bin/tokenburn-tui + .desktop       (terminal UI)
+#   tokenburn-gui    /usr/bin/tokenburn-gui + .desktop, icons, AppStream
+#   tokenburn-web    /usr/bin/tokenburn-web + browser runtime assets
+#                    in /usr/share/tokenburn-web/assets (when dist/web-assets
+#                    exists — see scripts/ci/bundle_web.sh)
+#
+# The GUI links nothing against X11/Wayland/GL at build time: winit and wgpu
+# `dlopen` them at runtime, so one binary serves X11 *and* Wayland sessions
+# and every distro. The package therefore only hard-depends on libxkbcommon
+# and merely *recommends* the display-server libraries.
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Build the argument list for the `alien` invocation used to convert one
@@ -15,61 +27,87 @@
 # exact shape of the args can be asserted directly in tests.
 #
 # .rpm packages were previously built directly with `rpmbuild` from a
-# hand-written .spec file (see git history for `rpmbuild-args` /
-# `gui-rpm-spec`), which went through two failed fix attempts:
-#   1. Missing `--target` made cross-architecture builds (e.g. an aarch64
-#      .rpm on an x86_64 CI runner) fail with "No compatible architectures
-#      found for build".
-#   2. Adding `--target <arch>-linux` was the wrong fix: it made rpmbuild
-#      validate cross-build *feasibility* against the host's
-#      compatible-architecture table, which Ubuntu's rpm package has no
-#      aarch64<->x86_64 entries for -- so it failed with the *exact same*
-#      error message (CI run 30751058486).
-#   3. Removing --target again didn't help either (CI run 30752224652):
-#      rpmbuild validates `BuildArch:` in the .spec against the host's
-#      compatible-architecture table regardless of --target, and aarch64
-#      and x86_64 are simply never considered compatible in that table on
-#      this rpm build. There is no rpmbuild flag that bypasses this for a
-#      genuine foreign architecture on this platform.
-#
+# hand-written .spec file, which kept failing on cross-architecture builds
+# (rpmbuild validates `BuildArch:` against the host's compatible-architecture
+# table and aarch64 <-> x86_64 are never compatible there; no flag bypasses it).
 # `alien` sidesteps the problem entirely: it derives the .rpm's metadata
-# (name, version, architecture, description, etc.) directly from the
-# already-built, already-correctly-tagged .deb's control file, and doesn't
-# perform any host/target architecture *compilation*-feasibility check --
-# it's just repackaging existing files, which is all we ever needed here.
+# directly from the already-built, already-correctly-tagged .deb's control file
+# and performs no architecture feasibility check — it's just repackaging.
 export def alien-args [deb_path: string]: nothing -> list<string> {
     ["--to-rpm" "--scripts" $deb_path]
 }
 
 # Whether a file name looks like a Linux package artifact (.deb or .rpm).
-# Extracted so the glob/regex used by the final packaging summary can be
-# unit tested directly instead of only being exercised as a side effect of
-# `ls | where ...` at the end of a full packaging run.
 export def is-linux-package-file [name: string]: nothing -> bool {
     ($name | str ends-with ".deb") or ($name | str ends-with ".rpm")
 }
 
-# Build the DEBIAN/control file contents for the desktop GUI .deb package.
-#
-# Extracted into its own pure function (no side effects, no external
-# commands) so its exact text can be asserted in tests. This is a regression
-# guard for a bug where the literal parenthesised text "(Elm Architecture)"
-# inside a `$"..."` interpolated string was parsed by Nu as a *nested
-# command call* (`Elm Architecture`) rather than literal text, since any
-# unescaped `(...)` inside a Nu interpolated string is evaluated as an
-# expression. That bug could not be caught by `nu-check` / parsing alone —
-# it only failed at runtime, when the packaging step actually reached this
-# code path.
-export def gui-deb-control [version: string, arch: string]: nothing -> string {
-    $"Package: tokenburn-gui
+# DEBIAN/control contents. Pure (no I/O) so the exact text can be asserted.
+# `depends` / `recommends` are comma-separated lists, empty to omit the field.
+export def deb-control [
+    name: string
+    version: string
+    arch: string
+    summary: string
+    long: string
+    depends: string
+    recommends: string
+]: nothing -> string {
+    let dep_line = if ($depends | is-empty) { "" } else { $"Depends: ($depends)\n" }
+    let rec_line = if ($recommends | is-empty) { "" } else { $"Recommends: ($recommends)\n" }
+    $"Package: ($name)
 Version: ($version)
 Architecture: ($arch)
 Maintainer: Sorin Irimies <sorinirimies@gmail.com>
-Description: TokenBurn — desktop GUI AI token usage report written in Rust
- A mouse-driven desktop GUI for AI token/cost usage, built on Iced \(Elm Architecture\).
+Section: utils
+Priority: optional
+Description: ($summary)
+ ($long)
 Homepage: https://github.com/sorinirimies/tokenburn
-Depends: libxkbcommon0, libwayland-client0, libgl1
-"
+($dep_line)($rec_line)"
+}
+
+# Control file for the desktop GUI package.
+#
+# NOTE: the literal "\(Elm Architecture\)" must stay escaped — an unescaped
+# `(...)` inside a Nu `$"..."` string is evaluated as a command call. This is a
+# regression guard (see the tests).
+export def gui-deb-control [version: string, arch: string]: nothing -> string {
+    (deb-control "tokenburn-gui" $version $arch
+        "TokenBurn — desktop GUI AI token usage report written in Rust"
+        "A mouse-driven desktop GUI for AI token/cost usage, built on Iced \(Elm Architecture\).\n Runs on X11 and Wayland."
+        "libxkbcommon0"
+        "libwayland-client0, libx11-6, libvulkan1 | libgl1, fontconfig, fonts-dejavu-core")
+}
+
+# Install-time layout of one package, as `{src, dst}` pairs relative to the
+# repo root / package root. Pure so it can be unit tested.
+export def package-files [name: string, target: string, has_web_assets: bool]: nothing -> list<record<src: string, dst: string>> {
+    let bin = {|b| {src: $"target/($target)/release/($b)", dst: $"usr/bin/($b)"} }
+    match $name {
+        "tokenburn" => [(do $bin "tokenburn")]
+        "tokenburn-tui" => [
+            (do $bin "tokenburn-tui")
+            {src: "packaging/linux/tokenburn-tui.desktop", dst: "usr/share/applications/tokenburn-tui.desktop"}
+        ]
+        "tokenburn-gui" => (
+            [
+                (do $bin "tokenburn-gui")
+                {src: "packaging/linux/tokenburn-gui.desktop", dst: "usr/share/applications/tokenburn-gui.desktop"}
+                {src: "packaging/linux/tokenburn-gui.metainfo.xml", dst: "usr/share/metainfo/tokenburn-gui.metainfo.xml"}
+                {src: "assets/icons/tokenburn.svg", dst: "usr/share/icons/hicolor/scalable/apps/tokenburn.svg"}
+            ] ++ (
+                [16 22 24 32 48 64 96 128 256 512] | each {|n|
+                    {src: $"assets/icons/tokenburn-($n).png", dst: $"usr/share/icons/hicolor/($n)x($n)/apps/tokenburn.png"}
+                }
+            )
+        )
+        "tokenburn-web" => (
+            [(do $bin "tokenburn-web")]
+            ++ (if $has_web_assets { [{src: "dist/web-assets", dst: "usr/share/tokenburn-web/assets"}] } else { [] })
+        )
+        _ => (error make {msg: $"unknown package: ($name)"})
+    }
 }
 
 # Convert an already-built .deb into a .rpm using `alien`, and return the
@@ -89,12 +127,55 @@ export def alien-deb-to-rpm [
     run-external "alien" ...(alien-args $deb_abs)
     cd $prev_dir
     # `into glob` forces glob expansion of this dynamically-built pattern.
-    # A plain interpolated string (e.g. `ls $"(...)/*.rpm"`) is ambiguous
-    # across nu versions -- some treat it as a literal filename lookup
-    # ("DoNotExpand") instead of a glob, which would fail here even though
-    # a matching file exists.
+    # A plain interpolated string is ambiguous across nu versions -- some treat
+    # it as a literal filename lookup ("DoNotExpand") instead of a glob.
     let pattern = ($out_dir + "/*.rpm" | into glob)
     (ls $pattern | first).name
+}
+
+# Stage + build one .deb and its .rpm. Returns nothing; prints a line per file.
+def build-package [
+    name: string
+    version: string
+    arch: string
+    rpm_arch: string
+    target: string
+    control: string
+    has_web_assets: bool
+] {
+    let dist_dir = "dist"
+    let root = $"($dist_dir)/deb-($name)"
+    rm -rf $root
+    mkdir $"($root)/DEBIAN"
+
+    for f in (package-files $name $target $has_web_assets) {
+        let dst = $"($root)/($f.dst)"
+        mkdir ($dst | path dirname)
+        if ($f.src | path type) == "dir" {
+            cp -r $f.src $dst
+        } else {
+            cp $f.src $dst
+        }
+    }
+    chmod 755 $"($root)/usr/bin/($name)"
+
+    mkdir $"($root)/usr/share/doc/($name)"
+    $"($name) ($version)
+Copyright Sorin Irimies
+MIT License — see /usr/share/common-licenses/MIT
+" | save -f $"($root)/usr/share/doc/($name)/copyright"
+
+    $control | save -f $"($root)/DEBIAN/control"
+
+    let deb_path = $"($dist_dir)/($name)_($version)_($arch).deb"
+    run-external "dpkg-deb" "--root-owner-group" "--build" $root $deb_path
+    print $"✅ Built ($name)_($version)_($arch).deb"
+
+    # Each conversion uses its own scratch subdirectory so a leftover .rpm from
+    # one conversion can never be mistaken for another's output.
+    let rpm_file = (alien-deb-to-rpm $deb_path $"($dist_dir)/alien-rpm/($name)")
+    cp $rpm_file $"($dist_dir)/($name)-($version)-($rpm_arch).rpm"
+    print $"✅ Built ($name)-($version)-($rpm_arch).rpm"
 }
 
 def main [
@@ -103,69 +184,28 @@ def main [
 ] {
     let arch = if ($target | str contains "aarch64") { "arm64" } else { "amd64" }
     let rpm_arch = if ($target | str contains "aarch64") { "aarch64" } else { "x86_64" }
-    let dist_dir = "dist"
+    let has_web_assets = ("dist/web-assets" | path exists)
 
-    mkdir $dist_dir
+    mkdir dist
 
-    # ── .deb for tokenburn-tui ────────────────────────────────────────────────
-    let tui_deb_root = $"($dist_dir)/deb-tui"
-    mkdir $"($tui_deb_root)/DEBIAN"
-    mkdir $"($tui_deb_root)/usr/bin"
-    mkdir $"($tui_deb_root)/usr/share/doc/tokenburn-tui"
+    build-package "tokenburn" $version $arch $rpm_arch $target (deb-control "tokenburn" $version $arch
+        "TokenBurn — local AI token/cost usage CLI written in Rust"
+        "Reads the local pi and Zed logs and prints token and cost usage per month, day or hour. No network access."
+        "" "") $has_web_assets
 
-    cp $"target/($target)/release/tokenburn-tui" $"($tui_deb_root)/usr/bin/tokenburn-tui"
+    build-package "tokenburn-tui" $version $arch $rpm_arch $target (deb-control "tokenburn-tui" $version $arch
+        "TokenBurn TUI — terminal AI token usage report written in Rust"
+        "A keyboard-driven terminal UI for AI token/cost usage, built on Ratatui."
+        "" "") $has_web_assets
 
-    $"Package: tokenburn-tui
-Version: ($version)
-Architecture: ($arch)
-Maintainer: Sorin Irimies <sorinirimies@gmail.com>
-Description: TokenBurn TUI — terminal AI token usage report written in Rust
- A keyboard-driven terminal UI for AI token/cost usage, built on Ratatui.
-Homepage: https://github.com/sorinirimies/tokenburn
-" | save -f $"($tui_deb_root)/DEBIAN/control"
+    build-package "tokenburn-gui" $version $arch $rpm_arch $target (gui-deb-control $version $arch) $has_web_assets
 
-    $"TokenBurn TUI ($version)
-Copyright 2024 Sorin Irimies
-MIT License — see /usr/share/common-licenses/MIT
-" | save -f $"($tui_deb_root)/usr/share/doc/tokenburn-tui/copyright"
-
-    let tui_deb_path = $"($dist_dir)/tokenburn-tui_($version)_($arch).deb"
-    run-external "dpkg-deb" "--build" $tui_deb_root $tui_deb_path
-    print $"✅ Built tokenburn-tui_($version)_($arch).deb"
-
-    # ── .deb for tokenburn (GUI) ──────────────────────────────────────────────
-    let gui_deb_root = $"($dist_dir)/deb-gui"
-    mkdir $"($gui_deb_root)/DEBIAN"
-    mkdir $"($gui_deb_root)/usr/bin"
-    mkdir $"($gui_deb_root)/usr/share/doc/tokenburn-gui"
-
-    cp $"target/($target)/release/tokenburn-gui" $"($gui_deb_root)/usr/bin/tokenburn-gui"
-
-    (gui-deb-control $version $arch) | save -f $"($gui_deb_root)/DEBIAN/control"
-
-    $"TokenBurn ($version)
-Copyright 2024 Sorin Irimies
-MIT License — see /usr/share/common-licenses/MIT
-" | save -f $"($gui_deb_root)/usr/share/doc/tokenburn-gui/copyright"
-
-    let gui_deb_path = $"($dist_dir)/tokenburn-gui_($version)_($arch).deb"
-    run-external "dpkg-deb" "--build" $gui_deb_root $gui_deb_path
-    print $"✅ Built tokenburn-gui_($version)_($arch).deb"
-
-    # ── .rpm for tokenburn-tui and tokenburn (via alien, from the .deb above) ──
-    # Each conversion uses its own scratch subdirectory so a leftover .rpm
-    # from one conversion can never be mistaken for the other's output by
-    # the "pick the only/first .rpm in this directory" lookup in
-    # `alien-deb-to-rpm`.
-    let tui_rpm_file = (alien-deb-to-rpm $tui_deb_path $"($dist_dir)/alien-rpm/tui")
-    cp $tui_rpm_file $"($dist_dir)/tokenburn-tui-($version)-($rpm_arch).rpm"
-    print $"✅ Built tokenburn-tui-($version)-($rpm_arch).rpm"
-
-    let gui_rpm_file = (alien-deb-to-rpm $gui_deb_path $"($dist_dir)/alien-rpm/gui")
-    cp $gui_rpm_file $"($dist_dir)/tokenburn-gui-($version)-($rpm_arch).rpm"
-    print $"✅ Built tokenburn-gui-($version)-($rpm_arch).rpm"
+    build-package "tokenburn-web" $version $arch $rpm_arch $target (deb-control "tokenburn-web" $version $arch
+        "TokenBurn web — local AI token usage dashboard written in Rust"
+        "A local web dashboard for AI token/cost usage, built on Topcoat. Binds 127.0.0.1 by default."
+        "" "") $has_web_assets
 
     print ""
     print "📦 Linux packages:"
-    ls $dist_dir | where { |it| is-linux-package-file ($it.name | path basename) } | select name size | print
+    ls dist | where { |it| is-linux-package-file ($it.name | path basename) } | select name size | print
 }

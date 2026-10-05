@@ -142,4 +142,8 @@ Server-rendered, **one flat crate** (no server/client split), one module per con
 7. **Match existing module structure.** Every feature follows the same file layout.
 8. **Keep the `Message` enum flat** in the GUI.
 9. **GIF assets** are tracked with Git LFS (`*.gif` in `.gitattributes`). Use `vhs` to regenerate from `.tape` files.
-10. **Zed has no `$` cost** locally — Zed rows always show cost 0; don't "fix" that.
+10. **Cross-platform is a requirement** (macOS, Linux, Windows). Never hard-code `/` paths or `~`: use `dirs` and `PathBuf::join`, and keep log-location logic in pure functions (`resolve_sessions_dir`, `candidates_from`) that tests can feed fake environments. Anything platform-specific goes behind `#[cfg(target_os = …)]`; check with `cargo check --target <triple>` (zig can stand in for the C cross-compiler).
+11. **Linux GUI must stay `dlopen`-based** — keep iced's default `x11` + `wayland` + `wgpu` + `tiny-skia` features. Don't add crates that link X11/Wayland/GL at build time (it would break "one binary, any distro, X11 and Wayland"). The window `application_id` must equal the `.desktop` file basename.
+12. **Icons are generated** by `python3 scripts/gen_icons.py` and committed. The Windows `.ico` must use classic BMP entries (NSIS rejects PNG-compressed ones).
+13. **Web asset IDs don't depend on the compile target** but do depend on source paths, so build the web runtime bundle (`scripts/ci/bundle_web.sh`) in the same CI job/checkout as the binary it ships with.
+14. **Zed has no `$` cost** locally — Zed rows always show cost 0; don't "fix" that.

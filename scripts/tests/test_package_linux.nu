@@ -35,7 +35,7 @@
 
 use std/assert
 use runner.nu *
-use ../ci/package_linux.nu [alien-args, is-linux-package-file, gui-deb-control]
+use ../ci/package_linux.nu [alien-args, is-linux-package-file, gui-deb-control, deb-control, package-files]
 
 # ── alien-args ───────────────────────────────────────────────────────────────
 
@@ -120,6 +120,64 @@ def "test gui-deb-control: has the expected package name and maintainer" [] {
     let control = (gui-deb-control "1.0.0" "amd64")
     assert ($control | str contains "Package: tokenburn")
     assert ($control | str contains "Maintainer: Sorin Irimies")
+}
+
+def "test gui-deb-control: hard-depends only on libxkbcommon, display servers are recommended" [] {
+    # The GUI dlopen()s X11/Wayland/GL at runtime, so one binary serves both
+    # session types on every distro; those libs must not be hard dependencies.
+    let control = (gui-deb-control "1.0.0" "amd64")
+    assert ($control | str contains "Depends: libxkbcommon0\n")
+    assert ($control | str contains "Recommends: libwayland-client0, libx11-6")
+    assert (not ($control | str contains "Depends: libxkbcommon0, libwayland"))
+}
+
+# ── deb-control ───────────────────────────────────────────────────────────────
+
+def "test deb-control: omits Depends and Recommends when empty" [] {
+    let c = (deb-control "tokenburn" "1.0.0" "amd64" "sum" "long" "" "")
+    assert (not ($c | str contains "Depends:"))
+    assert (not ($c | str contains "Recommends:"))
+    assert ($c | str contains "Package: tokenburn\n")
+}
+
+def "test deb-control: includes Depends when given" [] {
+    let c = (deb-control "x" "1.0.0" "arm64" "sum" "long" "libfoo" "")
+    assert ($c | str contains "Depends: libfoo")
+    assert ($c | str contains "Architecture: arm64")
+}
+
+# ── package-files ─────────────────────────────────────────────────────────────
+
+def "test package-files: every package installs its binary under usr/bin" [] {
+    for name in ["tokenburn" "tokenburn-tui" "tokenburn-gui" "tokenburn-web"] {
+        let files = (package-files $name "x86_64-unknown-linux-gnu" false)
+        assert ($files | any {|f| $f.dst == $"usr/bin/($name)" })
+    }
+}
+
+def "test package-files: only the GUI ships icons, desktop entry and metainfo" [] {
+    # Icons must live in exactly one package: two debs owning the same path
+    # would make dpkg refuse to install both.
+    let gui = (package-files "tokenburn-gui" "t" false | get dst)
+    assert ($gui | any {|d| $d == "usr/share/icons/hicolor/256x256/apps/tokenburn.png" })
+    assert ($gui | any {|d| $d == "usr/share/applications/tokenburn-gui.desktop" })
+    assert ($gui | any {|d| $d | str ends-with "tokenburn-gui.metainfo.xml" })
+    for other in ["tokenburn" "tokenburn-tui" "tokenburn-web"] {
+        let dsts = (package-files $other "t" false | get dst)
+        assert (not ($dsts | any {|d| $d | str contains "icons/hicolor" }))
+    }
+}
+
+def "test package-files: web assets only when the bundle exists" [] {
+    let without = (package-files "tokenburn-web" "t" false | get dst)
+    let with = (package-files "tokenburn-web" "t" true | get dst)
+    assert (not ($without | any {|d| $d | str contains "tokenburn-web/assets" }))
+    assert ($with | any {|d| $d == "usr/share/tokenburn-web/assets" })
+}
+
+def "test package-files: rejects unknown package" [] {
+    let failed = (try { package-files "nope" "t" false; false } catch { true })
+    assert $failed
 }
 
 # ── Parse-level regression guard ─────────────────────────────────────────────

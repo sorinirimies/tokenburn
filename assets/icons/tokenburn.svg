@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e2232"/><stop offset="1" stop-color="#0e1018"/></linearGradient>
+    <linearGradient id="fo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc440"/><stop offset="1" stop-color="#e84028"/></linearGradient>
+    <linearGradient id="fi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff096"/><stop offset="1" stop-color="#ffb03c"/></linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <path d="M 512.0 809.8 C 747.9 809.8, 806.9 580.4, 656.2 423.1 C 603.8 357.6, 616.9 265.8, 564.4 193.7 C 446.5 278.9, 446.5 370.7, 420.2 436.2 C 380.9 396.9, 367.8 357.6, 374.4 305.2 C 249.9 410.0, 217.1 567.3, 302.3 685.3 C 354.7 777.0, 433.4 809.8, 512.0 809.8 Z" fill="url(#fo)"/>
+  <path d="M 524.3 812.7 C 647.0 812.7, 677.6 693.4, 599.3 611.6 C 572.0 577.5, 578.8 529.8, 551.6 492.3 C 490.2 536.6, 490.2 584.3, 476.6 618.4 C 456.1 598.0, 449.3 577.5, 452.7 550.3 C 388.0 604.8, 370.9 686.6, 415.2 747.9 C 442.5 795.6, 483.4 812.7, 524.3 812.7 Z" fill="url(#fi)"/>
+</svg>

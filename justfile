@@ -97,10 +97,6 @@ dev-web: _check-topcoat
 run-web-static:
     cargo run -p tokenburn-web
 
-# Bundle the runtime next to the release binary (ship `assets/` beside `tokenburn-web`)
-bundle-web-release: _check-topcoat
-    topcoat asset bundle --release --package tokenburn-web --out target/release/assets
-
 # Launch the Iced desktop GUI
 run-gui:
     cargo run -p tokenburn-gui
@@ -241,20 +237,57 @@ vhs-list:
     echo "TUI tapes  →  {{ TUI_VHS }}/"
     ls {{ TUI_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
 
-# ── Packaging (Linux only — run locally on your Linux machine) ───────────────
+# ── Packaging ─────────────────────────────────────────────────────────────────
+# Release artifacts are normally built by CI (GitHub / Gitea release workflows).
+# These recipes reproduce them locally. Every package recipe builds with an
+# explicit --target so the output lands in target/<triple>/release, exactly
+# where the packaging scripts look.
 
-# Build Linux .deb and .rpm packages
-package-linux version: build-release
-    nu scripts/ci/package_linux.nu {{ version }} x86_64-unknown-linux-gnu
+LINUX_TARGET := "x86_64-unknown-linux-gnu"
+MUSL_TARGET := "x86_64-unknown-linux-musl"
 
-# Build Linux AppImages (requires appimagetool in PATH)
-package-appimage version: build-release
-    bash scripts/ci/package_appimage.sh {{ version }} x86_64-unknown-linux-gnu
+# Regenerate every icon asset (PNG set, .ico, .icns, window icon) — needs Pillow
+icons:
+    python3 scripts/gen_icons.py
 
-# Cross-compile Windows .exe from Linux (requires mingw-w64)
+# Bundle the web runtime into dist/web-assets + target/release/assets (live mode for local release runs)
+bundle-web-release: _check-topcoat
+    bash scripts/ci/bundle_web.sh dist/web-assets
+    mkdir -p target/release && rm -rf target/release/assets && cp -R dist/web-assets target/release/assets
 
-# Install: sudo pacman -S mingw-w64-gcc
-package-windows version:
+# Build all four apps for one target (GUI skipped for static musl targets)
+_build-target target:
+    cargo build --release --target {{ target }} -p tokenburn -p tokenburn-tui -p tokenburn-web
+    @if [ "{{ target }}" != "{{ MUSL_TARGET }}" ]; then cargo build --release --target {{ target }} -p tokenburn-gui; fi
+
+# Fully static Linux binaries (CLI + TUI + web) that run on any distro. Needs musl-tools.
+build-musl:
+    rustup target add {{ MUSL_TARGET }}
+    cargo build --release --target {{ MUSL_TARGET }} -p tokenburn -p tokenburn-tui -p tokenburn-web
+
+# Build a portable .tar.gz / .zip with every binary (e.g. just package-archive 0.1.0 x86_64-unknown-linux-gnu)
+package-archive version target suffix="": bundle-web-release (_build-target target)
+    bash scripts/ci/package_archive.sh {{ version }} {{ target }} {{ suffix }}
+
+# Build Linux .deb and .rpm packages (needs dpkg-deb + alien)
+package-linux version: bundle-web-release (_build-target LINUX_TARGET)
+    nu scripts/ci/package_linux.nu {{ version }} {{ LINUX_TARGET }}
+
+# Build Linux AppImages for the TUI and GUI (requires appimagetool in PATH)
+package-appimage version: (_build-target LINUX_TARGET)
+    bash scripts/ci/package_appimage.sh {{ version }} {{ LINUX_TARGET }}
+
+# Build the macOS DMG for this Mac's architecture (requires create-dmg for the styled window)
+package-macos version:
+    #!/usr/bin/env sh
+    set -e
+    TARGET="$(rustc -vV | sed -n 's/host: //p')"
+    just bundle-web-release
+    cargo build --release --target "$TARGET" -p tokenburn -p tokenburn-tui -p tokenburn-gui -p tokenburn-web
+    bash packaging/macos/create_dmg.sh {{ version }}
+
+# Cross-compile Windows .exe files + a .zip (needs mingw-w64: pacman -S mingw-w64-gcc / brew install mingw-w64)
+package-windows version: bundle-web-release
     rustup target add x86_64-pc-windows-gnu
     cargo build --release -p tokenburn -p tokenburn-gui -p tokenburn-web -p tokenburn-tui --target x86_64-pc-windows-gnu
     mkdir -p dist
@@ -262,6 +295,7 @@ package-windows version:
     cp target/x86_64-pc-windows-gnu/release/tokenburn-gui.exe dist/tokenburn-gui-x86_64-windows.exe
     cp target/x86_64-pc-windows-gnu/release/tokenburn-web.exe dist/tokenburn-web-x86_64-windows.exe
     cp target/x86_64-pc-windows-gnu/release/tokenburn-tui.exe dist/tokenburn-tui-x86_64-windows.exe
+    bash scripts/ci/package_archive.sh {{ version }} x86_64-pc-windows-gnu .exe
 
 # Update AUR PKGBUILD to a new version
 update-aur version:

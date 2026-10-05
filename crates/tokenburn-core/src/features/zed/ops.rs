@@ -8,16 +8,50 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::time::parse_ts;
 
-/// Known `threads.db` locations (macOS, Linux, XDG fallback).
+/// Known `threads.db` locations, most specific first.
+///
+/// * `TOKENBURN_ZED_DB` — explicit override (a path to `threads.db`)
+/// * macOS: `~/Library/Application Support/Zed/threads/threads.db`
+/// * Windows: `%LOCALAPPDATA%\Zed\threads\threads.db`
+/// * Linux: `$XDG_DATA_HOME/zed/threads/threads.db` (default `~/.local/share`),
+///   the Flatpak copy under `~/.var/app/dev.zed.Zed/`, then the legacy
+///   `~/.config/zed/threads/threads.db`
+///
+/// Every platform's candidates are listed on every OS — only ones that exist
+/// are used, which also covers e.g. a Windows home mounted under WSL.
 pub fn db_candidates() -> Vec<PathBuf> {
-    let Some(home) = dirs::home_dir() else {
-        return Vec::new();
+    let over = std::env::var_os("TOKENBURN_ZED_DB")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from);
+    let mut out: Vec<PathBuf> = over.into_iter().collect();
+    out.extend(candidates_from(
+        dirs::home_dir().as_deref(),
+        dirs::data_local_dir().as_deref(),
+    ));
+    out
+}
+
+/// Platform candidates for a given home and per-user local data directory
+/// (`%LOCALAPPDATA%` / `$XDG_DATA_HOME` / `~/Library/Application Support`).
+pub(crate) fn candidates_from(home: Option<&Path>, data_local: Option<&Path>) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut push = |p: PathBuf| {
+        if !out.contains(&p) {
+            out.push(p);
+        }
     };
-    vec![
-        home.join("Library/Application Support/Zed/threads/threads.db"),
-        home.join(".local/share/zed/threads/threads.db"),
-        home.join(".config/zed/threads/threads.db"),
-    ]
+    if let Some(d) = data_local {
+        // macOS: …/Application Support/Zed · Windows: …\AppData\Local\Zed · Linux: …/zed
+        push(d.join("Zed/threads/threads.db"));
+        push(d.join("zed/threads/threads.db"));
+    }
+    if let Some(h) = home {
+        push(h.join("Library/Application Support/Zed/threads/threads.db"));
+        push(h.join(".local/share/zed/threads/threads.db"));
+        push(h.join(".var/app/dev.zed.Zed/data/zed/threads/threads.db"));
+        push(h.join(".config/zed/threads/threads.db"));
+    }
+    out
 }
 
 /// Collect Zed rows from the first existing default database.
@@ -115,6 +149,36 @@ mod tests {
     use super::*;
 
     const JSON: &str = r#"{"model":{"model":"claude"},"cumulative_token_usage":{"input_tokens":7,"output_tokens":3}}"#;
+
+    #[test]
+    fn candidates_cover_every_platform_without_duplicates() {
+        let home = Path::new("/home/u");
+        let c = candidates_from(Some(home), Some(Path::new("/home/u/.local/share")));
+        let s: Vec<String> = c
+            .iter()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .collect();
+        assert!(s.contains(&"/home/u/.local/share/zed/threads/threads.db".to_string()));
+        assert!(
+            s.contains(&"/home/u/Library/Application Support/Zed/threads/threads.db".to_string())
+        );
+        assert!(s.contains(&"/home/u/.var/app/dev.zed.Zed/data/zed/threads/threads.db".to_string()));
+        // `data_local/zed` and `~/.local/share/zed` are the same path: listed once.
+        let n = s
+            .iter()
+            .filter(|p| p.ends_with(".local/share/zed/threads/threads.db"))
+            .count();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn windows_style_local_appdata_is_used() {
+        let c = candidates_from(None, Some(Path::new("C:/Users/u/AppData/Local")));
+        assert_eq!(
+            c[0],
+            Path::new("C:/Users/u/AppData/Local").join("Zed/threads/threads.db")
+        );
+    }
 
     #[test]
     fn decodes_plain_and_zstd() {

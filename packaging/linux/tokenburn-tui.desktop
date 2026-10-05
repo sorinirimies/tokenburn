@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=TokenBurn (terminal)
+GenericName=AI token usage
+Comment=Local AI token and cost usage for pi and Zed, in your terminal
+Exec=tokenburn-tui
+Icon=utilities-terminal
+Terminal=true
+Categories=Development;Utility;ConsoleOnly;
+Keywords=ai;tokens;usage;cost;pi;zed;llm;tui;

@@ -4,7 +4,7 @@
 
 The `create_dmg.sh` script creates a macOS disk image (`.dmg`) containing:
 - `TokenBurn.app` — the desktop GUI (`tokenburn-gui`) as a proper macOS application bundle
-- `tokenburn-tui` — the terminal binary (for manual install to `/usr/local/bin`)
+- `Command Line Tools/` — `tokenburn`, `tokenburn-tui`, `tokenburn-web` (+ `assets/` for the live dashboard)
 
 ### Building locally
 

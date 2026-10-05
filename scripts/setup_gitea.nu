@@ -76,16 +76,16 @@ def main [
     let ssh_port = ($port + 22)
     let run_result = (
         do {
-            ^$runtime run -d
-                --name $name
-                --restart unless-stopped
-                -p $"($port):3000"
-                -p $"($ssh_port):22"
-                -v $"($data_path):/data"
-                -e "GITEA__server__ROOT_URL"=$"http://localhost:($port)/"
-                -e "GITEA__server__HTTP_PORT"="3000"
-                -e "GITEA__repository__DEFAULT_BRANCH"="main"
-                "gitea/gitea:latest"
+            (run-external $runtime "run" "-d"
+                "--name" $name
+                "--restart" "unless-stopped"
+                "-p" $"($port):3000"
+                "-p" $"($ssh_port):22"
+                "-v" $"($data_path):/data"
+                "-e" $"GITEA__server__ROOT_URL=http://localhost:($port)/"
+                "-e" "GITEA__server__HTTP_PORT=3000"
+                "-e" "GITEA__repository__DEFAULT_BRANCH=main"
+                "gitea/gitea:latest")
         } | complete
     )
 
@@ -141,7 +141,7 @@ def main [
 }
 
 # Detect whether Docker or Podman is available.
-def detect_runtime [] -> string {
+def detect_runtime [] {
     let docker_check = (do { which docker } | complete)
     if $docker_check.exit_code == 0 and ($docker_check.stdout | str trim | str length) > 0 {
         return "docker"

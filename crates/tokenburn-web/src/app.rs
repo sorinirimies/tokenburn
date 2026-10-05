@@ -50,18 +50,51 @@ pub fn router(bundle: Option<AssetBundle>) -> Router {
     }
 }
 
+/// Directories searched for the Topcoat asset bundle (the browser runtime),
+/// in order. `exe_dir` is the directory of the running executable.
+///
+/// 1. `$TOKENBURN_WEB_ASSETS`
+/// 2. `<exe_dir>/assets` — release archives, `cargo run`, Windows installs
+/// 3. `<exe_dir>/../share/tokenburn-web/assets` — Homebrew / prefix installs
+/// 4. `/usr/share/tokenburn-web/assets`, `/usr/local/share/tokenburn-web/assets` — .deb/.rpm/AUR
+pub fn bundle_candidates(
+    exe_dir: Option<&std::path::Path>,
+    env_override: Option<std::ffi::OsString>,
+) -> Vec<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let mut out: Vec<PathBuf> = Vec::new();
+    out.extend(env_override.filter(|v| !v.is_empty()).map(PathBuf::from));
+    if let Some(dir) = exe_dir {
+        out.push(dir.join("assets"));
+        out.push(dir.join("../share/tokenburn-web/assets"));
+    }
+    out.push(PathBuf::from("/usr/share/tokenburn-web/assets"));
+    out.push(PathBuf::from("/usr/local/share/tokenburn-web/assets"));
+    out
+}
+
+/// Find and load the asset bundle, or `None` (→ static dashboard).
+fn find_bundle() -> Option<AssetBundle> {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(std::path::Path::to_path_buf));
+    let candidates =
+        bundle_candidates(exe_dir.as_deref(), std::env::var_os("TOKENBURN_WEB_ASSETS"));
+    candidates
+        .iter()
+        .find_map(|dir| AssetBundle::load_dir(dir).ok())
+}
+
 /// Bind and serve until the process is killed.
 pub async fn serve(opts: ServerOptions) -> std::io::Result<()> {
-    let bundle = match AssetBundle::load() {
-        Ok(b) => Some(b),
-        Err(e) => {
-            eprintln!(
-                "tokenburn-web: no asset bundle ({e}); serving the static dashboard.\n\
-                 Run `just run-web` (or `topcoat asset bundle` first) for the live version."
-            );
-            None
-        }
-    };
+    let bundle = find_bundle();
+    if bundle.is_none() {
+        eprintln!(
+            "tokenburn-web: no asset bundle found; serving the static dashboard.\n\
+             For the live version run `just run-web`, use a release archive/package, or set \
+             TOKENBURN_WEB_ASSETS to a `topcoat asset bundle` directory."
+        );
+    }
     let live = bundle.is_some();
 
     let listener = tokio::net::TcpListener::bind((opts.host.as_str(), opts.port)).await?;
@@ -122,6 +155,24 @@ fn open_in_browser(url: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bundle_search_order() {
+        let exe = std::path::Path::new("/opt/tb");
+        let c = bundle_candidates(Some(exe), Some("/custom".into()));
+        assert_eq!(c[0], std::path::PathBuf::from("/custom"));
+        assert_eq!(c[1], std::path::PathBuf::from("/opt/tb/assets"));
+        assert!(
+            c.iter()
+                .any(|p| p.ends_with("usr/share/tokenburn-web/assets"))
+        );
+    }
+
+    #[test]
+    fn empty_override_and_unknown_exe_dir_are_tolerated() {
+        let c = bundle_candidates(None, Some("".into()));
+        assert!(c.iter().all(|p| p.starts_with("/usr")));
+    }
 
     #[test]
     fn unspecified_addresses_open_localhost() {

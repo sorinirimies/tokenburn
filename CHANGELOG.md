@@ -7,4 +7,9 @@ All notable changes to this project will be documented in this file.
 - Rust workspace: `tokenburn-core`, clap CLI `tokenburn`, Ratatui `tokenburn-tui`, Iced `tokenburn-gui`
 - Native pi + Zed collectors (rusqlite + zstd) — no `python3`/`zstd` binaries required
 - `--json` output for the CLI
+- Cross-platform: macOS, Linux (X11 + Wayland from one binary, glibc and static musl builds) and Windows
+- Log locations resolved per platform with overrides (`TOKENBURN_PI_SESSIONS`, `TOKENBURN_ZED_DB`, pi's `PI_CODING_AGENT_*`)
+- App icon set (PNG/ICO/ICNS/SVG), window icon, `.desktop` + AppStream metadata, Wayland `app_id`
+- Packaging for every app: `.deb`/`.rpm`, AppImage, universal DMG, NSIS installer, portable archives with checksums
+- Web runtime bundle shipped with every package (`TOKENBURN_WEB_ASSETS` search path); static fallback otherwise
 - `tokenburn-web`: Topcoat dashboard with signal-driven filters and live auto-refresh (WebSocket), static fallback, `/api/report` JSON

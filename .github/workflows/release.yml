@@ -82,19 +82,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Linux x86_64 (GitHub hosted) ─────────────────────────────────────
+          # Linux glibc builds run on the OLDEST hosted runner on purpose: a
+          # binary needs at least the glibc of the machine that linked it, so
+          # building on 22.04 (glibc 2.35) keeps it running on Debian 12+,
+          # Ubuntu 22.04+, Fedora, Arch, openSUSE, … The GUI `dlopen()`s
+          # X11/Wayland/GL, so the same binary serves X11 *and* Wayland.
           - name: Linux x86_64
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             suffix: ""
             os: linux
 
-          # ── Linux aarch64 (cross-compiled on GitHub hosted ubuntu) ────────────
           - name: Linux aarch64
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             suffix: ""
             os: linux
+
+          # ── Linux x86_64, fully static (musl): CLI + TUI + web only ──────────
+          # Runs on ANY distro (Alpine, old CentOS, NixOS, containers…) with no
+          # glibc requirement. The GUI cannot be static (it dlopen()s the
+          # display server libraries), so it is skipped here.
+          - name: Linux x86_64 (static musl)
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            suffix: ""
+            os: linux
+            musl: true
 
           # ── Windows x86_64 (GitHub hosted Windows runner) ─────────────────────
           - name: Windows x86_64
@@ -130,7 +144,8 @@ jobs:
             pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
             libgl1-mesa-dev libfontconfig1-dev libssl-dev \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross dpkg-dev rpm alien fakeroot
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross dpkg-dev rpm alien fakeroot \
+            musl-tools
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -154,10 +169,24 @@ jobs:
         run: cargo build --release -p tokenburn --target ${{ matrix.target }}
 
       - name: Build GUI
+        if: ${{ !matrix.musl }}
         run: cargo build --release -p tokenburn-gui --target ${{ matrix.target }}
 
       - name: Build web
         run: cargo build --release -p tokenburn-web --target ${{ matrix.target }}
+
+      # ── Web runtime bundle (live dashboard) ────────────────────────────────
+      # Built in the SAME job as the target binary: asset IDs depend on crate
+      # name + source path, not on the target, so this host-built bundle
+      # matches the cross-compiled binary. It ships next to the binary
+      # (archives, installers, packages) — without it tokenburn-web still
+      # works, in static mode.
+      - name: Install Topcoat CLI
+        run: cargo install topcoat-cli --locked
+
+      - name: Bundle web runtime assets
+        shell: bash
+        run: bash scripts/ci/bundle_web.sh
 
       # ── Linux: .deb, .rpm, AppImage ────────────────────────────────────────
       - name: Install Nushell
@@ -165,7 +194,7 @@ jobs:
         run: cargo install nu --locked
 
       - name: Build .deb and .rpm
-        if: matrix.os == 'linux'
+        if: matrix.os == 'linux' && !matrix.musl
         run: nu scripts/ci/package_linux.nu ${{ needs.validate.outputs.version }} ${{ matrix.target }}
 
       - name: Install appimagetool
@@ -188,6 +217,11 @@ jobs:
           choco install nsis -y --no-progress
           bash scripts/ci/package_windows.sh ${{ needs.validate.outputs.version }}
 
+      # ── Portable archive: .tar.gz (Linux/macOS) or .zip (Windows) ───────────
+      - name: Package portable archive
+        shell: bash
+        run: bash scripts/ci/package_archive.sh "${{ needs.validate.outputs.version }}" "${{ matrix.target }}" "${{ matrix.suffix }}"
+
       # ── Stage raw binaries ───────────────────────────────────────────────────
       - name: Stage binaries
         shell: bash
@@ -202,11 +236,34 @@ jobs:
           cp target/${{ matrix.target }}/release/tokenburn-tui${{ matrix.suffix }} \
              dist/tokenburn-tui-${{ matrix.target }}${{ matrix.suffix }} || true
 
+      # Upload release files only (not the deb-*/AppDir-* staging directories).
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: artifacts-${{ matrix.target }}
-          path: dist/
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+            dist/*-setup.exe
+            dist/tokenburn-cli-*
+            dist/tokenburn-tui-*
+            dist/tokenburn-gui-*
+            dist/tokenburn-web-*
+          if-no-files-found: error
+          retention-days: 1
+
+      # The macOS DMG job needs the web runtime bundle too.
+      - name: Upload web runtime assets
+        if: matrix.os == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-assets-${{ matrix.target }}
+          path: dist/web-assets
+          if-no-files-found: error
           retention-days: 1
 
   # ── 3. macOS Universal DMG ────────────────────────────────────────────────────
@@ -232,17 +289,25 @@ jobs:
           name: artifacts-x86_64-apple-darwin
           path: artifacts/x86_64/
 
+      - name: Download web runtime assets
+        uses: actions/download-artifact@v8
+        with:
+          name: web-assets-aarch64-apple-darwin
+          path: dist/web-assets/
+
       - name: Reconstruct target dirs
         run: |
           mkdir -p target/aarch64-apple-darwin/release
           mkdir -p target/x86_64-apple-darwin/release
+          cp artifacts/arm64/tokenburn-web-aarch64-apple-darwin   target/aarch64-apple-darwin/release/tokenburn-web
+          cp artifacts/x86_64/tokenburn-web-x86_64-apple-darwin   target/x86_64-apple-darwin/release/tokenburn-web
           cp artifacts/arm64/tokenburn-gui-aarch64-apple-darwin   target/aarch64-apple-darwin/release/tokenburn-gui
           cp artifacts/arm64/tokenburn-cli-aarch64-apple-darwin   target/aarch64-apple-darwin/release/tokenburn
           cp artifacts/arm64/tokenburn-tui-aarch64-apple-darwin   target/aarch64-apple-darwin/release/tokenburn-tui
           cp artifacts/x86_64/tokenburn-gui-x86_64-apple-darwin   target/x86_64-apple-darwin/release/tokenburn-gui
           cp artifacts/x86_64/tokenburn-cli-x86_64-apple-darwin   target/x86_64-apple-darwin/release/tokenburn
           cp artifacts/x86_64/tokenburn-tui-x86_64-apple-darwin   target/x86_64-apple-darwin/release/tokenburn-tui
-          chmod +x target/*/release/tokenburn target/*/release/tokenburn-gui target/*/release/tokenburn-tui
+          chmod +x target/*/release/tokenburn target/*/release/tokenburn-gui target/*/release/tokenburn-tui target/*/release/tokenburn-web
 
       - name: Create universal binaries
         run: bash scripts/ci/build_universal_macos.sh
@@ -282,6 +347,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: artifacts-*
           path: artifacts/
           merge-multiple: true
 

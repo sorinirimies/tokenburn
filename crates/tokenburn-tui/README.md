@@ -11,3 +11,7 @@ Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://
 | `↑/↓`, `j/k` | scroll |
 | `r` | refresh |
 | `q`, `Esc` | quit |
+
+## Platforms
+
+Works in any terminal on macOS, Linux and Windows (Windows Terminal, PowerShell, cmd). The static `x86_64-unknown-linux-musl` build runs on any Linux distro. Start options: `tokenburn-tui --daily --tool pi`.

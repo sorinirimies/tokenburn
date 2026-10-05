@@ -62,10 +62,31 @@ Section "TokenBurn GUI" SecGUI
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn-gui.exe" "" "$INSTDIR\tokenburn-gui.exe"
 SectionEnd
 
+Section "TokenBurn CLI" SecCLI
+    SetOutPath "$INSTDIR"
+    File "target\x86_64-pc-windows-msvc\release\tokenburn.exe"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn.exe" "" "$INSTDIR\tokenburn.exe"
+SectionEnd
+
 Section "TokenBurn TUI" SecTUI
     SetOutPath "$INSTDIR"
     File "target\x86_64-pc-windows-msvc\release\tokenburn-tui.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn-tui.exe" "" "$INSTDIR\tokenburn-tui.exe"
+SectionEnd
+
+Section "TokenBurn web dashboard" SecWeb
+    SetOutPath "$INSTDIR"
+    File "target\x86_64-pc-windows-msvc\release\tokenburn-web.exe"
+    ; The live dashboard needs Topcoat's browser runtime bundle in assets\ next
+    ; to the exe. Without it tokenburn-web still works, in static mode.
+    !if /FileExists "dist\web-assets\manifest.toml"
+        SetOutPath "$INSTDIR\assets"
+        File /r "dist\web-assets\*.*"
+        SetOutPath "$INSTDIR"
+    !endif
+    CreateDirectory "$SMPROGRAMS\TokenBurn"
+    CreateShortcut "$SMPROGRAMS\TokenBurn\TokenBurn Web Dashboard.lnk" "$INSTDIR\tokenburn-web.exe"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn-web.exe" "" "$INSTDIR\tokenburn-web.exe"
 SectionEnd
 
 ; PATH key in the system environment registry
@@ -81,11 +102,15 @@ SectionEnd
 
 ; Descriptions
 LangString DESC_SecGUI ${LANG_ENGLISH} "TokenBurn desktop GUI — mouse-driven AI token usage report"
+LangString DESC_SecCLI ${LANG_ENGLISH} "TokenBurn CLI — scriptable token usage report (tokenburn.exe)"
+LangString DESC_SecWeb ${LANG_ENGLISH} "TokenBurn web dashboard — local live dashboard, opens in your browser"
 LangString DESC_SecTUI ${LANG_ENGLISH} "TokenBurn TUI — keyboard-driven terminal AI token usage report"
 LangString DESC_SecPATH ${LANG_ENGLISH} "Add TokenBurn to the system PATH"
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
     !insertmacro MUI_DESCRIPTION_TEXT ${SecGUI} $(DESC_SecGUI)
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecCLI} $(DESC_SecCLI)
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecWeb} $(DESC_SecWeb)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecTUI} $(DESC_SecTUI)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecPATH} $(DESC_SecPATH)
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
@@ -105,8 +130,12 @@ SectionEnd
 Section Uninstall
     Delete "$INSTDIR\tokenburn-gui.exe"
     Delete "$INSTDIR\tokenburn-tui.exe"
+    Delete "$INSTDIR\tokenburn.exe"
+    Delete "$INSTDIR\tokenburn-web.exe"
+    RMDir /r "$INSTDIR\assets"
     Delete "$INSTDIR\uninstall.exe"
     Delete "$SMPROGRAMS\TokenBurn\TokenBurn.lnk"
+    Delete "$SMPROGRAMS\TokenBurn\TokenBurn Web Dashboard.lnk"
     Delete "$DESKTOP\TokenBurn.lnk"
     RMDir "$SMPROGRAMS\TokenBurn"
     RMDir "$INSTDIR"
@@ -121,4 +150,6 @@ Section Uninstall
     DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn-gui.exe"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn-tui.exe"
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn.exe"
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\tokenburn-web.exe"
 SectionEnd

@@ -11,8 +11,9 @@ makedepends=('rust' 'cargo' 'cmake' 'pkg-config')
 source=("$pkgbase-$pkgver.tar.gz::https://github.com/sorinirimies/tokenburn/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
-# Required for the GUI binary
-_gui_deps=('libxkbcommon' 'wayland' 'libgl' 'fontconfig')
+# Runtime deps of the GUI. X11 and Wayland libraries are dlopen()ed, so one
+# build serves both session types; xkbcommon is always needed.
+_gui_deps=('libxkbcommon' 'wayland' 'libx11' 'libgl' 'fontconfig')
 
 prepare() {
     cd "$pkgbase-$pkgver"
@@ -42,14 +43,24 @@ package_tokenburn() {
 package_tokenburn-gui() {
     pkgdesc="TokenBurn — desktop GUI AI token usage report written in Rust (Iced)"
     depends=("${_gui_deps[@]}")
+    optdepends=('vulkan-icd-loader: GPU rendering (falls back to software rendering without it)')
     cd "$pkgbase-$pkgver"
     install -Dm755 "target/release/tokenburn-gui" "$pkgdir/usr/bin/tokenburn-gui"
+    install -Dm644 "packaging/linux/tokenburn-gui.desktop" "$pkgdir/usr/share/applications/tokenburn-gui.desktop"
+    install -Dm644 "packaging/linux/tokenburn-gui.metainfo.xml" "$pkgdir/usr/share/metainfo/tokenburn-gui.metainfo.xml"
+    install -Dm644 "assets/icons/tokenburn.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/tokenburn.svg"
+    for n in 16 22 24 32 48 64 96 128 256 512; do
+        install -Dm644 "assets/icons/tokenburn-$n.png" "$pkgdir/usr/share/icons/hicolor/${n}x${n}/apps/tokenburn.png"
+    done
     install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/tokenburn-gui/LICENSE"
     install -Dm644 "README.md" "$pkgdir/usr/share/doc/tokenburn-gui/README.md"
 }
 
 package_tokenburn-web() {
     pkgdesc="TokenBurn web — local AI token usage dashboard written in Rust (Topcoat)"
+    # Serves the static dashboard. For the live (WebSocket) dashboard, bundle the
+    # Topcoat runtime (`topcoat asset bundle`) into /usr/share/tokenburn-web/assets
+    # or point TOKENBURN_WEB_ASSETS at it.
     depends=('gcc-libs')
     cd "$pkgbase-$pkgver"
     install -Dm755 "target/release/tokenburn-web" "$pkgdir/usr/bin/tokenburn-web"

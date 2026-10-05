@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=TokenBurn
+GenericName=AI token usage
+Comment=Local AI token and cost usage for pi and Zed
+Exec=tokenburn-gui
+Icon=tokenburn
+Terminal=false
+Categories=Development;Utility;
+Keywords=ai;tokens;usage;cost;pi;zed;llm;
+# Must equal the window's Wayland app_id / X11 WM_CLASS (see tokenburn-gui's
+# `application_id`) so panels pick the right icon and group windows.
+StartupWMClass=tokenburn-gui
+StartupNotify=true

@@ -37,20 +37,8 @@ commands all resolve exactly as if the script were compiled in place.
 
 ## Icon
 
-The installer expects `packaging\windows\tokenburn.ico` to exist at build time.
-See [`tokenburn.ico.txt`](tokenburn.ico.txt) for instructions on providing it.
-
-If no icon is committed, `scripts/ci/package_windows.sh` writes a small
-bundled fallback icon (a pre-built, verified-valid classic 16x16 32bpp ICO,
-embedded as a base64 blob and decoded with `base64 -d`) before invoking
-`makensis`, so the installer build never hard-fails on a missing icon file.
-Replace it with real branded artwork at any time using the same path — the
-fallback is only used when the file is absent.
-
-Earlier versions of this script generated the fallback icon at build time
-via PowerShell + `System.Drawing` (`Bitmap.GetHicon()` → `Icon.Save()`).
-That reliably produced an ICO file `makensis` rejected with
-`Error while loading icon ... can't open file`, regardless of the bitmap
-size used — this is a known quirk where `Icon.Save()` on a handle-derived
-icon emits non-standard ICO data. The bundled, pre-verified byte blob
-avoids that code path entirely.
+`packaging\windows\tokenburn.ico` is committed (classic BMP entries at
+16/24/32/48 px, which NSIS' legacy icon loader accepts — it rejects
+PNG-compressed entries). Regenerate every icon asset with
+`python3 scripts/gen_icons.py`. `package_windows.sh` fails loudly if the file
+is missing rather than shipping a placeholder.
