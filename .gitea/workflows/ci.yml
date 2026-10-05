@@ -194,6 +194,26 @@ jobs:
           kill $PID
           grep -q '(live)' web.log || { cat web.log; exit 1; }
 
+  # ── 3d. MSRV ────────────────────────────────────────────────────────────────
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the declared MSRV toolchain
+        run: |
+          msrv=$(grep -m1 '^rust-version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "$msrv" --profile minimal
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # tokenburn-web declares its own, higher MSRV (Topcoat), so it is excluded.
+      - name: cargo check (MSRV)
+        run: cargo check --locked --workspace --exclude tokenburn-web --all-targets
+
   # ── 4. Build (dev) ───────────────────────────────────────────────────────────
   build:
     name: build

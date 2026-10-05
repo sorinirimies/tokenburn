@@ -11,6 +11,7 @@ resolver = "2"
 [workspace.package]
 version      = "0.1.0"
 edition      = "2021"
+rust-version = "1.88"   # MSRV (tokenburn-web needs 1.98 — Topcoat — and says so itself)
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
 repository   = "https://github.com/sorinirimies/tokenburn"
@@ -44,6 +45,10 @@ iced         = { version = "0.14", features = ["advanced", "canvas"] }
 # TUI (Ratatui)
 ratatui      = "0.30"
 crossterm    = "0.29"
+tui-spinner  = "0.4"     # animated spinner (loading indicator)
+tui-checkbox = "0.4"     # options checkboxes
+tui-slider   = "0.3"     # options sliders
+tui-piechart = "1.0"     # cost / token share pie chart
 
 # Web (Topcoat)
 topcoat      = "0.10"

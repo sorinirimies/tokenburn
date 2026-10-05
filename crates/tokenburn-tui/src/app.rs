@@ -2,7 +2,9 @@
 
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use std::time::Instant;
 
+use crate::features::options::Options;
 use chrono::Local;
 use ratatui::widgets::TableState;
 use tokenburn_core::{
@@ -28,6 +30,9 @@ pub enum BackgroundResult {
 pub struct App {
     pub query: Query,
     pub view: View,
+    pub options: Options,
+    /// When the last reload was started (drives auto-refresh).
+    pub last_reload: Option<Instant>,
     pub rows: Vec<Row>,
     pub report: Vec<ReportRow>,
     pub projects: Vec<(String, Summary)>,
@@ -54,6 +59,8 @@ impl App {
         Self {
             query: Query::default(),
             view: View::default(),
+            options: Options::default(),
+            last_reload: None,
             rows: Vec::new(),
             report: Vec::new(),
             projects: Vec::new(),
@@ -72,6 +79,7 @@ impl App {
     /// Re-read the logs in a background thread for the current query.
     pub fn reload(&mut self) {
         self.is_loading = true;
+        self.last_reload = Some(Instant::now());
         let query = self.query;
         let tx = self.bg_tx.clone();
         thread::spawn(move || {
@@ -79,6 +87,19 @@ impl App {
             let collected = collect(query.tool, start);
             let _ = tx.send(BackgroundResult::Loaded { query, collected });
         });
+    }
+
+    /// Start a reload when auto-refresh is on and the interval has elapsed.
+    pub fn tick_auto_refresh(&mut self) {
+        if !self.options.auto_refresh || self.is_loading {
+            return;
+        }
+        let due = self
+            .last_reload
+            .is_none_or(|t| t.elapsed() >= self.options.refresh_interval());
+        if due {
+            self.reload();
+        }
     }
 
     /// Drain finished background work. Results for a stale query are dropped.

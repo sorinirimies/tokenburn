@@ -1,0 +1,140 @@
+name: Dependency Update
+
+# The nightly dependency update runs on GITEA (see .gitea/workflows/deps-update.yml):
+# it bumps + tags + mirrors the result here, which then triggers release.yml.
+# This workflow is intentionally MANUAL-ONLY. Scheduling it as well would make the
+# two `main` branches diverge and break the Gitea → GitHub mirror push.
+#
+# Use "Run workflow" here when you are working GitHub-only (no Gitea mirror), or
+# to refresh dependencies on demand. To make GitHub the nightly source of truth
+# instead, add a `schedule:` trigger here and remove it from the Gitea workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Bump the patch version, tag and release when dependencies changed"
+        type: boolean
+        default: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: deps-update
+  cancel-in-progress: false
+
+jobs:
+  update-deps:
+    name: Update Cargo dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
+            libgl1-mesa-dev libfontconfig1-dev libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo update
+        run: cargo update
+
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet -- Cargo.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff -U0 -- Cargo.lock | grep -E '^[-+](name|version) ' || true
+          fi
+
+      - name: Check formatting
+        if: steps.check.outputs.changed == 'true'
+        run: cargo fmt --all -- --check
+
+      - name: Run tests
+        if: steps.check.outputs.changed == 'true'
+        run: cargo test --locked --workspace --all-features --all-targets
+
+      - name: Run clippy
+        if: steps.check.outputs.changed == 'true'
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings -A deprecated
+
+      # tokenburn-web declares its own, higher MSRV (Topcoat), so it is excluded.
+      - name: Check MSRV still builds
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          msrv=$(grep -m1 '^rust-version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          rustup toolchain install "$msrv" --profile minimal
+          cargo +"$msrv" check --locked --workspace --exclude tokenburn-web --all-targets
+
+      - name: Commit updated Cargo.lock
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "chore(deps): cargo update $(date -u '+%Y-%m-%d')"
+
+      # ── Release (optional) ─────────────────────────────────────────────────
+      - name: Install release tooling (nushell, git-cliff)
+        if: steps.check.outputs.changed == 'true' && inputs.release
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nushell,git-cliff
+
+      - name: Compute next patch version
+        if: steps.check.outputs.changed == 'true' && inputs.release
+        id: version
+        run: |
+          current=$(nu scripts/version.nu)
+          IFS='.' read -r major minor patch <<< "$current"
+          next="$major.$minor.$((patch + 1))"
+          while git rev-parse -q --verify "refs/tags/v$next" >/dev/null; do
+            patch=$((patch + 1))
+            next="$major.$minor.$((patch + 1))"
+          done
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "Releasing $current -> $next"
+
+      - name: Bump version, changelog, commit and tag
+        if: steps.check.outputs.changed == 'true' && inputs.release
+        run: nu scripts/bump_version.nu --yes ${{ steps.version.outputs.next }}
+
+      - name: Push commit (and tag)
+        if: steps.check.outputs.changed == 'true'
+        run: git push origin HEAD:main --follow-tags
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      # Pushes authored by GITHUB_TOKEN do NOT trigger other workflows
+      # (GitHub's anti-recursion guard), so dispatch release.yml explicitly.
+      - name: Trigger release workflow for the new tag
+        if: steps.check.outputs.changed == 'true' && inputs.release
+        run: gh workflow run release.yml --repo "${{ github.repository }}" -f tag="v${{ steps.version.outputs.next }}"
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Nothing to update
+        if: steps.check.outputs.changed == 'false'
+        run: echo "✅ All dependencies already up to date."

@@ -11,7 +11,14 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // The options popup captures every key while it is open.
+    if app.options.open {
+        crate::features::options::events::handle_key(app, key);
+        return;
+    }
+
     match key.code {
+        KeyCode::Char('o') => app.options.open = true,
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('r') | KeyCode::F(5) => app.reload(),
         KeyCode::Char('t') => app.cycle_tool(),
@@ -31,6 +38,17 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
 mod tests {
     use super::*;
     use crossterm::event::KeyEvent;
+
+    #[test]
+    fn o_opens_options_and_swallows_keys_until_closed() {
+        let mut app = App::new();
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('o')));
+        assert!(app.options.open);
+        // `q` closes the popup instead of quitting the app.
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('q')));
+        assert!(!app.options.open);
+        assert!(!app.should_quit);
+    }
 
     #[test]
     fn q_quits() {

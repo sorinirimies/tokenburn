@@ -8,7 +8,6 @@ use ratatui::Frame;
 use tokenburn_core::utils::fmt::{compact, usd};
 
 use crate::app::App;
-use crate::utils::spinner;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let t = app.total();
@@ -25,11 +24,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         chip("tool", q.tool.as_str()),
         chip("view", q.bucket.label()),
         chip("window", q.window.label()),
-        Span::raw(if app.is_loading {
-            format!(" {} loading…", spinner(app.tick_count))
-        } else {
-            String::new()
-        }),
+        Span::raw(if app.is_loading { " loading…" } else { "" }),
     ]);
 
     let totals = Line::from(vec![

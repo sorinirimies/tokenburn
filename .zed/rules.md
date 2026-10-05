@@ -93,6 +93,8 @@ Server-rendered, **one flat crate** (no server/client split), one module per con
 
 ### TUI Crate (`tokenburn-tui`) — Immediate-Mode Loop
 
+Use the author's own widget crates wherever one fits: `tui-spinner` (loading), `tui-piechart` (share chart), `tui-checkbox` + `tui-slider` (options popup), `tui-file-explorer` if a file picker is ever needed. Quirk: `tui-slider` draws a horizontal slider's label/value on the row *above* the area it is given.
+
 ~30 fps ratatui loop. Loading runs on a background thread and reports through `mpsc` (`bg_tx`/`bg_rx` on `App`); `poll_background()` drains it every tick. Stale results (query changed meanwhile) are dropped. Feature modules under `src/features/<name>/` hold `view.rs` / `events.rs`.
 
 ## Coding Standards

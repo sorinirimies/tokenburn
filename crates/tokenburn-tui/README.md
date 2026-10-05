@@ -9,8 +9,13 @@ Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://
 | `w` | cycle window (today → month → all) |
 | `p` | toggle per-project / per-model view |
 | `↑/↓`, `j/k` | scroll |
+| `o` | options popup |
 | `r` | refresh |
 | `q`, `Esc` | quit |
+
+## Built with
+
+Besides [Ratatui](https://ratatui.rs): [`tui-spinner`](https://crates.io/crates/tui-spinner) (loading indicator), [`tui-piechart`](https://crates.io/crates/tui-piechart) (cost / token share by project, braille high-resolution), [`tui-checkbox`](https://crates.io/crates/tui-checkbox) and [`tui-slider`](https://crates.io/crates/tui-slider) (the `o` options popup: auto-refresh, refresh interval, chart toggles, pie slice count).
 
 ## Platforms
 

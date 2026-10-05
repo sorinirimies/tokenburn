@@ -44,6 +44,7 @@ where
     while !app.should_quit {
         app.tick_count = app.tick_count.wrapping_add(1);
         app.poll_background();
+        app.tick_auto_refresh();
 
         terminal.draw(|frame| layout::render(&mut app, frame))?;
 

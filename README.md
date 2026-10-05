@@ -121,6 +121,7 @@ It binds to localhost by default — token/cost data is private, so don't expose
 | `t` | cycle tool (all → pi → zed) |
 | `w` | cycle window (today → month → all) |
 | `p` | toggle per-project / per-model view |
+| `o` | options popup — checkboxes and sliders: auto-refresh + interval, bar chart, pie chart (braille), pie slices |
 | `↑/↓`, `j/k`, `g/G` | scroll |
 | `r` | refresh |
 | `q`, `Esc` | quit |

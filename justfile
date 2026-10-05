@@ -62,7 +62,7 @@ build-gui:
 build-tui:
     cargo build -p tokenburn-tui
 
-# Build release binaries for CLI, GUI and TUI
+# Build release binaries for CLI, GUI, web and TUI
 build-release:
     cargo build --release -p tokenburn
     cargo build --release -p tokenburn-gui
@@ -375,18 +375,15 @@ bump version: (validate-tag version) (_check-version-changed version) check-rele
 check-publish: _check-nu
     nu scripts/check_publish.nu
 
-# Dry-run publish for all five crates (in dependency order)
+# Dry-run publish: core fully, the rest only packaged (they need core on crates.io first)
 publish-dry: check-all
     @echo "Dry-run: tokenburn-core"
     cargo publish --dry-run -p tokenburn-core
-    @echo "Dry-run: tokenburn (CLI)"
-    cargo publish --dry-run -p tokenburn
-    @echo "Dry-run: tokenburn-gui"
-    cargo publish --dry-run -p tokenburn-gui
-    @echo "Dry-run: tokenburn-web"
-    cargo publish --dry-run -p tokenburn-web
-    @echo "Dry-run: tokenburn-tui"
-    cargo publish --dry-run -p tokenburn-tui
+    @for c in tokenburn tokenburn-gui tokenburn-web tokenburn-tui; do \
+        echo "Package check: $c"; \
+        cargo package --list --no-verify --allow-dirty -p $c > /dev/null || exit 1; \
+    done
+    @echo "✅ Dry run OK (dependents are verified for real once tokenburn-core is published)."
 
 # Publish all three in dependency order: core → gui → tui.
 publish: check-all publish-core publish-cli publish-gui publish-web publish-tui
@@ -469,197 +466,83 @@ remotes:
     @git remote -v
 
 # ── Git remotes & pushing ────────────────────────────────────────────────────
+# tokenburn lives on GitHub (origin) and the Gitea Starscream instance. Every
+# *-all recipe loops over REMOTES and keeps going when one fails.
+
+REMOTES := "origin gitea-starscream"
 
 # Push the current branch to GitHub (origin)
 push:
     git push origin main
 
-# Push the current branch to Gitea Microlab
-push-gitea-microlab:
-    git push gitea-microlab main
-
 # Push the current branch to Gitea Starscream
 push-gitea-starscream:
     git push gitea-starscream main
 
-# Push the current branch to Gitea (nexus-lab instance)
-push-gitea-nexus-lab:
-    git push gitea-nexus-lab main
-
-# Push the current branch to all remotes (continues on failure)
+# Push the current branch to every remote (continues on failure)
 push-all:
     #!/usr/bin/env sh
     failed=""
-    git push origin main             || failed="$failed origin"
-    git push gitea-microlab main     || failed="$failed gitea-microlab"
-    git push gitea-starscream main   || failed="$failed gitea-starscream"
-    git push gitea-nexus-lab main    || failed="$failed gitea-nexus-lab"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push to:$failed"
-    else
-        echo "✅ Pushed to GitHub, Gitea Microlab, Gitea Starscream, and Gitea (nexus-lab)!"
-    fi
+    for r in {{ REMOTES }}; do
+        git push "$r" main || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Failed to push to:$failed"; exit 1; fi
+    echo "✅ Pushed to: {{ REMOTES }}"
 
-# Force-push the current branch to all remotes
+# Force-push the current branch to every remote (leases are NOT used — be sure!)
 push-all-force:
     #!/usr/bin/env sh
     failed=""
-    git push --force origin main             || failed="$failed origin"
-    git push --force gitea-microlab main     || failed="$failed gitea-microlab"
-    git push --force gitea-starscream main   || failed="$failed gitea-starscream"
-    git push --force gitea-nexus-lab main    || failed="$failed gitea-nexus-lab"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to force-push to:$failed"
-    else
-        echo "✅ Force-pushed to GitHub, Gitea Microlab, Gitea Starscream, and Gitea (nexus-lab)!"
-    fi
+    for r in {{ REMOTES }}; do
+        git push --force "$r" main || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Failed to force-push to:$failed"; exit 1; fi
+    echo "✅ Force-pushed to: {{ REMOTES }}"
 
 # Pull the current branch from GitHub (origin)
 pull:
     git pull origin main
 
-# Pull the current branch from Gitea Microlab
-pull-gitea-microlab:
-    git pull gitea-microlab main
-
 # Pull the current branch from Gitea Starscream
 pull-gitea-starscream:
     git pull gitea-starscream main
 
-# Pull the current branch from Gitea (nexus-lab instance)
-pull-gitea-nexus-lab:
-    git pull gitea-nexus-lab main
-
-# Pull the current branch from all remotes (continues on failure)
+# Pull the current branch from every remote (continues on failure)
 pull-all:
     #!/usr/bin/env sh
     failed=""
-    git pull origin main             || failed="$failed origin"
-    git pull gitea-microlab main     || failed="$failed gitea-microlab"
-    git pull gitea-starscream main   || failed="$failed gitea-starscream"
-    git pull gitea-nexus-lab main    || failed="$failed gitea-nexus-lab"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to pull from:$failed"
-    else
-        echo "✅ Pulled from GitHub, Gitea Microlab, Gitea Starscream, and Gitea (nexus-lab)!"
-    fi
+    for r in {{ REMOTES }}; do
+        git pull "$r" main || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Failed to pull from:$failed"; exit 1; fi
+    echo "✅ Pulled from: {{ REMOTES }}"
 
 # Push all tags to GitHub
 push-tags:
     git push origin --tags
 
-# Push all tags to all remotes (continues on failure)
+# Push all tags to every remote (continues on failure)
 push-tags-all:
     #!/usr/bin/env sh
     failed=""
-    git push origin --tags             || failed="$failed origin"
-    git push gitea-microlab --tags     || failed="$failed gitea-microlab"
-    git push gitea-starscream --tags   || failed="$failed gitea-starscream"
-    git push gitea-nexus-lab --tags    || failed="$failed gitea-nexus-lab"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push tags to:$failed"
-    else
-        echo "✅ Tags pushed to all remotes!"
-    fi
+    for r in {{ REMOTES }}; do
+        git push "$r" --tags || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Failed to push tags to:$failed"; exit 1; fi
+    echo "✅ Tags pushed to: {{ REMOTES }}"
 
-# ── Release workflows ─────────────────────────────────────────────────────────
-
-# Bump, commit, tag, then push to GitHub — triggers Release workflow.
-release version: (bump version)
-    @echo "Pushing release v{{ version }} to GitHub…"
-    git push --follow-tags origin main
-    @echo "✅ Release v{{ version }} pushed — Release workflow will trigger automatically."
-    @echo "   https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//' | sed 's/\.git//')/actions"
-
-# Bump, commit, tag, then push to Gitea Microlab only.
-release-gitea-microlab version: (bump version)
-    @echo "Pushing release v{{ version }} to Gitea Microlab…"
-    git push --follow-tags gitea-microlab main
-    @echo "✅ Release v{{ version }} live on Gitea Microlab."
-
-# Bump, commit, tag, then push to Gitea Starscream only.
-release-gitea-starscream version: (bump version)
-    @echo "Pushing release v{{ version }} to Gitea Starscream…"
-    git push --follow-tags gitea-starscream main
-    @echo "✅ Release v{{ version }} live on Gitea Starscream."
-
-# Bump, commit, tag, then push to Gitea (nexus-lab instance) only.
-release-gitea-nexus-lab version: (bump version)
-    @echo "Pushing release v{{ version }} to Gitea (nexus-lab)…"
-    git push --follow-tags gitea-nexus-lab main
-    @echo "✅ Release v{{ version }} live on Gitea (nexus-lab)."
-
-# Bump, commit, tag, then push to all remotes (continues on failure).
-release-all version: (bump version)
-    #!/usr/bin/env sh
-    echo "Pushing release v{{ version }} to all remotes…"
-    failed=""
-    git push --follow-tags origin main             || failed="$failed origin"
-    git push --follow-tags gitea-microlab main     || failed="$failed gitea-microlab"
-    git push --follow-tags gitea-starscream main   || failed="$failed gitea-starscream"
-    git push --follow-tags gitea-nexus-lab main    || failed="$failed gitea-nexus-lab"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Release v{{ version }} failed to push to:$failed"
-    else
-        echo "✅ Release v{{ version }} pushed to GitHub, Gitea Microlab, Gitea Starscream, and Gitea (nexus-lab)!"
-    fi
-
-# Push the latest commit and all tags to every remote (no bump, continues on failure).
-push-release-all: check-all
-    #!/usr/bin/env sh
-    failed=""
-    git push --follow-tags origin main             || failed="$failed origin"
-    git push --follow-tags gitea-microlab main     || failed="$failed gitea-microlab"
-    git push --follow-tags gitea-starscream main   || failed="$failed gitea-starscream"
-    git push --follow-tags gitea-nexus-lab main    || failed="$failed gitea-nexus-lab"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push to:$failed"
-    else
-        echo "✅ Latest commit + tags pushed to all remotes."
-    fi
-
-# Manually re-trigger the Release workflow for an existing tag via the gh CLI.
-release-retrigger version:
-    @command -v gh >/dev/null 2>&1 || { \
-        echo "❌ GitHub CLI (gh) not found. Install from https://cli.github.com"; exit 1; \
-    }
-    @echo "Manually dispatching Release workflow for tag v{{ version }}…"
-    gh workflow run release.yml --field tag=v{{ version }}
-    @echo "✅ Dispatched — check progress at: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions"
-
-# Force-sync Gitea Microlab with GitHub
-sync-gitea-microlab:
-    git push gitea-microlab main --force
-    git push gitea-microlab --tags --force
-    @echo "✅ Gitea Microlab force-synced with GitHub."
-
-# Force-sync Gitea Starscream with GitHub
+# Force-sync Gitea Starscream with GitHub (main + tags)
 sync-gitea-starscream:
     git push gitea-starscream main --force
     git push gitea-starscream --tags --force
-    @echo "✅ Gitea Starscream force-synced with GitHub."
+    @echo "✅ Gitea Starscream force-synced."
 
-# Force-sync Gitea (nexus-lab instance) with GitHub
-sync-gitea-nexus-lab:
-    git push gitea-nexus-lab main --force
-    git push gitea-nexus-lab --tags --force
-    @echo "✅ Gitea (nexus-lab) force-synced with GitHub."
-
-# Force-sync all Gitea instances with GitHub (continues on failure)
-sync-all-gitea:
+# Add the Gitea Starscream remote if it is missing
+setup-remotes:
     #!/usr/bin/env sh
-    failed=""
-    git push gitea-microlab main --force                  || failed="$failed gitea-microlab"
-    git push gitea-microlab --tags --force                || failed="$failed gitea-microlab-tags"
-    git push gitea-starscream main --force       || failed="$failed gitea-starscream"
-    git push gitea-starscream --tags --force     || failed="$failed gitea-starscream-tags"
-    git push gitea-nexus-lab main --force        || failed="$failed gitea-nexus-lab"
-    git push gitea-nexus-lab --tags --force      || failed="$failed gitea-nexus-lab-tags"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to sync:$failed"
-    else
-        echo "✅ All Gitea instances force-synced with GitHub."
-    fi
+    git remote get-url origin >/dev/null 2>&1 || git remote add origin git@github.com:sorinirimies/tokenburn.git
+    git remote get-url gitea-starscream >/dev/null 2>&1 || git remote add gitea-starscream gitea@192.168.1.44:sorin/tokenburn.git
+    git remote -v
 
 # Add a Gitea remote and optionally push — interactive (nu script)
 setup-gitea url: _check-nu
@@ -668,3 +551,76 @@ setup-gitea url: _check-nu
 # Migrate this project to dual GitHub + Gitea hosting (interactive)
 migrate-gitea: _check-nu
     nu scripts/migrate_to_gitea.nu
+
+# ── Release workflows ─────────────────────────────────────────────────────────
+# Pushing a vX.Y.Z tag starts the Release workflow on whichever host receives it
+# (GitHub: .github/workflows/release.yml, Gitea: .gitea/workflows/release.yml).
+
+# First release of the version already in Cargo.toml (0.1.0): gate, changelog, tag, push to all remotes
+release-initial: check-release _check-git-cliff _check-nu
+    #!/usr/bin/env sh
+    set -e
+    version=$(nu scripts/version.nu)
+    tag="v$version"
+    nu scripts/ci/validate_tag.nu "$tag" >/dev/null
+    if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+        echo "❌ Tag $tag already exists. Use 'just release <new-version>' to bump."; exit 1
+    fi
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "❌ Working tree is dirty — commit or stash first."; exit 1
+    fi
+    git-cliff --output CHANGELOG.md --tag "$tag"
+    git add CHANGELOG.md
+    git diff --cached --quiet || git commit -m "chore: release $tag"
+    git tag -a "$tag" -m "Release $tag"
+    echo "🏷️  Tagged $tag — pushing to: {{ REMOTES }}"
+    failed=""
+    for r in {{ REMOTES }}; do
+        git push "$r" main || failed="$failed $r"
+        git push "$r" "$tag" || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Release $tag failed to push to:$failed"; exit 1; fi
+    echo "✅ Release $tag pushed to: {{ REMOTES }} — Release workflows will start."
+
+# Bump, commit, tag, then push to every remote — triggers the Release workflows.
+release version: (bump version)
+    #!/usr/bin/env sh
+    failed=""
+    for r in {{ REMOTES }}; do
+        git push --follow-tags "$r" main || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Release v{{ version }} failed to push to:$failed"; exit 1; fi
+    echo "✅ Release v{{ version }} pushed to: {{ REMOTES }}"
+
+# Bump, commit, tag, then push to GitHub only.
+release-github version: (bump version)
+    git push --follow-tags origin main
+    @echo "✅ Release v{{ version }} pushed to GitHub."
+
+# Bump, commit, tag, then push to Gitea Starscream only.
+release-gitea-starscream version: (bump version)
+    git push --follow-tags gitea-starscream main
+    @echo "✅ Release v{{ version }} pushed to Gitea Starscream."
+
+# Push the latest commit and all tags to every remote (no bump, continues on failure).
+push-release-all: check-all
+    #!/usr/bin/env sh
+    failed=""
+    for r in {{ REMOTES }}; do
+        git push --follow-tags "$r" main || failed="$failed $r"
+    done
+    if [ -n "$failed" ]; then echo "⚠️  Failed to push to:$failed"; exit 1; fi
+    echo "✅ Latest commit + tags pushed to: {{ REMOTES }}"
+
+# Manually re-trigger the GitHub Release workflow for an existing tag via the gh CLI.
+release-retrigger version:
+    @command -v gh >/dev/null 2>&1 || { \
+        echo "❌ GitHub CLI (gh) not found. Install from https://cli.github.com"; exit 1; \
+    }
+    @echo "Manually dispatching Release workflow for tag v{{ version }}…"
+    gh workflow run release.yml --field tag=v{{ version }}
+    @echo "✅ Dispatched — check progress at: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions"
+
+# Run the nightly dependency update workflow on GitHub on demand.
+deps-update-now:
+    gh workflow run deps-update.yml

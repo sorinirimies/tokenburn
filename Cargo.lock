@@ -5046,6 +5046,10 @@ dependencies = [
  "crossterm",
  "ratatui",
  "tokenburn-core",
+ "tui-checkbox",
+ "tui-piechart",
+ "tui-slider",
+ "tui-spinner",
 ]
 
 [[package]]
@@ -5635,6 +5639,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 dependencies = [
  "core_maths",
+]
+
+[[package]]
+name = "tui-checkbox"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c58a691322aaf315585a8c6e4d61aff48900071fc00a5c1e5f84f5494fc59be"
+dependencies = [
+ "ratatui",
+]
+
+[[package]]
+name = "tui-piechart"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80333ebf441bf1bf04055494abdd345ef90c6e74b3ada1349c6239cd5525bf9a"
+dependencies = [
+ "ratatui",
+]
+
+[[package]]
+name = "tui-slider"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa5a6ee84447b4cd5ed3fc49380fc9622a099f27a6a72ae918e4472d1f7e0c64"
+dependencies = [
+ "ratatui",
+ "unicode-width",
+]
+
+[[package]]
+name = "tui-spinner"
+version = "0.4.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed353870742ab556256a2bcf1733dc650b8be88a52842ce9acae884028172e2d"
+dependencies = [
+ "ratatui",
 ]
 
 [[package]]

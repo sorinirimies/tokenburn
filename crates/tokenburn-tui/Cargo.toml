@@ -2,6 +2,7 @@
 name = "tokenburn-tui"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -22,6 +23,10 @@ path = "src/main.rs"
 tokenburn-core = { workspace = true }
 ratatui        = { workspace = true }
 crossterm      = { workspace = true }
+tui-spinner    = { workspace = true }
+tui-checkbox   = { workspace = true }
+tui-slider     = { workspace = true }
+tui-piechart   = { workspace = true }
 anyhow         = { workspace = true }
 clap           = { workspace = true }
 chrono         = { workspace = true }
