@@ -5,6 +5,7 @@ use ratatui::style::{Color, Style};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders};
 use ratatui::Frame;
 use tokenburn_core::utils::fmt::compact;
+use tokenburn_core::Tool;
 
 use crate::app::App;
 
@@ -29,11 +30,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 .value(r.summary.total_tokens)
                 .text_value(compact(r.summary.total_tokens))
                 .label(label)
-                .style(Style::default().fg(if r.tool == "zed" {
-                    Color::Magenta
-                } else {
-                    Color::Cyan
-                }))
+                .style(Style::default().fg(tool_color(&r.tool)))
         })
         .collect();
 
@@ -49,6 +46,25 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(chart, area);
 }
 
+const TOOL_COLORS: [Color; 8] = [
+    Color::Cyan,
+    Color::Magenta,
+    Color::Yellow,
+    Color::Green,
+    Color::LightRed,
+    Color::LightBlue,
+    Color::LightMagenta,
+    Color::Gray,
+];
+
+/// A stable colour per tool (by its position in [`Tool::ALL`]).
+fn tool_color(name: &str) -> Color {
+    Tool::ALL
+        .iter()
+        .position(|t| t.as_str() == name)
+        .map_or(Color::White, |i| TOOL_COLORS[i % TOOL_COLORS.len()])
+}
+
 /// Trim a bucket label to its trailing, most-significant-for-recency part.
 fn short(bucket: &str) -> String {
     // "2026-05-01 13:00" → "05-01 13h"; "2026-05-01" → "05-01"; "2026-05" → "2026-05"
@@ -61,7 +77,20 @@ fn short(bucket: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::short;
+    use super::{short, tool_color};
+    use ratatui::style::Color;
+
+    #[test]
+    fn every_tool_gets_a_distinct_colour() {
+        let colors: Vec<Color> = tokenburn_core::Tool::ALL
+            .iter()
+            .map(|t| tool_color(t.as_str()))
+            .collect();
+        for (i, c) in colors.iter().enumerate() {
+            assert!(!colors[..i].contains(c), "duplicate colour for tool {i}");
+        }
+        assert_eq!(tool_color("mystery"), Color::White);
+    }
 
     #[test]
     fn shortens_labels() {

@@ -6,31 +6,44 @@ use serde::{Deserialize, Serialize};
 
 use crate::features::usage::{Summary, Tool};
 
-/// Which sources to read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+/// Which sources to read: everything, or one tool.
+///
+/// Serialises as a plain string (`"all"`, `"pi"`, `"claude"`, …).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ToolFilter {
     #[default]
     All,
-    Pi,
-    Zed,
+    Only(Tool),
 }
 
 impl ToolFilter {
-    pub const ALL: [ToolFilter; 3] = [ToolFilter::All, ToolFilter::Pi, ToolFilter::Zed];
+    pub const PI: ToolFilter = ToolFilter::Only(Tool::Pi);
+    pub const ZED: ToolFilter = ToolFilter::Only(Tool::Zed);
+
+    /// Every choice, `all` first — what pickers and the TUI `t` key cycle through.
+    pub const ALL: [ToolFilter; 9] = [
+        ToolFilter::All,
+        ToolFilter::Only(Tool::Pi),
+        ToolFilter::Only(Tool::Zed),
+        ToolFilter::Only(Tool::Claude),
+        ToolFilter::Only(Tool::Codex),
+        ToolFilter::Only(Tool::Copilot),
+        ToolFilter::Only(Tool::Gemini),
+        ToolFilter::Only(Tool::OpenCode),
+        ToolFilter::Only(Tool::Amp),
+    ];
 
     pub fn includes(self, tool: Tool) -> bool {
-        matches!(
-            (self, tool),
-            (ToolFilter::All, _) | (ToolFilter::Pi, Tool::Pi) | (ToolFilter::Zed, Tool::Zed)
-        )
+        match self {
+            ToolFilter::All => true,
+            ToolFilter::Only(t) => t == tool,
+        }
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             ToolFilter::All => "all",
-            ToolFilter::Pi => "pi",
-            ToolFilter::Zed => "zed",
+            ToolFilter::Only(t) => t.as_str(),
         }
     }
 }
@@ -44,12 +57,26 @@ impl fmt::Display for ToolFilter {
 impl FromStr for ToolFilter {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "all" => Ok(Self::All),
-            "pi" => Ok(Self::Pi),
-            "zed" => Ok(Self::Zed),
-            other => Err(format!("must be pi, zed, or all (got '{other}')")),
+        if s.eq_ignore_ascii_case("all") {
+            return Ok(Self::All);
         }
+        s.parse::<Tool>().map(Self::Only).map_err(|_| {
+            let names: Vec<&str> = Tool::ALL.iter().map(|t| t.as_str()).collect();
+            format!("must be all or one of {} (got '{s}')", names.join(", "))
+        })
+    }
+}
+
+impl Serialize for ToolFilter {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for ToolFilter {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -247,7 +274,46 @@ mod tests {
 
     #[test]
     fn tool_filter_parses_case_insensitively() {
-        assert_eq!("PI".parse::<ToolFilter>().unwrap(), ToolFilter::Pi);
+        assert_eq!("PI".parse::<ToolFilter>().unwrap(), ToolFilter::PI);
+        assert_eq!(
+            "Claude".parse::<ToolFilter>().unwrap(),
+            ToolFilter::Only(Tool::Claude)
+        );
+        assert_eq!("ALL".parse::<ToolFilter>().unwrap(), ToolFilter::All);
         assert!("vim".parse::<ToolFilter>().is_err());
+    }
+
+    #[test]
+    fn tool_filter_lists_every_tool_exactly_once() {
+        assert_eq!(ToolFilter::ALL.len(), Tool::ALL.len() + 1);
+        for t in Tool::ALL {
+            assert_eq!(
+                ToolFilter::ALL
+                    .iter()
+                    .filter(|f| **f == ToolFilter::Only(t))
+                    .count(),
+                1
+            );
+            assert_eq!(t.as_str().parse::<Tool>().unwrap(), t);
+        }
+    }
+
+    #[test]
+    fn tool_filter_error_lists_the_choices() {
+        let e = "vim".parse::<ToolFilter>().unwrap_err();
+        assert!(
+            e.contains("claude") && e.contains("codex") && e.contains("all"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn tool_filter_serialises_as_a_string() {
+        assert_eq!(
+            serde_json::to_string(&ToolFilter::Only(Tool::Codex)).unwrap(),
+            "\"codex\""
+        );
+        let back: ToolFilter = serde_json::from_str("\"all\"").unwrap();
+        assert_eq!(back, ToolFilter::All);
     }
 }

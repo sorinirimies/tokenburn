@@ -2,7 +2,7 @@
 
 # 🔥 TokenBurn
 
-**Local AI token & cost usage for pi and Zed — CLI, terminal UI, desktop GUI & web dashboard, all in Rust**
+**Local AI token & cost usage for pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp — CLI, terminal UI, desktop GUI & web dashboard, all in Rust**
 
 [![Crates.io](https://img.shields.io/crates/v/tokenburn.svg)](https://crates.io/crates/tokenburn)
 [![docs.rs](https://docs.rs/tokenburn-core/badge.svg)](https://docs.rs/tokenburn-core)
@@ -12,12 +12,22 @@
 
 ---
 
-TokenBurn reads **local logs only** — no network calls, no external service:
+TokenBurn reads **local logs only** — no network calls, no external service. It understands every agent harness and IDE that keeps token usage on disk:
 
-| Source | Location | Granularity |
-|--------|----------|-------------|
-| [pi](https://github.com/earendil-works/pi-coding-agent) | `~/.pi/agent/sessions/**/*.jsonl` | per assistant turn: input / output / cache read / cache write tokens + estimated cost |
-| Zed | `threads.db` (sqlite + zstd JSON) | per thread: input / output tokens only (Zed stores no `$` cost → always `0`) |
+| `--tool` | Tool | Where it reads (default) | Granularity | `$` cost |
+|----------|------|--------------------------|-------------|:---:|
+| `pi` | [pi](https://github.com/earendil-works/pi-coding-agent) | `~/.pi/agent/sessions/**/*.jsonl` | per assistant turn | ✅ |
+| `zed` | Zed agent panel | `threads.db` (sqlite + zstd JSON) | per thread, input/output only | – |
+| `claude` | Claude Code | `~/.claude/projects/**/*.jsonl` (+ `~/.config/claude`, `$CLAUDE_CONFIG_DIR`) | per message, de-duplicated | when logged |
+| `codex` | OpenAI Codex CLI | `~/.codex/sessions/**/*.jsonl` (`$CODEX_HOME`) | per model call (deltas of the running totals) | – |
+| `copilot` | GitHub Copilot CLI | `~/.copilot/session-state` (`$COPILOT_HOME`) | per session & model (`session.shutdown`) | – |
+| `gemini` | Google Gemini CLI | `~/.gemini/tmp/*/chats` (`$GEMINI_DATA_DIR`) | per message | – |
+| `opencode` | OpenCode | `~/.local/share/opencode/opencode.db` + legacy JSON (`$OPENCODE_DATA_DIR`) | per message | ✅ |
+| `amp` | Amp | `~/.local/share/amp/threads/*.json` (`$AMP_DATA_DIR`) | per message | – |
+
+`all` (the default) reads every tool that is installed; a tool that isn't simply contributes nothing. Each tool is read on its own thread. The `$` column says whether the tool logs a cost; where it doesn't, cost shows `$0.0000` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
+
+> The Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp readers follow the on-disk formats documented by [ccusage](https://github.com/ryoppippi/ccusage) and are covered by fixture tests; pi and Zed were also checked against real logs. Open an issue with a (redacted) log line if one of them misreads your data.
 
 One Rust workspace, four front-ends sharing one core:
 

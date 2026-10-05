@@ -1,7 +1,7 @@
 use clap::Parser;
 use tokenburn_core::{Query, ToolFilter};
 
-/// Desktop GUI for local AI token/cost usage (pi + Zed).
+/// Desktop GUI for local AI token/cost usage (pi, Zed, Claude Code, Codex, …).
 ///
 /// The flags only choose the initial view; everything can be changed in the window.
 #[derive(Debug, Parser, Clone)]

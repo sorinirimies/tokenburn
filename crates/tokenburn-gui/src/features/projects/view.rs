@@ -1,4 +1,4 @@
-//! Per-project (pi) / per-model (Zed) breakdown, most expensive first.
+//! Per-project / per-model breakdown, most expensive first.
 
 use iced::alignment::Horizontal;
 use iced::widget::{column, container, progress_bar, row, scrollable, text};

@@ -190,7 +190,7 @@ def main [
 
     build-package "tokenburn" $version $arch $rpm_arch $target (deb-control "tokenburn" $version $arch
         "TokenBurn — local AI token/cost usage CLI written in Rust"
-        "Reads the local pi and Zed logs and prints token and cost usage per month, day or hour. No network access."
+        "Reads the local logs of pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp and prints token and cost usage per month, day or hour. No network access."
         "" "") $has_web_assets
 
     build-package "tokenburn-tui" $version $arch $rpm_arch $target (deb-control "tokenburn-tui" $version $arch

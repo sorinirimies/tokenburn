@@ -57,7 +57,7 @@ pub fn build_report(rows: &[Row], query: &Query) -> Vec<ReportRow> {
     out
 }
 
-/// Per-project (pi) / per-model (Zed) breakdown, most expensive first.
+/// Per-project (or per-model, where a tool logs no project) breakdown, most expensive first.
 pub fn by_project(rows: &[Row]) -> Vec<(String, Summary)> {
     let mut groups: BTreeMap<(&'static str, &str), Vec<&Row>> = BTreeMap::new();
     for r in rows {
@@ -116,7 +116,7 @@ mod tests {
     fn single_tool_only_total() {
         let rows = vec![row(Tool::Pi, "2026-05-01T12:00:00Z", 10, 0.5)];
         let q = Query {
-            tool: ToolFilter::Pi,
+            tool: ToolFilter::PI,
             ..Query::default()
         };
         assert_eq!(build_report(&rows, &q).len(), 1);

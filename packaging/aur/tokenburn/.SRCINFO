@@ -1,5 +1,5 @@
 pkgbase = tokenburn
-	pkgdesc = Local AI token/cost usage report for pi + Zed — CLI, TUI, GUI and web dashboard
+	pkgdesc = Local AI token/cost usage report for pi, Zed, Claude Code, Codex, Gemini, OpenCode, Amp… — CLI, TUI, GUI and web dashboard
 	pkgver = 0.1.0
 	pkgrel = 1
 	url = https://github.com/sorinirimies/tokenburn

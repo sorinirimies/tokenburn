@@ -71,7 +71,7 @@ The original single-file Nushell implementation is kept as `scripts/tokenburn.nu
 
 ### Core Crate (`tokenburn-core`)
 
-- **Feature modules** live under `src/features/<name>/` (`pi`, `zed`, `usage`, `report`) with `types.rs` (plain data, serde derives), `ops.rs` (logic returning `anyhow::Result<T>`) and `mod.rs` (re-exports).
+- **Feature modules** live under `src/features/<name>/`: one collector per tool (`pi`, `zed`, `claude`, `codex`, `copilot`, `gemini`, `opencode`, `amp` — see "Adding a tool" in the core README), plus `usage` and `report` with `types.rs` (plain data, serde derives), `ops.rs` (logic returning `anyhow::Result<T>`) and `mod.rs` (re-exports).
 - **Error handling**: `anyhow::Result` with `.context("descriptive message")`. A missing log source is *not* an error — return no rows. Per-source failures surface as `Collected::warnings`.
 - **No UI code** in core. New data/aggregation functionality goes in core first.
 - Collectors take explicit paths in `*_from` variants so they are testable with `tempfile`.

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Features
 - Rust workspace: `tokenburn-core`, clap CLI `tokenburn`, Ratatui `tokenburn-tui`, Iced `tokenburn-gui`
+- Collectors for pi, Zed, Claude Code, Codex CLI, Copilot CLI, Gemini CLI, OpenCode and Amp (read in parallel, de-duplicated, cache-aware)
 - Native pi + Zed collectors (rusqlite + zstd) — no `python3`/`zstd` binaries required
 - `--json` output for the CLI
 - TUI: share pie chart (`tui-piechart`), options popup with checkboxes/sliders (`tui-checkbox`, `tui-slider`), animated loading spinner (`tui-spinner`), auto-refresh

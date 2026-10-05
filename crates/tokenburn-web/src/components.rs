@@ -109,7 +109,7 @@ pub async fn report_table(report: &[ReportRow]) -> Result<impl View> {
     })
 }
 
-/// Per-project (pi) / per-model (Zed) breakdown, most expensive first.
+/// Per-project / per-model breakdown, most expensive first.
 #[component]
 pub async fn projects_table(projects: &[(String, Summary)]) -> Result<impl View> {
     let max = projects

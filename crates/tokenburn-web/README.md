@@ -1,6 +1,6 @@
 # tokenburn-web
 
-Server-rendered web dashboard ([Topcoat](https://github.com/tokio-rs/topcoat)) for [TokenBurn](https://github.com/sorinirimies/tokenburn) — local AI token/cost usage for **pi** and **Zed**.
+Server-rendered web dashboard ([Topcoat](https://github.com/tokio-rs/topcoat)) for [TokenBurn](https://github.com/sorinirimies/tokenburn) — local AI token/cost usage for your AI coding agents (**pi**, **Zed**, **Claude Code**, **Codex**, **Copilot CLI**, **Gemini CLI**, **OpenCode**, **Amp**).
 
 ```sh
 just run-web                       # live dashboard, http://127.0.0.1:3000

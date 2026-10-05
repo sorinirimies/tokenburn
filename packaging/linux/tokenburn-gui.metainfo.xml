@@ -4,9 +4,9 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <name>TokenBurn</name>
-  <summary>Local AI token and cost usage for pi and Zed</summary>
+  <summary>Local AI token and cost usage for your AI coding agents</summary>
   <description>
-    <p>TokenBurn reads the session logs that pi and Zed already keep on disk and shows how many tokens you burned and what it cost — per month, day or hour, per tool and per project. Everything stays local: there are no network calls.</p>
+    <p>TokenBurn reads the session logs that pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp already keep on disk and shows how many tokens you burned and what it cost — per month, day or hour, per tool and per project. Everything stays local: there are no network calls.</p>
   </description>
   <launchable type="desktop-id">tokenburn-gui.desktop</launchable>
   <url type="homepage">https://github.com/sorinirimies/tokenburn</url>

@@ -1,7 +1,7 @@
 use clap::Parser;
 use tokenburn_core::{Query, ToolFilter};
 
-/// Interactive terminal UI for local AI token/cost usage (pi + Zed).
+/// Interactive terminal UI for local AI token/cost usage (pi, Zed, Claude Code, Codex, …).
 ///
 /// The flags only choose the initial view; everything can be changed live
 /// with the keyboard (press `q` to quit).
@@ -55,7 +55,7 @@ mod tests {
         let q = Args::parse_from(["tokenburn-tui", "--tool", "pi", "--hourly"]).query();
         assert_eq!(
             (q.tool, q.bucket, q.window),
-            (ToolFilter::Pi, Bucket::Hour, Window::Today)
+            (ToolFilter::PI, Bucket::Hour, Window::Today)
         );
     }
 

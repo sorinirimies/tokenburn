@@ -3,20 +3,82 @@ use std::fmt;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// Which tool produced a usage row.
+/// Which agent harness / IDE produced a usage row.
+///
+/// Every variant is backed by a collector in `features/<name>/` that reads the
+/// logs the tool already keeps on disk (no network). Adding a tool means adding a
+/// variant here, a collector module, and one line in [`crate::collect`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Tool {
+    /// [pi](https://github.com/earendil-works/pi-coding-agent)
     Pi,
+    /// Zed's agent panel
     Zed,
+    /// Claude Code
+    Claude,
+    /// OpenAI Codex CLI
+    Codex,
+    /// GitHub Copilot CLI
+    Copilot,
+    /// Google Gemini CLI
+    Gemini,
+    /// OpenCode
+    OpenCode,
+    /// Amp
+    Amp,
 }
 
 impl Tool {
+    /// Every supported tool, in display order.
+    pub const ALL: [Tool; 8] = [
+        Tool::Pi,
+        Tool::Zed,
+        Tool::Claude,
+        Tool::Codex,
+        Tool::Copilot,
+        Tool::Gemini,
+        Tool::OpenCode,
+        Tool::Amp,
+    ];
+
+    /// Short machine name (CLI flag value, JSON, query string).
     pub fn as_str(self) -> &'static str {
         match self {
             Tool::Pi => "pi",
             Tool::Zed => "zed",
+            Tool::Claude => "claude",
+            Tool::Codex => "codex",
+            Tool::Copilot => "copilot",
+            Tool::Gemini => "gemini",
+            Tool::OpenCode => "opencode",
+            Tool::Amp => "amp",
         }
+    }
+
+    /// Human-readable name.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Tool::Pi => "pi",
+            Tool::Zed => "Zed",
+            Tool::Claude => "Claude Code",
+            Tool::Codex => "Codex CLI",
+            Tool::Copilot => "Copilot CLI",
+            Tool::Gemini => "Gemini CLI",
+            Tool::OpenCode => "OpenCode",
+            Tool::Amp => "Amp",
+        }
+    }
+}
+
+impl std::str::FromStr for Tool {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lower = s.to_ascii_lowercase();
+        Tool::ALL
+            .into_iter()
+            .find(|t| t.as_str() == lower)
+            .ok_or_else(|| format!("unknown tool '{s}'"))
     }
 }
 
@@ -26,11 +88,13 @@ impl fmt::Display for Tool {
     }
 }
 
-/// One usage record: an assistant turn (pi) or a whole thread (Zed).
+/// One usage record: an assistant turn, a message, or a whole thread/session,
+/// depending on what the tool logs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Row {
     pub tool: Tool,
-    /// pi: project directory name; Zed: model name.
+    /// The project / workspace when the tool logs one (pi, Claude Code, Codex…),
+    /// otherwise the model name (Zed, Copilot, Gemini…).
     pub project: String,
     pub id: String,
     pub ts: DateTime<Utc>,

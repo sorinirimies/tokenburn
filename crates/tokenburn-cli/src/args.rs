@@ -1,7 +1,7 @@
 use clap::Parser;
 use tokenburn_core::{Query, ToolFilter};
 
-/// Local AI token/cost usage report for pi + Zed session logs on disk.
+/// Local AI token/cost usage report for AI coding agents (pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Amp), read from their session logs on disk.
 ///
 /// Reads local logs only — no network calls.
 #[derive(Debug, Parser, Clone)]
@@ -60,7 +60,7 @@ mod tests {
         let q = a.query();
         assert_eq!(
             (q.tool, q.bucket, q.window),
-            (ToolFilter::Pi, Bucket::Day, Window::All)
+            (ToolFilter::PI, Bucket::Day, Window::All)
         );
     }
 

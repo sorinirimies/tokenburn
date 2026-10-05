@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 
-/// Parse the timestamp flavours found in pi / Zed logs.
+/// Parse the timestamp flavours found in the agents' logs.
 ///
 /// Accepts RFC 3339 (`2026-05-01T10:00:00Z`, with offset or fractional
 /// seconds) and naive `YYYY-MM-DD[T ]HH:MM:SS[.f]` (interpreted as UTC).

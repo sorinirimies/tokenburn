@@ -70,7 +70,7 @@ mod tests {
         let q = parse(Some("pi"), Some("daily"), Some("all"));
         assert_eq!(
             (q.tool, q.bucket, q.window),
-            (ToolFilter::Pi, Bucket::Day, Window::All)
+            (ToolFilter::PI, Bucket::Day, Window::All)
         );
     }
 

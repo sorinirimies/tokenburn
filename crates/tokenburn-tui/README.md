@@ -1,6 +1,6 @@
 # tokenburn-tui
 
-Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://github.com/sorinirimies/tokenburn) — local AI token/cost usage for **pi** and **Zed**.
+Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://github.com/sorinirimies/tokenburn) — local AI token/cost usage for your AI coding agents (**pi**, **Zed**, **Claude Code**, **Codex**, **Copilot CLI**, **Gemini CLI**, **OpenCode**, **Amp**).
 
 | Key | Action |
 |-----|--------|
