@@ -1,0 +1,61 @@
+[workspace]
+members = [
+    "crates/tokenburn-core",
+    "crates/tokenburn-cli",
+    "crates/tokenburn-gui",
+    "crates/tokenburn-tui",
+    "crates/tokenburn-web",
+]
+resolver = "2"
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
+license      = "MIT"
+repository   = "https://github.com/sorinirimies/tokenburn"
+
+# ── Shared dependency versions ─────────────────────────────────────────────────
+# Pin versions here once; each crate's Cargo.toml references them with
+# `{ workspace = true }` so there is a single source of truth.
+
+[workspace.dependencies]
+# Core / shared
+anyhow       = "1"
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+chrono       = { version = "0.4", features = ["serde"] }
+dirs         = "6.0"
+rusqlite     = { version = "0.37", features = ["bundled"] }
+zstd         = "0.13"
+tempfile     = "3"
+futures      = "0.3"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI (clap)
+clap         = { version = "4", features = ["derive", "env"] }
+
+# GUI (Iced)
+iced         = { version = "0.14", features = ["advanced", "canvas"] }
+
+# TUI (Ratatui)
+ratatui      = "0.30"
+crossterm    = "0.29"
+
+# Web (Topcoat)
+topcoat      = "0.10"
+tokio        = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+
+# Internal crates
+tokenburn-core = { path = "crates/tokenburn-core", version = "0.1.0" }
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level     = 3
+lto           = "thin"   # faster than full LTO, nearly same size reduction
+codegen-units = 1        # maximises inlining across crate boundaries
+strip         = "symbols" # removes debug symbols from release binary
+panic         = "abort"  # removes unwinding tables (~10% smaller binary)

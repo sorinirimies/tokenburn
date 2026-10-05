@@ -1,0 +1,27 @@
+[package]
+name = "tokenburn-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TokenBurn — local AI token/cost usage terminal application (Ratatui TUI)"
+readme = "README.md"
+categories = ["command-line-utilities", "development-tools"]
+keywords = ["ai", "tokens", "usage", "cost", "tui"]
+
+[lib]
+name = "tokenburn_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tokenburn-tui"
+path = "src/main.rs"
+
+[dependencies]
+tokenburn-core = { workspace = true }
+ratatui        = { workspace = true }
+crossterm      = { workspace = true }
+anyhow         = { workspace = true }
+clap           = { workspace = true }
+chrono         = { workspace = true }

@@ -1,0 +1,33 @@
+pkgbase = tokenburn
+	pkgdesc = Local AI token/cost usage report for pi + Zed — CLI, TUI, GUI and web dashboard
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/sorinirimies/tokenburn
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	makedepends = cmake
+	makedepends = pkg-config
+	source = tokenburn-0.1.0.tar.gz::https://github.com/sorinirimies/tokenburn/archive/refs/tags/v0.1.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = tokenburn
+	pkgdesc = TokenBurn — local AI token/cost usage CLI (clap)
+	depends = gcc-libs
+
+pkgname = tokenburn-gui
+	pkgdesc = TokenBurn — desktop GUI AI token usage report written in Rust (Iced)
+	depends = libxkbcommon
+	depends = wayland
+	depends = libgl
+	depends = fontconfig
+
+pkgname = tokenburn-web
+	pkgdesc = TokenBurn web — local AI token usage dashboard written in Rust (Topcoat)
+	depends = gcc-libs
+
+pkgname = tokenburn-tui
+	pkgdesc = TokenBurn TUI — terminal AI token usage report written in Rust (Ratatui)
+	depends = gcc-libs

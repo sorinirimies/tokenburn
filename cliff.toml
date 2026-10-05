@@ -1,0 +1,64 @@
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+"""
+body = """
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## [Unreleased]
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") -%}
+### {{ group }}
+{% for commit in commits -%}
+- {{ commit.message | split(pat="\n") | first | trim }}{% if commit.breaking %} **[BREAKING]**{% endif %}
+{% endfor -%}
+{% endfor -%}
+{% if version and previous.version -%}
+**Full Changelog**: https://github.com/sorinirimies/tokenburn/compare/{{ previous.version }}...{{ version }}
+{% endif -%}
+"""
+trim = true
+
+[git]
+# Require conventional commits (feat:, fix:, chore:, etc.)
+conventional_commits = true
+# Skip commits that don't match any parser — keeps the log clean
+filter_unconventional = true
+# Only include commits that match one of the parsers below (no stray type groups)
+filter_commits = true
+
+commit_parsers = [
+    # Skip version-bump chores — they're noise, not substance
+    { message = "^chore: bump version",   skip = true },
+    { message = "^chore\\(release\\)",    skip = true },
+    { message = "^chore\\(deps\\)",       skip = true },
+
+    # Meaningful categories
+    { message = "^feat",                  group = "✨ Features"       },
+    { message = "^fix",                   group = "🐛 Bug Fixes"      },
+    { message = "^perf",                  group = "⚡ Performance"    },
+    { message = "^refactor",              group = "♻️  Refactor"      },
+    { message = "^doc",                   group = "📚 Documentation"  },
+    { message = "^test",                  group = "🧪 Testing"        },
+    { message = "^build",                 group = "📦 Build"          },
+    { message = "^ci",                    group = "🔄 CI"             },
+    { message = "^style",                 group = "💄 Style"          },
+    { message = "^chore",                 group = "🔧 Chores"         },
+]
+
+# Protect breaking-change commits from being skipped
+protect_breaking_commits = true
+
+# Only pick up vX.Y.Z tags
+tag_pattern = "v[0-9]*"
+
+# Sort tags by semver so version ordering is always correct
+sort_tags = "semver"
+
+[github]
+owner = "sorinirimies"
+repo  = "tokenburn"

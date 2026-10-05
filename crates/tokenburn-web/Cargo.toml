@@ -1,0 +1,26 @@
+[package]
+name = "tokenburn-web"
+version.workspace = true
+edition = "2024"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TokenBurn — local AI token/cost usage web dashboard (Topcoat)"
+readme = "README.md"
+categories = ["web-programming", "development-tools"]
+keywords = ["ai", "tokens", "usage", "cost", "web"]
+
+[lib]
+name = "tokenburn_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tokenburn-web"
+path = "src/main.rs"
+
+[dependencies]
+tokenburn-core = { workspace = true }
+topcoat        = { workspace = true }
+tokio          = { workspace = true }
+chrono         = { workspace = true }
+clap           = { workspace = true }

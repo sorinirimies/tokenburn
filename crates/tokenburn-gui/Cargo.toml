@@ -1,0 +1,28 @@
+[package]
+name = "tokenburn-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TokenBurn — local AI token/cost usage desktop application (Iced GUI)"
+readme = "README.md"
+categories = ["gui", "development-tools"]
+keywords = ["ai", "tokens", "usage", "cost", "gui"]
+
+[lib]
+name = "tokenburn_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tokenburn-gui"
+path = "src/main.rs"
+
+[dependencies]
+tokenburn-core     = { workspace = true }
+iced               = { workspace = true }
+futures            = { workspace = true }
+chrono             = { workspace = true }
+clap               = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
