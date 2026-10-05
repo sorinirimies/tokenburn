@@ -11,7 +11,7 @@ resolver = "2"
 [workspace.package]
 version      = "0.1.0"
 edition      = "2021"
-rust-version = "1.88"   # MSRV (tokenburn-web needs 1.98 — Topcoat — and says so itself)
+rust-version = "1.90"   # MSRV across Linux/macOS/Windows graphs (ordered-float 5.5 needs 1.90). tokenburn-web needs 1.98 (Topcoat) and says so itself
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
 repository   = "https://github.com/sorinirimies/tokenburn"
