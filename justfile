@@ -548,10 +548,6 @@ setup-remotes:
 setup-gitea url: _check-nu
     nu scripts/setup_gitea.nu {{ url }}
 
-# Migrate this project to dual GitHub + Gitea hosting (interactive)
-migrate-gitea: _check-nu
-    nu scripts/migrate_to_gitea.nu
-
 # ── Release workflows ─────────────────────────────────────────────────────────
 # Pushing a vX.Y.Z tag starts the Release workflow on whichever host receives it
 # (GitHub: .github/workflows/release.yml, Gitea: .gitea/workflows/release.yml).

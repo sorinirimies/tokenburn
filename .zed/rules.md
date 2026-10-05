@@ -97,6 +97,12 @@ Use the author's own widget crates wherever one fits: `tui-spinner` (loading), `
 
 ~30 fps ratatui loop. Loading runs on a background thread and reports through `mpsc` (`bg_tx`/`bg_rx` on `App`); `poll_background()` drains it every tick. Stale results (query changed meanwhile) are dropped. Feature modules under `src/features/<name>/` hold `view.rs` / `events.rs`.
 
+## Releases and nightly dependency updates
+
+- GitHub (`origin`) and Gitea (`gitea-starscream`) are **independent hosts — no mirroring**. Each runs its own nightly `deps-update.yml` (GitHub 02:00 UTC, Gitea 02:30 UTC): `cargo update` → fmt/clippy/tests (GitHub: also macOS + Windows) → MSRV check → commit lock → bump patch → tag → push straight to `main` → start `release.yml` (all platforms + crates.io). No changes ⇒ nothing happens. If the histories diverge, force-push the one to keep (`just push-all-force`).
+- First release: `just release-initial` (tags the version already in `Cargo.toml`). Later: `just release <version>`.
+- Secrets: `CRATES_IO_TOKEN` (publish), optional `GH_PAT` (GitHub: tag push triggers release.yml itself), `GITEA_TOKEN` (Gitea nightly push/dispatch).
+
 ## Coding Standards
 
 - **Rust edition**: 2021, MSRV 1.80+.

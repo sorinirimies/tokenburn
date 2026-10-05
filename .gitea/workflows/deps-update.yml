@@ -1,21 +1,20 @@
 name: Nightly Dependency Update
 
-# Gitea is the SINGLE SOURCE OF TRUTH for nightly dependency updates.
-# Every night: run `cargo update` against the CURRENT tip of main. Only when
-# Cargo.lock really changes AND the quality gate + MSRV check pass do we:
-#   1. commit the lockfile to main,
-#   2. bump the patch version (Cargo.toml, README badge, CHANGELOG.md),
-#   3. tag vX.Y.Z and push main + tag (the tag push triggers release.yml),
-#   4. mirror main + tag to GitHub (when the GITHUB_REMOTE_URL secret is set),
-#      which triggers the GitHub release workflow there too.
+# Fully automatic, no human in the loop. Every night, against the CURRENT tip of main:
+#   1. `cargo update` (compatible bumps only),
+#   2. only if Cargo.lock really changed: fmt + clippy + tests + MSRV check,
+#   3. commit the lockfile, bump the patch version (Cargo.toml, CHANGELOG.md),
+#   4. tag vX.Y.Z and push main + tag straight to main (no PR, no manual merge),
+#   5. dispatch release.yml (builds every platform, publishes to crates.io).
 # No changes => no commit, no tag, no release.
 #
-# (GitHub's deps-update.yml is manual-only on purpose: two nightly updaters
-# would make the two mains diverge and break the mirror push.)
+# This host runs on its own: there is deliberately NO mirroring to GitHub. GitHub
+# has its own nightly (.github/workflows/deps-update.yml). If the two histories
+# ever diverge, force-push whichever one you want to keep.
 
 on:
   schedule:
-    - cron: "30 0 * * *" # Every night at 00:30 UTC
+    - cron: "30 2 * * *" # 02:30 UTC (GitHub runs at 02:00)
   workflow_dispatch:
 
 env:
@@ -152,18 +151,20 @@ jobs:
           git push origin HEAD:main
           git push origin "v${{ steps.version.outputs.next }}"
 
-      - name: Push release commit and tag to GitHub mirror
+      # Tag pushes made with the built-in token don't always trigger workflows on
+      # Gitea, so start the release explicitly (the release workflow's concurrency
+      # group makes a duplicate harmless).
+      - name: Trigger release workflow for the new tag
         if: steps.check.outputs.changed == 'true'
-        env:
-          GITHUB_REMOTE_URL: ${{ secrets.GITHUB_REMOTE_URL }}
         run: |
-          if [ -z "$GITHUB_REMOTE_URL" ]; then
-            echo "GITHUB_REMOTE_URL not set — skipping GitHub mirror."
-            exit 0
-          fi
-          git remote add github-ci "$GITHUB_REMOTE_URL"
-          git push github-ci HEAD:main
-          git push github-ci "v${{ steps.version.outputs.next }}"
+          TAG="v${{ steps.version.outputs.next }}"
+          echo "🚀 Dispatching release.yml for ${TAG}…"
+          curl -sf -X POST \
+            "${{ github.server_url }}/api/v1/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches" \
+            -H "Authorization: token ${{ secrets.GITEA_TOKEN || github.token }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"ref\": \"main\", \"inputs\": {\"tag\": \"${TAG}\"}}" \
+            || echo "⚠️  Dispatch failed — the tag push may already have started the release."
 
       - name: Nothing to update
         if: steps.check.outputs.changed == 'false'
