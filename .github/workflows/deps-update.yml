@@ -173,10 +173,21 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install release tooling (nushell, git-cliff)
+      # `nu` is the crate name; install-action has no "nushell" tool (it fell back to
+      # a binstall of a crate called `nushell`, which does not exist). Use the setup
+      # action for nushell and install-action for git-cliff. Both are best-effort:
+      # the next step falls back to `cargo install` if either is unavailable.
+      - name: Install nushell
+        continue-on-error: true
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "0.111.0"
+
+      - name: Install git-cliff
+        continue-on-error: true
         uses: taiki-e/install-action@v2
         with:
-          tool: nushell,git-cliff
+          tool: git-cliff
 
       - name: Ensure nu + git-cliff are installed
         run: |
