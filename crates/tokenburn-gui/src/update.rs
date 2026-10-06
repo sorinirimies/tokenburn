@@ -23,7 +23,6 @@ impl TokenBurn {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Refresh => self.reload(),
             // The periodic tick never piles up loads: skip it while one is running.
             Message::AutoRefresh if self.is_loading => Task::none(),
             Message::AutoRefresh => self.reload_quietly(),

@@ -1,6 +1,6 @@
-//! Top toolbar: title + query pickers + refresh.
+//! Top toolbar: title + query pickers (the data refreshes itself).
 
-use iced::widget::{button, pick_list, row, space, text};
+use iced::widget::{pick_list, row, space, text};
 use iced::Element;
 use tokenburn_core::{Bucket, ToolFilter, Window};
 
@@ -43,7 +43,6 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
             Message::ThemeSelected
         )
         .placeholder("Theme"),
-        button("Refresh").on_press(Message::Refresh),
     ]
     .spacing(10)
     .align_y(iced::Alignment::Center)

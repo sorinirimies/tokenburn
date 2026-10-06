@@ -7,8 +7,6 @@ use crate::state::View;
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    /// Re-read the logs for the current query.
-    Refresh,
     /// Chart y-axis: tokens or cost.
     MetricSelected(tokenburn_core::Metric),
     /// Periodic tick: refresh unless a load is already in flight.
