@@ -332,6 +332,18 @@ jobs:
           done
           echo "✅ Release ${TAG} published."
 
+      # This Gitea is self-hosted and every release carries ~40 installers and archives,
+      # so only the newest release keeps its files. Older releases stay (notes, tags);
+      # their downloads live on GitHub. A failure here must not fail the release.
+      - name: Keep only the latest release's files
+        run: |
+          python3 scripts/ci/prune_releases.py \
+            --server "${{ github.server_url }}" \
+            --repo "${{ github.repository }}" \
+            --keep "${{ needs.validate.outputs.tag }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            || echo "⚠️  Could not prune old release files (non-fatal)."
+
   # ── 5. Publish to crates.io ───────────────────────────────────────────────────
   publish:
     name: Publish to crates.io
