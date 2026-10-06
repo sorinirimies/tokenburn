@@ -11,7 +11,15 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
 
-    // Popups capture every key while they are open.
+    // The `/` text box and the popups capture every key while they are active.
+    if app.filter_editing {
+        crate::features::filter::events::handle_text_key(app, key);
+        return;
+    }
+    if app.tool_filter_open {
+        crate::features::filter::events::handle_tool_key(app, key);
+        return;
+    }
     if app.theme_picker_open {
         crate::features::theme::events::handle_key(app, key);
         return;
@@ -26,6 +34,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('T') => app.theme_picker_open = true,
         KeyCode::Char(']') => app.cycle_theme(1),
         KeyCode::Char('[') => app.cycle_theme(-1),
+        KeyCode::Char('/') => app.filter_editing = true,
+        KeyCode::Char('f') => app.tool_filter_open = true,
+        // Esc first clears an active filter; only a second Esc quits.
+        KeyCode::Esc if !app.filter.is_empty() => app.clear_filter(),
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('r') | KeyCode::F(5) => app.reload(),
         KeyCode::Char('t') => app.cycle_tool(),
@@ -69,6 +81,33 @@ mod tests {
         handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
         handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
         assert_eq!(app.theme_index, tokenburn_core::THEME_COUNT - 1);
+    }
+
+    #[test]
+    fn slash_starts_the_text_filter_and_f_opens_the_tool_popup() {
+        let mut app = App::new();
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('/')));
+        assert!(app.filter_editing);
+        // While editing, letters are text — `q` must not quit.
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('q')));
+        assert!(!app.should_quit);
+        assert_eq!(app.filter.text, "q");
+        handle_key(&mut app, KeyEvent::from(KeyCode::Enter));
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('f')));
+        assert!(app.tool_filter_open);
+    }
+
+    #[test]
+    fn escape_clears_an_active_filter_before_it_quits() {
+        let mut app = App::new();
+        app.set_filter_text("x".into());
+        handle_key(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert!(
+            app.filter.is_empty() && !app.should_quit,
+            "first Esc clears the filter"
+        );
+        handle_key(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert!(app.should_quit, "second Esc quits");
     }
 
     #[test]

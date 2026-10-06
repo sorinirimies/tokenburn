@@ -28,8 +28,8 @@ pub async fn document(interactive: bool, theme: usize, child: Child<'_>) -> Resu
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 if !interactive {
-                    // Static fallback: no runtime, so just reload periodically.
-                    <meta http-equiv="refresh" content="60">
+                    // Static fallback: no runtime, so reload every 10 s (the live mode pushes updates).
+                    <meta http-equiv="refresh" content="10">
                 }
                 <title>"TokenBurn — AI token usage"</title>
                 <link rel="stylesheet" href="/style.css">

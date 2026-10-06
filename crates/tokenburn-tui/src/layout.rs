@@ -4,7 +4,7 @@ use ratatui::layout::{Constraint, Layout};
 use ratatui::Frame;
 
 use crate::app::{App, View};
-use crate::features::{chart, options, pie, projects, report, theme};
+use crate::features::{chart, filter, options, pie, projects, report, theme};
 use crate::widgets::{header, status_bar};
 
 pub fn render(app: &mut App, frame: &mut Frame) {
@@ -60,6 +60,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     if app.options.open {
         options::view::render(app, frame, frame.area());
     }
+    if app.tool_filter_open {
+        filter::view::render(app, frame, frame.area());
+    }
     if app.theme_picker_open {
         theme::view::render(app, frame, frame.area());
     }
@@ -70,11 +73,11 @@ mod tests {
     use super::*;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use tokenburn_core::{build_report, by_project, Query, Row, Tool};
+    use tokenburn_core::{Row, Tool};
 
     fn app_with_rows() -> App {
         let mut app = App::new();
-        app.rows = vec![Row {
+        app.all_rows = vec![Row {
             tool: Tool::Pi,
             project: "proj".into(),
             id: "x".into(),
@@ -85,9 +88,7 @@ mod tests {
             cache_write: 1,
             cost: 0.5,
         }];
-        app.report = build_report(&app.rows, &Query::default());
-        app.projects = by_project(&app.rows);
-        app.clamp_selection();
+        app.rebuild();
         app
     }
 
@@ -188,6 +189,53 @@ mod tests {
         let mut app = app_with_rows();
         app.set_theme(10);
         assert!(draw(&mut app).contains("theme:Nord"));
+    }
+
+    #[test]
+    fn the_filter_shows_in_the_header_and_hides_non_matching_rows() {
+        let mut app = app_with_rows();
+        app.set_filter_text("zzz-no-match".into());
+        let out = draw(&mut app);
+        assert!(out.contains("filter:\"zzz-no-match\""), "{out}");
+        assert!(out.contains("0/1 rows"));
+        assert!(
+            out.contains("The filter hides all 1 rows"),
+            "dedicated empty state"
+        );
+        app.clear_filter();
+        assert!(!draw(&mut app).contains("filter:"));
+    }
+
+    #[test]
+    fn the_text_box_replaces_the_status_line_while_editing() {
+        let mut app = app_with_rows();
+        app.filter_editing = true;
+        app.filter.text = "proj".into();
+        let out = draw(&mut app);
+        assert!(out.contains("/ proj█"), "{out}");
+        assert!(out.contains("Enter keep"));
+    }
+
+    #[test]
+    fn the_tool_popup_lists_every_tool_with_counts_and_checkboxes() {
+        let mut app = app_with_rows();
+        app.tool_filter_open = true;
+        app.filter.toggle_tool(Tool::Zed);
+        app.rebuild();
+        let out = draw(&mut app);
+        for name in [
+            "Tools",
+            "pi",
+            "Zed",
+            "Claude Code",
+            "Codex CLI",
+            "Amp",
+            "7/8 shown",
+            "☑",
+            "☐",
+        ] {
+            assert!(out.contains(name), "missing {name:?} in:\n{out}");
+        }
     }
 
     #[test]

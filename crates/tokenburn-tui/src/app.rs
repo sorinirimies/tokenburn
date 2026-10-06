@@ -9,8 +9,8 @@ use crate::features::theme::UiTheme;
 use chrono::Local;
 use ratatui::widgets::TableState;
 use tokenburn_core::{
-    build_report, by_project, collect, Bucket, Collected, Query, ReportRow, Row, Summary,
-    ToolFilter, Window,
+    build_report, by_project, collect, Bucket, Collected, Query, ReportRow, Row, RowFilter,
+    Summary, Tool, ToolFilter, Window,
 };
 
 /// Which main panel is shown.
@@ -39,7 +39,19 @@ pub struct App {
     pub theme_picker_open: bool,
     /// When the last reload was started (drives auto-refresh).
     pub last_reload: Option<Instant>,
+    /// Everything the last load returned (the filter works on this).
+    pub all_rows: Vec<Row>,
+    /// Rows that pass the filter — what the header, report, chart and pie show.
     pub rows: Vec<Row>,
+    /// Free-text + per-tool filter, applied instantly to `all_rows`.
+    pub filter: RowFilter,
+    /// The `/` text box has the keyboard.
+    pub filter_editing: bool,
+    /// The `f` tool-checkbox popup is open, and which row is selected.
+    pub tool_filter_open: bool,
+    pub tool_cursor: usize,
+    /// Rows per tool in `all_rows` (for the tool popup).
+    pub tool_counts: [usize; 8],
     pub report: Vec<ReportRow>,
     pub projects: Vec<(String, Summary)>,
     pub warnings: Vec<String>,
@@ -72,7 +84,13 @@ impl App {
             theme: UiTheme::by_index(0),
             theme_picker_open: false,
             last_reload: None,
+            all_rows: Vec::new(),
             rows: Vec::new(),
+            filter: RowFilter::default(),
+            filter_editing: false,
+            tool_filter_open: false,
+            tool_cursor: 0,
+            tool_counts: [0; 8],
             report: Vec::new(),
             projects: Vec::new(),
             warnings: Vec::new(),
@@ -122,16 +140,69 @@ impl App {
                     if query != self.query {
                         continue;
                     }
-                    self.report = build_report(&collected.rows, &query);
-                    self.projects = by_project(&collected.rows);
-                    self.rows = collected.rows;
+                    self.all_rows = collected.rows;
                     self.warnings = collected.warnings;
                     self.is_loading = false;
                     self.last_refresh = Some(Local::now());
-                    self.status_message = Some(format!("{} rows loaded", self.rows.len()));
-                    self.clamp_selection();
+                    self.rebuild();
                 }
             }
+        }
+    }
+
+    /// Re-apply the filter to the loaded rows and rebuild everything derived from
+    /// them. Instant: no log is re-read.
+    pub fn rebuild(&mut self) {
+        self.tool_counts = [0; 8];
+        for r in &self.all_rows {
+            self.tool_counts[r.tool.series_index()] += 1;
+        }
+        self.rows = self.filter.apply(&self.all_rows);
+        self.report = build_report(&self.rows, &self.query);
+        self.projects = by_project(&self.rows);
+        self.status_message = Some(self.status_text());
+        self.clamp_selection();
+    }
+
+    /// `updated 12:03:04 · 1,203 of 3,029 rows · auto-refresh 5s`
+    fn status_text(&self) -> String {
+        let updated = self
+            .last_refresh
+            .map(|t| t.format("%H:%M:%S").to_string())
+            .unwrap_or_else(|| "—".into());
+        let count = if self.filter.is_empty() {
+            format!("{} rows", self.all_rows.len())
+        } else {
+            format!("{} of {} rows", self.rows.len(), self.all_rows.len())
+        };
+        let auto = if self.options.auto_refresh {
+            format!(
+                " · auto-refresh {}s",
+                self.options.refresh_interval().as_secs()
+            )
+        } else {
+            " · auto-refresh off".to_string()
+        };
+        format!("updated {updated} · {count}{auto}")
+    }
+
+    /// Replace the filter text (and re-filter).
+    pub fn set_filter_text(&mut self, text: String) {
+        self.filter.text = text;
+        self.rebuild();
+    }
+
+    /// Clear text and tool filters.
+    pub fn clear_filter(&mut self) {
+        self.filter = RowFilter::default();
+        self.rebuild();
+    }
+
+    /// Flip the tool at the popup cursor.
+    pub fn toggle_tool_at_cursor(&mut self) {
+        if let Some(tool) = Tool::ALL.get(self.tool_cursor) {
+            self.filter.toggle_tool(*tool);
+            self.rebuild();
         }
     }
 
@@ -228,5 +299,168 @@ impl App {
     /// Grand total over every loaded row.
     pub fn total(&self) -> Summary {
         Summary::of(&self.rows)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokenburn_core::Row;
+
+    fn row(project: &str) -> Row {
+        Row {
+            tool: Tool::Pi,
+            project: project.into(),
+            id: "s".into(),
+            ts: "2026-05-01T12:00:00Z".parse().unwrap(),
+            input: 10,
+            output: 5,
+            cache_read: 0,
+            cache_write: 0,
+            cost: 1.0,
+        }
+    }
+
+    #[test]
+    fn auto_refresh_waits_for_the_interval() {
+        let mut app = App::new();
+        app.last_reload = Some(Instant::now());
+        app.tick_auto_refresh();
+        assert!(!app.is_loading, "not due yet");
+    }
+
+    #[test]
+    fn auto_refresh_fires_when_the_interval_has_elapsed() {
+        let mut app = App::new();
+        app.last_reload = Some(Instant::now() - Duration::from_secs(6));
+        app.tick_auto_refresh();
+        assert!(app.is_loading);
+        assert!(app.last_reload.unwrap().elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn auto_refresh_fires_immediately_on_the_first_tick() {
+        let mut app = App::new();
+        assert!(app.last_reload.is_none());
+        app.tick_auto_refresh();
+        assert!(app.is_loading);
+    }
+
+    #[test]
+    fn auto_refresh_respects_the_off_switch_and_in_flight_loads() {
+        let mut app = App::new();
+        app.options.auto_refresh = false;
+        app.tick_auto_refresh();
+        assert!(!app.is_loading, "off means off");
+
+        let mut app = App::new();
+        app.is_loading = true;
+        app.last_reload = Some(Instant::now() - Duration::from_secs(60));
+        let before = app.last_reload;
+        app.tick_auto_refresh();
+        assert_eq!(
+            app.last_reload, before,
+            "no second load while one is running"
+        );
+    }
+
+    #[test]
+    fn new_data_replaces_the_old_and_stamps_the_time() {
+        let mut app = App::new();
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: app.query,
+                collected: Collected {
+                    rows: vec![row("a"), row("b")],
+                    warnings: vec![],
+                },
+            })
+            .unwrap();
+        app.poll_background();
+        assert_eq!(app.rows.len(), 2);
+        assert!(app.last_refresh.is_some());
+
+        // A later refresh brings a new row: everything derived follows.
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: app.query,
+                collected: Collected {
+                    rows: vec![row("a"), row("b"), row("c")],
+                    warnings: vec![],
+                },
+            })
+            .unwrap();
+        app.poll_background();
+        assert_eq!(app.rows.len(), 3);
+        assert_eq!(app.projects.len(), 3);
+        assert_eq!(app.total().turns, 3);
+    }
+
+    #[test]
+    fn a_refresh_keeps_the_active_filter() {
+        let mut app = App::new();
+        app.set_filter_text("a".into());
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: app.query,
+                collected: Collected {
+                    rows: vec![row("alpha"), row("beta"), row("gamma")],
+                    warnings: vec![],
+                },
+            })
+            .unwrap();
+        app.poll_background();
+        assert_eq!(app.all_rows.len(), 3);
+        assert_eq!(app.rows.len(), 3, "all three contain an 'a'");
+        app.set_filter_text("alp".into());
+        assert_eq!(app.rows.len(), 1);
+        // Another auto-refresh must not reset the filter.
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: app.query,
+                collected: Collected {
+                    rows: vec![row("alpha"), row("beta"), row("alpine")],
+                    warnings: vec![],
+                },
+            })
+            .unwrap();
+        app.poll_background();
+        assert_eq!(app.rows.len(), 2);
+        assert_eq!(app.filter.text, "alp");
+    }
+
+    #[test]
+    fn stale_results_for_an_old_query_are_dropped() {
+        let mut app = App::new();
+        let old = app.query;
+        app.query.bucket = Bucket::Day;
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: old,
+                collected: Collected {
+                    rows: vec![row("x")],
+                    warnings: vec![],
+                },
+            })
+            .unwrap();
+        app.poll_background();
+        assert!(app.all_rows.is_empty());
+    }
+
+    #[test]
+    fn the_status_line_reports_filter_counts_and_the_refresh_interval() {
+        let mut app = App::new();
+        app.all_rows = vec![row("a"), row("b")];
+        app.last_refresh = Some(Local::now());
+        app.set_filter_text("a".into());
+        let s = app.status_message.clone().unwrap();
+        assert!(
+            s.contains("1 of 2 rows") && s.contains("auto-refresh 5s"),
+            "{s}"
+        );
+        app.options.auto_refresh = false;
+        app.rebuild();
+        assert!(app.status_message.unwrap().contains("auto-refresh off"));
     }
 }

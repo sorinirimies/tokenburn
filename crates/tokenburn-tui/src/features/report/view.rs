@@ -80,17 +80,25 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
         .highlight_symbol("▶ ");
 
     if app.report.is_empty() && !app.is_loading {
-        let msg = ratatui::widgets::Paragraph::new(format!(
-            "No tokenburn results found for tool={}, window={}.",
-            app.query.tool, app.query.window
-        ))
-        .style(Style::default().fg(th.muted))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border)
-                .title(" Report "),
-        );
+        let text = if app.all_rows.is_empty() {
+            format!(
+                "No tokenburn results found for tool={}, window={}.",
+                app.query.tool, app.query.window
+            )
+        } else {
+            format!(
+                "The filter hides all {} rows — Esc clears it, f edits the tools.",
+                app.all_rows.len()
+            )
+        };
+        let msg = ratatui::widgets::Paragraph::new(text)
+            .style(Style::default().fg(th.muted))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(border)
+                    .title(" Report "),
+            );
         frame.render_widget(msg, area);
         return;
     }

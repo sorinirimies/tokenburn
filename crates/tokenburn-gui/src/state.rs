@@ -7,6 +7,9 @@ use iced::Theme;
 use crate::features::theme;
 use tokenburn_core::{build_report, by_project, Collected, Query, ReportRow, Row, Summary};
 
+/// How often the GUI re-reads the logs by itself.
+pub const AUTO_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Which main panel is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum View {
@@ -43,6 +46,8 @@ pub struct TokenBurn {
     pub status_message: Option<String>,
     pub error_message: Option<String>,
     pub tick: u64,
+    /// When the data on screen was last refreshed.
+    pub last_updated: Option<chrono::DateTime<chrono::Local>>,
 }
 
 impl Default for TokenBurn {
@@ -71,6 +76,7 @@ impl TokenBurn {
             status_message: None,
             error_message: None,
             tick: 0,
+            last_updated: None,
         }
     }
 
@@ -89,9 +95,15 @@ impl TokenBurn {
 
     /// Install freshly loaded data.
     pub fn apply(&mut self, collected: Collected) {
+        self.last_updated = Some(chrono::Local::now());
         self.report = build_report(&collected.rows, &self.query);
         self.projects = by_project(&collected.rows);
-        self.status_message = Some(format!("{} rows loaded", collected.rows.len()));
+        self.status_message = Some(format!(
+            "Updated {} · {} rows · auto-refresh every {} s",
+            chrono::Local::now().format("%H:%M:%S"),
+            collected.rows.len(),
+            AUTO_REFRESH.as_secs()
+        ));
         self.rows = collected.rows;
         self.warnings = collected.warnings;
         self.error_message = None;

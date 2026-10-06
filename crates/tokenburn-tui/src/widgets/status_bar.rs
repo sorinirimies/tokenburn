@@ -31,7 +31,16 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         );
     }
 
-    let hints = "q quit · r refresh · t tool · w window · ←/→ 1-4 view · p projects · o options · T theme · [ ] cycle";
+    let hints = "q quit · / filter · f tools · t tool · w window · ←/→ view · p projects · o options · T theme";
+    if app.filter_editing {
+        // The text box: show the cursor and what the keys do.
+        let line = format!(
+            " / {}█    Enter keep · Esc clear · Ctrl-U wipe · \"-term\" excludes",
+            app.filter.text
+        );
+        frame.render_widget(Paragraph::new(line).style(bar), area);
+        return;
+    }
     let text = if let Some(w) = app.warnings.first() {
         format!("⚠ {w}   │   {hints}")
     } else if let Some(s) = &app.status_message {

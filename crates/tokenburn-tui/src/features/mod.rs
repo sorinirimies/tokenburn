@@ -1,4 +1,5 @@
 pub mod chart;
+pub mod filter;
 pub mod options;
 pub mod pie;
 pub mod projects;

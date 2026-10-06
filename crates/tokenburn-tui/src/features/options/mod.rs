@@ -60,7 +60,7 @@ impl Default for Options {
             show_chart: true,
             show_pie: true,
             hires_pie: true,
-            refresh_secs: SliderState::with_step(15.0, 5.0, 300.0, 5.0),
+            refresh_secs: SliderState::with_step(5.0, 5.0, 300.0, 5.0),
             top_n: SliderState::with_step(6.0, 3.0, 12.0, 1.0),
         }
     }
@@ -122,7 +122,7 @@ mod tests {
     fn defaults_are_sane() {
         let o = Options::default();
         assert!(o.auto_refresh && o.show_chart && o.show_pie);
-        assert_eq!(o.refresh_interval(), Duration::from_secs(15));
+        assert_eq!(o.refresh_interval(), Duration::from_secs(5));
         assert_eq!(o.top_n(), 6);
     }
 
@@ -153,7 +153,7 @@ mod tests {
             ..Options::default()
         };
         o.adjust(1);
-        assert_eq!(o.refresh_interval(), Duration::from_secs(20));
+        assert_eq!(o.refresh_interval(), Duration::from_secs(10));
         for _ in 0..100 {
             o.adjust(-1);
         }

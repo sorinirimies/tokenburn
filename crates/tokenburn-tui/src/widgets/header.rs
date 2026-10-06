@@ -25,6 +25,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         chip(th, "view", q.bucket.label()),
         chip(th, "window", q.window.label()),
         chip(th, "theme", tokenburn_core::THEME_NAMES[app.theme_index]),
+        filter_chips(app),
         Span::styled(
             if app.is_loading { " loading…" } else { "" },
             Style::default().fg(th.muted),
@@ -62,4 +63,31 @@ fn chip(th: UiTheme, label: &str, value: &str) -> Span<'static> {
 
 fn stat(th: UiTheme, label: &str, value: String) -> Span<'static> {
     Span::styled(format!(" {label} {value} │"), Style::default().fg(th.text))
+}
+
+/// `filter:"text"  tools:3/8  412/3,029` — empty when nothing is filtered.
+fn filter_chips(app: &App) -> Span<'static> {
+    let th = app.theme;
+    if app.filter.is_empty() {
+        return Span::raw("");
+    }
+    let mut parts = Vec::new();
+    if !app.filter.text.trim().is_empty() {
+        parts.push(format!("filter:\"{}\"", app.filter.text.trim()));
+    }
+    if app.filter.tools.is_some() {
+        parts.push(format!(
+            "tools:{}/{}",
+            app.filter.tool_count(),
+            tokenburn_core::Tool::ALL.len()
+        ));
+    }
+    parts.push(format!("{}/{} rows", app.rows.len(), app.all_rows.len()));
+    Span::styled(
+        format!(" ⌕ {} ", parts.join("  ")),
+        Style::default()
+            .fg(th.bg)
+            .bg(th.warning)
+            .add_modifier(Modifier::BOLD),
+    )
 }

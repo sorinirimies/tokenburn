@@ -32,7 +32,7 @@ mod tests {
         press(&mut app, KeyCode::Down);
         assert_eq!(app.options.cursor, OptionRow::RefreshSecs);
         press(&mut app, KeyCode::Right);
-        assert_eq!(app.options.refresh_interval().as_secs(), 20);
+        assert_eq!(app.options.refresh_interval().as_secs(), 10);
         press(&mut app, KeyCode::Up);
         press(&mut app, KeyCode::Char(' '));
         assert!(!app.options.auto_refresh);

@@ -40,6 +40,30 @@ One Rust workspace, four front-ends sharing one core:
 
 No `python3` or `zstd` binary needed (sqlite and zstd are bundled).
 
+## Always up to date
+
+Every front-end refreshes itself — no key to press:
+
+| Front-end | Refresh | Notes |
+|-----------|---------|-------|
+| TUI | every **5 s** (adjustable 5–300 s, or off, in the `o` popup) | the status line shows `updated 12:03:04 · 1,203 of 3,029 rows · auto-refresh 5s` |
+| GUI | every **10 s** | the footer shows the last update time; ticks never pile up while a load is running |
+| Web | every **5 s** over a WebSocket (live mode), every 10 s via meta-refresh (static mode) | the footer shows `● live` and the update time |
+
+A refresh re-reads only what changed recently (a month of logs takes ~0.2 s), so leaving a dashboard open is cheap.
+
+## Filtering (TUI)
+
+Filters apply instantly to the rows already loaded — totals, report, bar chart and pie all follow as you type:
+
+| Key | Filter |
+|-----|--------|
+| `/` | free text: `tokenburn claude` keeps rows matching **all** words (tool, project/model or session id, case-insensitive); `-zed` excludes. `Enter` keeps it, `Esc` clears it |
+| `f` | per-tool checkboxes with row counts — `␣` toggle, `a` all, `n` none, `x` clear every filter |
+| `Esc` | clears an active filter first; a second `Esc` quits |
+
+The header shows what is active, e.g. `⌕ filter:"tokenburn"  tools:3/8  412/3,029 rows`.
+
 ## Themes
 
 43 colour themes — Dracula, Nord, Tokyo Night, Catppuccin (all four), Gruvbox, Solarized, Kanagawa, Rosé Pine, Everforest, Flexoki, Oxocarbon, Synthwave… dark **and** light — shared by the TUI, the GUI and the web dashboard. The palettes live once in `tokenburn-core` (shared with the author's GitKraft), so a theme looks the same everywhere, including one colour per tool in the charts, pie and bars.
@@ -125,7 +149,7 @@ Binds `127.0.0.1` by default; `--host 0.0.0.0` exposes it on the network (there 
 
 The page is **live**: the filters are [Topcoat signals](https://github.com/tokio-rs/topcoat), changing one re-renders the dashboard without a page reload, and while the page is open the data refreshes itself every 5 s over a WebSocket (the footer shows `● live` and the last update time).
 
-The live mode needs Topcoat's browser runtime bundle. Release archives, the DMG, the Windows installer and the `.deb`/`.rpm` already include it. When you build yourself, run `just run-web` (needs `cargo install topcoat-cli`), or run `topcoat asset bundle` and point `TOKENBURN_WEB_ASSETS` at the result. The bundle is searched in this order: `$TOKENBURN_WEB_ASSETS`, `<exe dir>/assets`, `<exe dir>/../share/tokenburn-web/assets`, `/usr/share/tokenburn-web/assets`, `/usr/local/share/tokenburn-web/assets`. Without a bundle `tokenburn-web` still works and serves a static dashboard (GET-form filters, reload every 60 s), which is what `cargo install tokenburn-web` gives you.
+The live mode needs Topcoat's browser runtime bundle. Release archives, the DMG, the Windows installer and the `.deb`/`.rpm` already include it. When you build yourself, run `just run-web` (needs `cargo install topcoat-cli`), or run `topcoat asset bundle` and point `TOKENBURN_WEB_ASSETS` at the result. The bundle is searched in this order: `$TOKENBURN_WEB_ASSETS`, `<exe dir>/assets`, `<exe dir>/../share/tokenburn-web/assets`, `/usr/share/tokenburn-web/assets`, `/usr/local/share/tokenburn-web/assets`. Without a bundle `tokenburn-web` still works and serves a static dashboard (GET-form filters, reload every 10 s), which is what `cargo install tokenburn-web` gives you.
 
 | URL | Description |
 |-----|-------------|

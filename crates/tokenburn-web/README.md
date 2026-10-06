@@ -11,7 +11,7 @@ tokenburn-web                      # static fallback when no asset bundle is pre
 # flags: --host (default 127.0.0.1)  --port (default 3000)  --no-open (skip opening the browser)
 ```
 
-**Live mode** (needs `cargo install topcoat-cli` + the asset bundle, see `just bundle-web`): filters are signals bound to the selects, and the data region re-reads the logs every 5 s over a WebSocket — no reloads. **Static mode** (no bundle): GET-form filters and a 60 s `<meta refresh>`.
+**Live mode** (needs `cargo install topcoat-cli` + the asset bundle, see `just bundle-web`): filters are signals bound to the selects, and the data region re-reads the logs every 5 s over a WebSocket — no reloads. **Static mode** (no bundle): GET-form filters and a 10 s `<meta refresh>`.
 
 | URL | Description |
 |-----|-------------|

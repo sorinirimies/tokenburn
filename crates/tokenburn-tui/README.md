@@ -9,6 +9,8 @@ Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://
 | `w` | cycle window (today → month → all) |
 | `p` | toggle per-project / per-model view |
 | `↑/↓`, `j/k` | scroll |
+| `/` | filter rows by text (`word`, `-exclude`; Enter keep · Esc clear) |
+| `f` | filter by tool (checkboxes with counts) |
 | `o` | options popup |
 | `T` | theme picker (43 themes, live preview) |
 | `[` `]` | previous / next theme |

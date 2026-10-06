@@ -14,9 +14,19 @@ impl TokenBurn {
         commands::load(self.query)
     }
 
+    /// Like [`Self::reload`] but keeps the status line (the periodic refresh must not
+    /// flash "Loading…" every few seconds).
+    fn reload_quietly(&mut self) -> Task<Message> {
+        self.is_loading = true;
+        commands::load(self.query)
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Refresh => self.reload(),
+            // The periodic tick never piles up loads: skip it while one is running.
+            Message::AutoRefresh if self.is_loading => Task::none(),
+            Message::AutoRefresh => self.reload_quietly(),
             Message::Loaded(query, result) => {
                 // Drop results for a query the user has already changed.
                 if query != self.query {
@@ -87,6 +97,43 @@ mod tests {
         app.is_loading = true;
         let _ = app.update(Message::Loaded(q, Ok(Collected::default())));
         assert!(!app.is_loading);
+    }
+}
+
+#[cfg(test)]
+mod auto_refresh_tests {
+    use super::*;
+    use tokenburn_core::Collected;
+
+    #[test]
+    fn the_periodic_tick_starts_a_load_and_keeps_the_status_line() {
+        let mut app = TokenBurn::new();
+        app.status_message = Some("Updated 10:00:00".into());
+        let _ = app.update(Message::AutoRefresh);
+        assert!(app.is_loading);
+        assert_eq!(app.status_message.as_deref(), Some("Updated 10:00:00"));
+    }
+
+    #[test]
+    fn ticks_never_pile_up_while_a_load_is_in_flight() {
+        let mut app = TokenBurn::new();
+        app.is_loading = true;
+        let _ = app.update(Message::AutoRefresh);
+        assert!(app.is_loading);
+    }
+
+    #[test]
+    fn a_finished_load_stamps_the_update_time() {
+        let mut app = TokenBurn::new();
+        let q = app.query;
+        assert!(app.last_updated.is_none());
+        let _ = app.update(Message::Loaded(q, Ok(Collected::default())));
+        assert!(app.last_updated.is_some());
+        let status = app.status_message.unwrap();
+        assert!(
+            status.starts_with("Updated ") && status.contains("auto-refresh every 10 s"),
+            "{status}"
+        );
     }
 }
 

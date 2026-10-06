@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 use clap::Parser;
 use iced::{Settings, Task};
 use tokenburn_core::Query;
+use tokenburn_gui::state::AUTO_REFRESH;
 use tokenburn_gui::{Args, Message, TokenBurn};
 
 /// Initial query and theme from the command line (read once by `boot`).
@@ -51,7 +52,7 @@ fn boot() -> (TokenBurn, Task<Message>) {
 }
 
 fn subscription(state: &TokenBurn) -> iced::Subscription<Message> {
-    // Slow auto-refresh so the numbers track live sessions.
+    // Always on: the numbers track live sessions.
     let auto_refresh = iced::Subscription::run(auto_refresh_stream);
     // Spinner animation only while a load is in flight.
     let animation = if state.is_loading {
@@ -62,12 +63,12 @@ fn subscription(state: &TokenBurn) -> iced::Subscription<Message> {
     iced::Subscription::batch([auto_refresh, animation])
 }
 
-/// Emits `Refresh` every 60 s. Blocking sleep is fine: Iced runs each
-/// subscription on its own worker thread.
+/// Emits `AutoRefresh` every [`AUTO_REFRESH`]. Blocking sleep is fine: Iced runs
+/// each subscription on its own worker thread.
 fn auto_refresh_stream() -> impl futures::Stream<Item = Message> {
     futures::stream::unfold((), |()| async {
-        std::thread::sleep(std::time::Duration::from_secs(60));
-        Some((Message::Refresh, ()))
+        std::thread::sleep(AUTO_REFRESH);
+        Some((Message::AutoRefresh, ()))
     })
 }
 

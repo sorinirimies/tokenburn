@@ -25,7 +25,7 @@ pub mod features;
 pub mod utils;
 
 pub use features::report::{
-    build_report, by_project, Bucket, Query, ReportRow, ToolFilter, Window,
+    build_report, by_project, Bucket, Query, ReportRow, RowFilter, ToolFilter, Window,
 };
 pub use features::settings::{self, Settings};
 pub use features::theme::{
