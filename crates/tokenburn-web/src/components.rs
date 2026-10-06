@@ -10,6 +10,7 @@ use topcoat::{
 
 use crate::data::{Dashboard, share_percent};
 use crate::params::WINDOW_CHOICES;
+use crate::theme;
 
 /// Row of headline totals.
 #[component]
@@ -29,7 +30,7 @@ pub async fn summary_cards(total: Summary) -> Result<impl View> {
 
 /// GET form that drives the query string.
 #[component]
-pub async fn filters(query: Query) -> Result<impl View> {
+pub async fn filters(query: Query, theme: usize) -> Result<impl View> {
     Ok(view! {
         <form class="filters" method="get" action="/">
             <label>"tool "
@@ -50,6 +51,13 @@ pub async fn filters(query: Query) -> Result<impl View> {
                 <select name="window" onchange="this.form.submit()">
                     for w in Window::ALL {
                         <option value=(w.label()) selected=(w == query.window)>(w.label())</option>
+                    }
+                </select>
+            </label>
+            <label>"theme "
+                <select name="theme" onchange="this.form.submit()">
+                    for (i, n) in theme::names().iter().enumerate() {
+                        <option value=(*n) selected=(i == theme)>(*n)</option>
                     }
                 </select>
             </label>
@@ -99,7 +107,7 @@ pub async fn report_table(report: &[ReportRow]) -> Result<impl View> {
                         <td class="cost">(usd(r.summary.cost_usd))</td>
                         <td class="left">
                             if r.tool != "TOTAL" {
-                                <span class="bar"><span style=(format!("width:{}%", share_percent(r.summary.total_tokens, max)))></span></span>
+                                <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent(r.summary.total_tokens, max), theme::series_var(&r.tool)))></span></span>
                             }
                         </td>
                     </tr>
@@ -137,7 +145,7 @@ pub async fn projects_table(projects: &[(String, Summary)]) -> Result<impl View>
                         <td>(thousands(s.total_tokens))</td>
                         <td class="cost">(usd(s.cost_usd))</td>
                         <td class="left">
-                            <span class="bar"><span style=(format!("width:{}%", share_percent((s.cost_usd * 10_000.0) as u64, max)))></span></span>
+                            <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent((s.cost_usd * 10_000.0) as u64, max), theme::series_var(name.split(':').next().unwrap_or(""))))></span></span>
                         </td>
                     </tr>
                 }
@@ -153,11 +161,13 @@ pub async fn live_filters(
     tool: &Signal<String>,
     bucket: &Signal<String>,
     window: &Signal<String>,
+    theme: &Signal<String>,
 ) -> Result<impl View> {
-    let (t, b, w) = (
+    let (t, b, w, th) = (
         tool.get_untracked(),
         bucket.get_untracked(),
         window.get_untracked(),
+        theme.get_untracked(),
     );
     Ok(view! {
         <div class="filters">
@@ -179,6 +189,13 @@ pub async fn live_filters(
                 <select :value=$(window.get()) @change=$(|e: Event| window.set(e.target.value))>
                     for x in WINDOW_CHOICES {
                         <option value=(x) selected=(x == w)>(x)</option>
+                    }
+                </select>
+            </label>
+            <label>"theme "
+                <select :value=$(theme.get()) @change=$(|e: Event| theme.set(e.target.value))>
+                    for n in theme::names() {
+                        <option value=(*n) selected=(*n == th)>(*n)</option>
                     }
                 </select>
             </label>
@@ -230,4 +247,11 @@ pub async fn dashboard_body(d: &Dashboard, live: bool) -> Result<impl View> {
             <a href="/api/report">"/api/report"</a>
         </footer>
     })
+}
+
+/// The active theme's CSS variables, as a `<style>` element.
+#[component]
+pub async fn theme_style(index: usize) -> Result<impl View> {
+    let css = theme::css(index);
+    Ok(view! { <style>(css)</style> })
 }

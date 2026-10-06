@@ -1,15 +1,15 @@
 //! Bar chart of total tokens per bucket (or per tool when un-bucketed).
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders};
 use ratatui::Frame;
 use tokenburn_core::utils::fmt::compact;
-use tokenburn_core::Tool;
 
 use crate::app::App;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+    let th = app.theme;
     // Un-bucketed: chart the per-tool lines (skip TOTAL, it would dwarf them).
     let lines: Vec<_> = app.report.iter().filter(|r| r.tool != "TOTAL").collect();
 
@@ -30,7 +30,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 .value(r.summary.total_tokens)
                 .text_value(compact(r.summary.total_tokens))
                 .label(label)
-                .style(Style::default().fg(tool_color(&r.tool)))
+                .style(Style::default().fg(th.tool(&r.tool)))
         })
         .collect();
 
@@ -38,31 +38,15 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_style(Style::default().fg(th.border))
                 .title(" Total tokens "),
         )
         .bar_width(bar_w)
         .bar_gap(1)
+        .label_style(Style::default().fg(th.muted))
+        .value_style(Style::default().fg(th.bg).bg(th.accent))
         .data(BarGroup::default().bars(&bars));
     frame.render_widget(chart, area);
-}
-
-const TOOL_COLORS: [Color; 8] = [
-    Color::Cyan,
-    Color::Magenta,
-    Color::Yellow,
-    Color::Green,
-    Color::LightRed,
-    Color::LightBlue,
-    Color::LightMagenta,
-    Color::Gray,
-];
-
-/// A stable colour per tool (by its position in [`Tool::ALL`]).
-fn tool_color(name: &str) -> Color {
-    Tool::ALL
-        .iter()
-        .position(|t| t.as_str() == name)
-        .map_or(Color::White, |i| TOOL_COLORS[i % TOOL_COLORS.len()])
 }
 
 /// Trim a bucket label to its trailing, most-significant-for-recency part.
@@ -77,20 +61,7 @@ fn short(bucket: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{short, tool_color};
-    use ratatui::style::Color;
-
-    #[test]
-    fn every_tool_gets_a_distinct_colour() {
-        let colors: Vec<Color> = tokenburn_core::Tool::ALL
-            .iter()
-            .map(|t| tool_color(t.as_str()))
-            .collect();
-        for (i, c) in colors.iter().enumerate() {
-            assert!(!colors[..i].contains(c), "duplicate colour for tool {i}");
-        }
-        assert_eq!(tool_color("mystery"), Color::White);
-    }
+    use super::short;
 
     #[test]
     fn shortens_labels() {

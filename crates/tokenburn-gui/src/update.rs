@@ -42,8 +42,8 @@ impl TokenBurn {
                 self.query.window = window;
                 self.reload()
             }
-            Message::ThemeSelected(theme) => {
-                self.theme = theme;
+            Message::ThemeSelected(choice) => {
+                self.set_theme(choice.index);
                 Task::none()
             }
             Message::ViewSelected(view) => {
@@ -87,5 +87,34 @@ mod tests {
         app.is_loading = true;
         let _ = app.update(Message::Loaded(q, Ok(Collected::default())));
         assert!(!app.is_loading);
+    }
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+    use crate::features::theme::ThemeChoice;
+
+    #[test]
+    fn selecting_a_theme_changes_the_iced_theme() {
+        let mut app = TokenBurn::new();
+        let before = app.iced_theme();
+        let _ = app.update(Message::ThemeSelected(ThemeChoice::at(9)));
+        assert_eq!(app.theme_index, 9);
+        assert_ne!(
+            app.iced_theme().palette().background,
+            before.palette().background
+        );
+        assert_eq!(app.iced_theme().to_string(), tokenburn_core::THEME_NAMES[9]);
+    }
+
+    #[test]
+    fn persistence_is_off_by_default_so_tests_never_touch_the_users_settings() {
+        let mut app = TokenBurn::new();
+        assert!(!app.persist);
+        app.set_theme(5); // must not write anything
+        assert_eq!(app.theme_index, 5);
+        app.set_theme(usize::MAX);
+        assert_eq!(app.theme_index, tokenburn_core::THEME_COUNT - 1, "clamped");
     }
 }

@@ -21,11 +21,32 @@ struct Args {
     /// Don't open the dashboard in a browser on start.
     #[arg(long)]
     no_open: bool,
+
+    /// Colour theme (see --list-themes); remembered for the TUI and GUI too.
+    #[arg(long, value_name = "NAME", value_parser = parse_theme)]
+    theme: Option<usize>,
+
+    /// Print every theme name and exit.
+    #[arg(long)]
+    list_themes: bool,
+}
+
+fn parse_theme(s: &str) -> Result<usize, String> {
+    tokenburn_core::find_theme(s).ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
 }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
+    if args.list_themes {
+        for name in tokenburn_core::THEME_NAMES {
+            println!("{name}");
+        }
+        return Ok(());
+    }
+    if let Some(i) = args.theme {
+        let _ = tokenburn_core::settings::save_theme(i);
+    }
     serve(ServerOptions {
         host: args.host,
         port: args.port,

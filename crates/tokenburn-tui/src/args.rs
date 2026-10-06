@@ -27,6 +27,18 @@ pub struct Args {
     /// Start with all logged history.
     #[arg(long, short)]
     pub all: bool,
+
+    /// Colour theme (see --list-themes); remembered for the GUI and web dashboard too.
+    #[arg(long, value_name = "NAME", value_parser = parse_theme)]
+    pub theme: Option<usize>,
+
+    /// Print every theme name and exit.
+    #[arg(long)]
+    pub list_themes: bool,
+}
+
+fn parse_theme(s: &str) -> Result<usize, String> {
+    tokenburn_core::find_theme(s).ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
 }
 
 impl Args {
@@ -57,6 +69,14 @@ mod tests {
             (q.tool, q.bucket, q.window),
             (ToolFilter::PI, Bucket::Hour, Window::Today)
         );
+    }
+
+    #[test]
+    fn theme_flag_accepts_names_case_insensitively_and_rejects_unknown_ones() {
+        let a = Args::parse_from(["tokenburn-tui", "--theme", "tokyo night"]);
+        assert_eq!(a.theme, tokenburn_core::find_theme("Tokyo Night"));
+        assert!(Args::try_parse_from(["tokenburn-tui", "--theme", "nope"]).is_err());
+        assert_eq!(Args::parse_from(["tokenburn-tui"]).theme, None);
     }
 
     #[test]

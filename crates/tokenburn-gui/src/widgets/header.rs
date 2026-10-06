@@ -1,9 +1,10 @@
 //! Top toolbar: title + query pickers + refresh.
 
 use iced::widget::{button, pick_list, row, space, text};
-use iced::{Element, Theme};
+use iced::Element;
 use tokenburn_core::{Bucket, ToolFilter, Window};
 
+use crate::features::theme::ThemeChoice;
 use crate::message::Message;
 use crate::state::{TokenBurn, View};
 
@@ -37,10 +38,11 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
             Message::WindowSelected
         ),
         pick_list(
-            Theme::ALL,
-            Some(state.theme.clone()),
+            ThemeChoice::all(),
+            Some(ThemeChoice::at(state.theme_index)),
             Message::ThemeSelected
-        ),
+        )
+        .placeholder("Theme"),
         button("Refresh").on_press(Message::Refresh),
     ]
     .spacing(10)

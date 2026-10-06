@@ -1,5 +1,5 @@
 use ratatui::layout::Rect;
-use ratatui::style::Color;
+use ratatui::style::Style;
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use tui_piechart::{PieChart, PieSlice};
@@ -8,24 +8,22 @@ use super::pie_data;
 use crate::app::App;
 use crate::utils::truncate;
 
-const COLORS: [Color; 8] = [
-    Color::Cyan,
-    Color::Magenta,
-    Color::Yellow,
-    Color::Green,
-    Color::LightRed,
-    Color::LightBlue,
-    Color::LightMagenta,
-    Color::Gray,
-];
-
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+    let th = app.theme;
     let (data, metric) = pie_data(&app.projects, app.options.top_n());
     let title = format!(" Share by project · {} ", metric.label());
-    let block = Block::default().borders(Borders::ALL).title(title);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(th.border))
+        .title(title);
 
     if data.is_empty() {
-        frame.render_widget(Paragraph::new("No data.").block(block), area);
+        frame.render_widget(
+            Paragraph::new("No data.")
+                .style(Style::default().fg(th.muted))
+                .block(block),
+            area,
+        );
         return;
     }
 
@@ -33,7 +31,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let slices: Vec<PieSlice> = data
         .iter()
         .enumerate()
-        .map(|(i, (_, v))| PieSlice::new(&names[i], *v, COLORS[i % COLORS.len()]))
+        .map(|(i, (_, v))| PieSlice::new(&names[i], *v, th.slice(i)))
         .collect();
 
     frame.render_widget(

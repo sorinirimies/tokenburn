@@ -27,6 +27,10 @@ pub mod utils;
 pub use features::report::{
     build_report, by_project, Bucket, Query, ReportRow, ToolFilter, Window,
 };
+pub use features::settings::{self, Settings};
+pub use features::theme::{
+    find_theme, theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES,
+};
 pub use features::usage::{Row, Summary, Tool};
 
 use chrono::{DateTime, Utc};

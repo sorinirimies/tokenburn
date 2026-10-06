@@ -10,6 +10,8 @@ Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://
 | `p` | toggle per-project / per-model view |
 | `↑/↓`, `j/k` | scroll |
 | `o` | options popup |
+| `T` | theme picker (43 themes, live preview) |
+| `[` `]` | previous / next theme |
 | `r` | refresh |
 | `q`, `Esc` | quit |
 

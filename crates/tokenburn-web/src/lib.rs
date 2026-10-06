@@ -12,6 +12,7 @@
 //! | [`params`] | query-string / signal values → core `Query` |
 //! | [`data`] | loading and shaping the dashboard data |
 //! | [`style`] | the stylesheet |
+//! | [`theme`] | the core's colour themes as CSS custom properties |
 //!
 //! Routes use absolute paths and are registered through `.discover()`, so the
 //! file layout never influences URLs.
@@ -27,5 +28,6 @@ pub mod data;
 pub mod pages;
 pub mod params;
 pub mod style;
+pub mod theme;
 
 pub use app::{ServerOptions, router, serve};

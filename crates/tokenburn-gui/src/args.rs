@@ -26,6 +26,18 @@ pub struct Args {
     /// Start with all logged history.
     #[arg(long, short)]
     pub all: bool,
+
+    /// Colour theme (see --list-themes); remembered for the TUI and web dashboard too.
+    #[arg(long, value_name = "NAME", value_parser = parse_theme)]
+    pub theme: Option<usize>,
+
+    /// Print every theme name and exit.
+    #[arg(long)]
+    pub list_themes: bool,
+}
+
+fn parse_theme(s: &str) -> Result<usize, String> {
+    tokenburn_core::find_theme(s).ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
 }
 
 impl Args {

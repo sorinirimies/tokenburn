@@ -12,5 +12,7 @@ pub mod gemini;
 pub mod opencode;
 pub mod pi;
 pub mod report;
+pub mod settings;
+pub mod theme;
 pub mod usage;
 pub mod zed;

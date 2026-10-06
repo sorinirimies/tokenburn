@@ -1,7 +1,7 @@
 //! Stylesheet served at `/style.css`.
 
 pub const CSS: &str = r#"
-:root { color-scheme: dark; --bg:#14161f; --panel:#1c1f2b; --line:#2b3042; --fg:#d8dcea; --dim:#8b92aa; --accent:#7aa2f7; --ok:#9ece6a; --warn:#e0af68; --err:#f7768e; }
+:root { color-scheme: dark; --bg:#14161f; --panel:#1c1f2b; --line:#2b3042; --fg:#d8dcea; --dim:#8b92aa; --accent:#7aa2f7; --ok:#9ece6a; --warn:#e0af68; --err:#f7768e; --fg2:#e0af68; --sel:#232840; --s0:#7aa2f7; --s1:#bb9af7; --s2:#e0af68; --s3:#9ece6a; --s4:#f7768e; --s5:#7dcfff; --s6:#ff9e64; --s7:#a9b1d6; }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
 main { max-width:1200px; margin:0 auto; padding:24px; display:flex; flex-direction:column; gap:20px; }
@@ -18,12 +18,13 @@ button { cursor:pointer; border-color:var(--accent); }
 .card.cost .value { color:var(--ok); }
 table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
 th, td { padding:8px 12px; text-align:right; font-variant-numeric:tabular-nums; border-bottom:1px solid var(--line); }
-th { color:var(--accent); font-weight:600; background:#181b26; }
+th { color:var(--accent); font-weight:600; background:var(--sel); }
 th:first-child, td:first-child, td.left, th.left { text-align:left; }
 tr.total td { color:var(--warn); font-weight:700; }
 td.cost { color:var(--ok); }
 .bar { width:140px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; display:inline-block; }
 .bar > span { display:block; height:100%; background:var(--accent); }
+tr:hover td { background:var(--sel); }
 .empty, .warn { padding:16px; background:var(--panel); border:1px solid var(--line); border-radius:8px; color:var(--dim); }
 .warn { color:var(--warn); }
 .badge { padding:2px 8px; border-radius:10px; border:1px solid var(--line); }

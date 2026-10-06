@@ -11,7 +11,11 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
 
-    // The options popup captures every key while it is open.
+    // Popups capture every key while they are open.
+    if app.theme_picker_open {
+        crate::features::theme::events::handle_key(app, key);
+        return;
+    }
     if app.options.open {
         crate::features::options::events::handle_key(app, key);
         return;
@@ -19,6 +23,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
 
     match key.code {
         KeyCode::Char('o') => app.options.open = true,
+        KeyCode::Char('T') => app.theme_picker_open = true,
+        KeyCode::Char(']') => app.cycle_theme(1),
+        KeyCode::Char('[') => app.cycle_theme(-1),
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('r') | KeyCode::F(5) => app.reload(),
         KeyCode::Char('t') => app.cycle_tool(),
@@ -48,6 +55,20 @@ mod tests {
         handle_key(&mut app, KeyEvent::from(KeyCode::Char('q')));
         assert!(!app.options.open);
         assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn capital_t_opens_the_theme_picker_and_brackets_cycle_themes() {
+        let mut app = App::new();
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('T')));
+        assert!(app.theme_picker_open);
+        handle_key(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert!(!app.theme_picker_open);
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char(']')));
+        assert_eq!(app.theme_index, 1);
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
+        assert_eq!(app.theme_index, tokenburn_core::THEME_COUNT - 1);
     }
 
     #[test]

@@ -12,4 +12,5 @@ macOS, Windows and Linux. On Linux **one binary serves X11 and Wayland**: it onl
 env -u WAYLAND_DISPLAY tokenburn-gui     # force X11 (XWayland) inside a Wayland session
 ICED_BACKEND=tiny-skia tokenburn-gui     # force software rendering (VMs, remote desktops)
 tokenburn-gui --daily --tool pi          # choose the initial view
+tokenburn-gui --theme "Tokyo Night"      # 43 themes; also in the toolbar drop-down
 ```

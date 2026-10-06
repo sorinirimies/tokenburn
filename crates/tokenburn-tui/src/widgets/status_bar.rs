@@ -1,20 +1,19 @@
 //! Bottom status line: loading spinner, message and key hints.
 
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use tui_spinner::{FluxFrames, FluxSpinner};
 
 use crate::app::App;
 
-const BAR: Style = Style::new().fg(Color::Black).bg(Color::DarkGray);
-
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+    let bar = Style::default().fg(app.theme.bg).bg(app.theme.accent);
     // [3 cols: spinner] [rest: message + hints]
     let [left, right] = Layout::horizontal([Constraint::Length(3), Constraint::Min(0)]).areas(area);
 
-    frame.render_widget(Paragraph::new("").style(BAR), left);
+    frame.render_widget(Paragraph::new("").style(bar), left);
 
     // Animated spinner (tui-spinner) while a background load is in flight.
     if app.is_loading {
@@ -27,12 +26,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         frame.render_widget(
             FluxSpinner::new(app.tick_count)
                 .frames(FluxFrames::CORNERS)
-                .color(Color::Black),
+                .color(app.theme.bg),
             cell,
         );
     }
 
-    let hints = "q quit · r refresh · t tool · w window · ←/→ 1-4 view · p projects · o options";
+    let hints = "q quit · r refresh · t tool · w window · ←/→ 1-4 view · p projects · o options · T theme · [ ] cycle";
     let text = if let Some(w) = app.warnings.first() {
         format!("⚠ {w}   │   {hints}")
     } else if let Some(s) = &app.status_message {
@@ -40,5 +39,5 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     } else {
         hints.to_string()
     };
-    frame.render_widget(Paragraph::new(text).style(BAR), right);
+    frame.render_widget(Paragraph::new(text).style(bar), right);
 }

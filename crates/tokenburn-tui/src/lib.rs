@@ -23,22 +23,37 @@ pub use crate::args::Args;
 use tokenburn_core::Query;
 
 /// Run the TUI until the user quits, starting from `query`.
-pub fn run(query: Query) -> Result<()> {
+///
+/// `theme` (an index into [`tokenburn_core::THEME_NAMES`]) overrides the saved theme;
+/// `None` uses the one in the shared settings file.
+pub fn run(query: Query, theme: Option<usize>) -> Result<()> {
     // `ratatui::init` enables raw mode + alternate screen and installs a
     // panic hook that restores the terminal.
     let mut terminal = ratatui::init();
-    let result = run_app(&mut terminal, query);
+    let result = run_app(&mut terminal, query, theme);
     ratatui::restore();
     result
 }
 
 /// The inner event loop — draw, poll for input, dispatch, repeat.
-pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, query: Query) -> Result<()>
+pub fn run_app<B: Backend>(
+    terminal: &mut Terminal<B>,
+    query: Query,
+    theme: Option<usize>,
+) -> Result<()>
 where
     B::Error: Send + Sync + 'static,
 {
     let mut app = App::new();
+    app.persist = true;
     app.query = query;
+    match theme {
+        Some(i) => app.set_theme(i), // an explicit --theme is remembered
+        None => {
+            app.theme_index = tokenburn_core::settings::theme_index();
+            app.theme = crate::features::theme::UiTheme::by_index(app.theme_index);
+        }
+    }
     app.reload();
 
     while !app.should_quit {

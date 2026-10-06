@@ -5,6 +5,7 @@ use std::thread;
 use std::time::Instant;
 
 use crate::features::options::Options;
+use crate::features::theme::UiTheme;
 use chrono::Local;
 use ratatui::widgets::TableState;
 use tokenburn_core::{
@@ -31,6 +32,11 @@ pub struct App {
     pub query: Query,
     pub view: View,
     pub options: Options,
+    /// Index into [`tokenburn_core::THEME_NAMES`].
+    pub theme_index: usize,
+    /// Colours of the active theme (what every view reads).
+    pub theme: UiTheme,
+    pub theme_picker_open: bool,
     /// When the last reload was started (drives auto-refresh).
     pub last_reload: Option<Instant>,
     pub rows: Vec<Row>,
@@ -43,6 +49,8 @@ pub struct App {
     pub last_refresh: Option<chrono::DateTime<Local>>,
     pub tick_count: u64,
     pub should_quit: bool,
+    /// Write settings (theme) to disk. `false` in tests.
+    pub persist: bool,
     pub bg_tx: Sender<BackgroundResult>,
     bg_rx: Receiver<BackgroundResult>,
 }
@@ -60,6 +68,9 @@ impl App {
             query: Query::default(),
             view: View::default(),
             options: Options::default(),
+            theme_index: 0,
+            theme: UiTheme::by_index(0),
+            theme_picker_open: false,
             last_reload: None,
             rows: Vec::new(),
             report: Vec::new(),
@@ -71,6 +82,7 @@ impl App {
             last_refresh: None,
             tick_count: 0,
             should_quit: false,
+            persist: false,
             bg_tx,
             bg_rx,
         }
@@ -180,6 +192,28 @@ impl App {
             Window::All => Window::Today,
         };
         self.reload();
+    }
+
+    /// Apply the theme at `index` (wraps / clamps) and remember it in the shared
+    /// settings so the GUI and web dashboard start with it too.
+    pub fn set_theme(&mut self, index: usize) {
+        self.theme_index = index.min(tokenburn_core::THEME_COUNT - 1);
+        self.theme = UiTheme::by_index(self.theme_index);
+        self.persist_theme();
+    }
+
+    /// Move `delta` themes forward (negative: back), wrapping around.
+    pub fn cycle_theme(&mut self, delta: isize) {
+        let n = tokenburn_core::THEME_COUNT as isize;
+        let next = (self.theme_index as isize + delta).rem_euclid(n) as usize;
+        self.set_theme(next);
+    }
+
+    /// Best-effort save; tests opt out so they never touch the user's real config.
+    fn persist_theme(&self) {
+        if self.persist {
+            let _ = tokenburn_core::settings::save_theme(self.theme_index);
+        }
     }
 
     pub fn toggle_view(&mut self) {

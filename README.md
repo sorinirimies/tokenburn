@@ -40,6 +40,18 @@ One Rust workspace, four front-ends sharing one core:
 
 No `python3` or `zstd` binary needed (sqlite and zstd are bundled).
 
+## Themes
+
+43 colour themes — Dracula, Nord, Tokyo Night, Catppuccin (all four), Gruvbox, Solarized, Kanagawa, Rosé Pine, Everforest, Flexoki, Oxocarbon, Synthwave… dark **and** light — shared by the TUI, the GUI and the web dashboard. The palettes live once in `tokenburn-core` (shared with the author's GitKraft), so a theme looks the same everywhere, including one colour per tool in the charts, pie and bars.
+
+| Front-end | Pick a theme |
+|-----------|--------------|
+| TUI | `T` opens a picker with live preview and swatches; `[` / `]` cycle; `--theme "Tokyo Night"` |
+| GUI | the theme drop-down in the toolbar; `--theme NAME` |
+| Web | the theme select (applies instantly in live mode); `?theme=Nord`; `--theme NAME`; palettes as JSON at `/api/themes` |
+
+`--list-themes` prints every name. The choice is saved in `settings.json` (`~/.config/tokenburn/`, `~/Library/Application Support/tokenburn/`, `%APPDATA%\tokenburn\`; override the directory with `TOKENBURN_CONFIG_DIR`), so changing it in one front-end changes the starting theme of the others.
+
 ## Platform support
 
 TokenBurn runs on **macOS, Linux and Windows**. The log locations are found per platform, and every one can be overridden with an environment variable:
@@ -132,6 +144,7 @@ It binds to localhost by default — token/cost data is private, so don't expose
 | `w` | cycle window (today → month → all) |
 | `p` | toggle per-project / per-model view |
 | `o` | options popup — checkboxes and sliders: auto-refresh + interval, bar chart, pie chart (braille), pie slices |
+| `T`, `[`, `]` | theme picker / previous / next theme |
 | `↑/↓`, `j/k`, `g/G` | scroll |
 | `r` | refresh |
 | `q`, `Esc` | quit |

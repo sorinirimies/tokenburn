@@ -24,6 +24,12 @@ async fn health() -> Result<Json<&'static str>> {
     Ok(Json("ok"))
 }
 
+/// Every colour theme with its palette (the same ones the TUI and GUI offer).
+#[route(GET "/api/themes")]
+async fn themes() -> Result<Json<serde_json::Value>> {
+    Ok(Json(crate::theme::catalogue()))
+}
+
 #[route(GET "/style.css")]
 async fn style() -> Result<Css<&'static str>> {
     Ok(Css(CSS))

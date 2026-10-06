@@ -8,6 +8,13 @@ GUI (`tokenburn-gui`).
 
 No network access — everything is read from local files.
 
+## Themes and settings
+
+`features/theme/` holds the 43 shared palettes (`AppTheme`: background, surface, border, selection,
+three text colours, accent/success/warning/error and eight **series** colours — one per tool);
+`features/settings/` stores the chosen theme in `settings.json`. Front-ends convert `Rgb` to their own
+colour type (ratatui `Color::Rgb`, iced `Color`, CSS custom properties) and never hard-code colours.
+
 ## Adding a tool
 
 1. Add a variant to `Tool` (`features/usage/types.rs`) — `ALL`, `as_str`, `display_name`.

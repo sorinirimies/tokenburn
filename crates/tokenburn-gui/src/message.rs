@@ -1,8 +1,8 @@
 //! Every event the UI can produce.
 
-use iced::Theme;
 use tokenburn_core::{Bucket, Collected, Query, ToolFilter, Window};
 
+use crate::features::theme::ThemeChoice;
 use crate::state::View;
 
 #[derive(Debug, Clone)]
@@ -14,7 +14,7 @@ pub enum Message {
     ToolSelected(ToolFilter),
     BucketSelected(Bucket),
     WindowSelected(Window),
-    ThemeSelected(Theme),
+    ThemeSelected(ThemeChoice),
     ViewSelected(View),
     /// ~10 fps animation tick, only subscribed while loading.
     AnimationTick,

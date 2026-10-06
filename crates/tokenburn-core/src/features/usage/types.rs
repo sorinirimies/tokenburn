@@ -56,6 +56,11 @@ impl Tool {
         }
     }
 
+    /// Position in [`Tool::ALL`] — selects the tool's series colour in a theme.
+    pub fn series_index(self) -> usize {
+        Tool::ALL.iter().position(|t| *t == self).unwrap_or(0)
+    }
+
     /// Human-readable name.
     pub fn display_name(self) -> &'static str {
         match self {

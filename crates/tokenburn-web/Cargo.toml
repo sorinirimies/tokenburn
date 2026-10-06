@@ -24,4 +24,5 @@ tokenburn-core = { workspace = true }
 topcoat        = { workspace = true }
 tokio          = { workspace = true }
 chrono         = { workspace = true }
+serde_json     = { workspace = true }
 clap           = { workspace = true }

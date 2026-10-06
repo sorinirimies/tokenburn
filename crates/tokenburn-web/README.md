@@ -17,6 +17,8 @@ tokenburn-web                      # static fallback when no asset bundle is pre
 |-----|-------------|
 | `/?tool=pi&bucket=daily&window=month` | HTML dashboard (all params optional) |
 | `/api/report?tool=all&bucket=monthly` | same report as JSON |
+| `/api/themes` | every colour theme with its palette |
+| `/?theme=Nord` | pick a theme (remembered, shared with the TUI and GUI) |
 | `/api/health` | liveness probe |
 
 Logs are read locally on every request; nothing leaves the machine. The server binds to localhost by default — token/cost data is private.

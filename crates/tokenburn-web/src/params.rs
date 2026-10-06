@@ -14,6 +14,8 @@ pub struct UsageParams {
     pub tool: Option<String>,
     pub bucket: Option<String>,
     pub window: Option<String>,
+    /// Colour theme name (see `/api/themes`). Unknown names are ignored.
+    pub theme: Option<String>,
 }
 
 impl UsageParams {

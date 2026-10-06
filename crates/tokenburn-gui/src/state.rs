@@ -3,6 +3,8 @@
 use std::fmt;
 
 use iced::Theme;
+
+use crate::features::theme;
 use tokenburn_core::{build_report, by_project, Collected, Query, ReportRow, Row, Summary};
 
 /// Which main panel is shown.
@@ -29,7 +31,10 @@ impl fmt::Display for View {
 pub struct TokenBurn {
     pub query: Query,
     pub view: View,
-    pub theme: Theme,
+    /// Index into [`tokenburn_core::THEME_NAMES`].
+    pub theme_index: usize,
+    /// Write settings (theme) to disk. `false` in tests and `TokenBurn::new()`.
+    pub persist: bool,
     pub rows: Vec<Row>,
     pub report: Vec<ReportRow>,
     pub projects: Vec<(String, Summary)>,
@@ -56,7 +61,8 @@ impl TokenBurn {
         Self {
             query,
             view: View::default(),
-            theme: Theme::TokyoNight,
+            theme_index: 0,
+            persist: false,
             rows: Vec::new(),
             report: Vec::new(),
             projects: Vec::new(),
@@ -69,7 +75,16 @@ impl TokenBurn {
     }
 
     pub fn iced_theme(&self) -> Theme {
-        self.theme.clone()
+        theme::iced_theme(self.theme_index)
+    }
+
+    /// Apply a theme and remember it in the shared settings, so the TUI and the
+    /// web dashboard start with it too.
+    pub fn set_theme(&mut self, index: usize) {
+        self.theme_index = index.min(tokenburn_core::THEME_COUNT - 1);
+        if self.persist {
+            let _ = tokenburn_core::settings::save_theme(self.theme_index);
+        }
     }
 
     /// Install freshly loaded data.

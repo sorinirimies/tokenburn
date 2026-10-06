@@ -8,13 +8,19 @@ use iced::{Settings, Task};
 use tokenburn_core::Query;
 use tokenburn_gui::{Args, Message, TokenBurn};
 
-/// Initial query from the command line (read once by `boot`).
-static INITIAL: OnceLock<Query> = OnceLock::new();
+/// Initial query and theme from the command line (read once by `boot`).
+static INITIAL: OnceLock<(Query, Option<usize>)> = OnceLock::new();
 
 fn main() -> iced::Result {
     // Handles --help / --version before any window is created.
     let args = Args::parse();
-    let _ = INITIAL.set(args.query());
+    if args.list_themes {
+        for name in tokenburn_core::THEME_NAMES {
+            println!("{name}");
+        }
+        return Ok(());
+    }
+    let _ = INITIAL.set((args.query(), args.theme));
 
     tracing_subscriber::fmt::init();
 
@@ -33,7 +39,13 @@ fn main() -> iced::Result {
 
 /// Boot function — initial state plus the first load.
 fn boot() -> (TokenBurn, Task<Message>) {
-    let mut state = TokenBurn::with_query(INITIAL.get().copied().unwrap_or_default());
+    let (query, theme) = INITIAL.get().copied().unwrap_or_default();
+    let mut state = TokenBurn::with_query(query);
+    state.persist = true;
+    match theme {
+        Some(i) => state.set_theme(i), // an explicit --theme is remembered
+        None => state.theme_index = tokenburn_core::settings::theme_index(),
+    }
     let task = state.reload();
     (state, task)
 }

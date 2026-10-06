@@ -1,5 +1,5 @@
 use ratatui::layout::{Constraint, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Borders, Cell, Row, Table};
 use ratatui::Frame;
 use tokenburn_core::utils::fmt::{thousands, usd};
@@ -7,6 +7,8 @@ use tokenburn_core::utils::fmt::{thousands, usd};
 use crate::app::App;
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
+    let th = app.theme;
+    let border = Style::default().fg(th.border);
     let bucketed = app.report.iter().any(|r| r.bucket.is_some());
 
     let mut head = Vec::new();
@@ -33,7 +35,13 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
             if bucketed {
                 cells.push(Cell::from(r.bucket.clone().unwrap_or_default()));
             }
-            cells.push(Cell::from(r.tool.clone()));
+            cells.push(Cell::from(r.tool.clone()).style(Style::default().fg(
+                if r.tool == "TOTAL" {
+                    th.warning
+                } else {
+                    th.tool(&r.tool)
+                },
+            )));
             for n in [
                 s.turns,
                 s.input,
@@ -42,16 +50,12 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 s.cache_write,
                 s.total_tokens,
             ] {
-                cells.push(Cell::from(thousands(n)).style(Style::default()));
+                cells.push(Cell::from(thousands(n)).style(Style::default().fg(th.text)));
             }
-            cells.push(Cell::from(usd(s.cost_usd)).style(Style::default().fg(Color::Green)));
+            cells.push(Cell::from(usd(s.cost_usd)).style(Style::default().fg(th.success)));
             let mut row = Row::new(cells);
             if r.tool == "TOTAL" {
-                row = row.style(
-                    Style::default()
-                        .add_modifier(Modifier::BOLD)
-                        .fg(Color::Yellow),
-                );
+                row = row.style(Style::default().add_modifier(Modifier::BOLD).fg(th.warning));
             }
             row
         })
@@ -65,19 +69,14 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     widths.extend([Constraint::Min(8); 7]);
 
     let table = Table::new(rows, widths)
-        .header(
-            Row::new(head).style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        )
+        .header(Row::new(head).style(Style::default().fg(th.accent).add_modifier(Modifier::BOLD)))
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_style(border)
                 .title(format!(" Report · {} ", app.query.bucket)),
         )
-        .row_highlight_style(Style::default().bg(Color::DarkGray))
+        .row_highlight_style(Style::default().bg(th.selection))
         .highlight_symbol("▶ ");
 
     if app.report.is_empty() && !app.is_loading {
@@ -85,7 +84,13 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
             "No tokenburn results found for tool={}, window={}.",
             app.query.tool, app.query.window
         ))
-        .block(Block::default().borders(Borders::ALL).title(" Report "));
+        .style(Style::default().fg(th.muted))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border)
+                .title(" Report "),
+        );
         frame.render_widget(msg, area);
         return;
     }
