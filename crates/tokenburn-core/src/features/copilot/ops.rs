@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::features::usage::{Row, Tool};
+use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{env_path, modified_since, num, read_lines, walk_ext};
 use crate::utils::time::parse_ts;
 
@@ -25,24 +28,37 @@ pub fn collect_copilot(start: DateTime<Utc>) -> Result<Vec<Row>> {
 /// Copilot CLI records usage in one `session.shutdown` event per session, with
 /// per-model counters in `data.modelMetrics`. Sessions that never shut down
 /// cleanly, and older CLI versions that log no usage, yield no rows.
+/// Parsed rows per session file, reused while the file is unchanged.
+static CACHE: LazyLock<FileCache<Vec<Row>>> = LazyLock::new(FileCache::default);
+
 pub fn collect_copilot_from(dir: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
+    let files = walk_ext(dir, &["jsonl"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in walk_ext(dir, &["jsonl"]) {
+    for file in files {
         if !modified_since(&file, start) {
             continue;
         }
-        let id = session_id(&file);
-        let Some(lines) = read_lines(&file) else {
+        let Some(sig) = Sig::of(&file, 0) else {
             continue;
         };
-        for line in lines {
-            // Cheap pre-filter: shutdown events are rare, don't JSON-parse the rest.
-            if line.contains("session.shutdown") {
-                rows.extend(parse_shutdown(&line, &id));
-            }
-        }
+        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(&file));
+        rows.extend(parsed.iter().cloned());
     }
+    CACHE.prune_under(dir, &live);
     Ok(rows)
+}
+
+fn parse_file(file: &Path) -> Vec<Row> {
+    let id = session_id(file);
+    let Some(lines) = read_lines(file) else {
+        return Vec::new();
+    };
+    lines
+        // Cheap pre-filter: shutdown events are rare, don't JSON-parse the rest.
+        .filter(|l| l.contains("session.shutdown"))
+        .flat_map(|l| parse_shutdown(&l, &id))
+        .collect()
 }
 
 /// `…/<uuid>/events.jsonl` → `<uuid>`; `…/<uuid>.jsonl` → `<uuid>`.

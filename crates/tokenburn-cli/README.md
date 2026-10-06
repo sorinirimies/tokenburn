@@ -4,7 +4,7 @@ Local AI token/cost usage report for your AI coding agents (**pi**, **Zed**, **C
 Part of [TokenBurn](https://github.com/sorinirimies/tokenburn); see also `tokenburn-tui` and `tokenburn-gui`.
 
 ```sh
-tokenburn                  # this month, pi+zed combined
+tokenburn                  # this month, all tools combined
 tokenburn --tool pi        # pi only
 tokenburn --hourly         # today by hour
 tokenburn --daily          # this month by day

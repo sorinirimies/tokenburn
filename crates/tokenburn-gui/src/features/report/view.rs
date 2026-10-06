@@ -1,12 +1,16 @@
 //! Aggregated report table, with a share-of-tokens bar per line.
 
 use iced::alignment::Horizontal;
-use iced::widget::{column, container, progress_bar, row, scrollable, text};
+use iced::widget::{column, container, pick_list, progress_bar, row, scrollable, space, text};
 use iced::{Element, Length};
 use tokenburn_core::utils::fmt::{thousands, usd};
 
+use tokenburn_core::Metric;
+
+use crate::features::theme::chart_colors;
 use crate::message::Message;
 use crate::state::TokenBurn;
+use crate::widgets::charts::{donut, stacked_bars};
 
 const NUMERIC: [&str; 6] = [
     "turns",
@@ -100,8 +104,8 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
         body = body.push(container(line).padding([4, 10]));
     }
 
-    column![header, scrollable(body).height(Length::Fill)]
-        .spacing(6)
+    column![charts(state), header, scrollable(body).height(Length::Fill)]
+        .spacing(10)
         .into()
 }
 
@@ -113,4 +117,47 @@ fn cell_right<'a>(s: String, portion: u16) -> iced::widget::Text<'a> {
     text(s)
         .align_x(Horizontal::Right)
         .width(Length::FillPortion(portion))
+}
+
+/// Stacked bars over time (left) and the share donut (right).
+fn charts(state: &TokenBurn) -> Element<'_, Message> {
+    let colors = chart_colors(state.theme_index);
+    let metric = state.chart_metric;
+    let title = format!(
+        "{} over time",
+        if metric == Metric::Cost {
+            "Cost"
+        } else {
+            "Tokens"
+        }
+    );
+
+    let bars = column![
+        row![
+            text(title).size(13).style(text::secondary),
+            space::horizontal(),
+            pick_list(&Metric::ALL[..], Some(metric), Message::MetricSelected),
+        ]
+        .align_y(iced::Alignment::Center)
+        .height(Length::Fixed(34.0)),
+        stacked_bars(state.series.clone(), metric, colors, 200.0),
+    ]
+    .spacing(4)
+    .width(Length::FillPortion(3));
+
+    let share = column![
+        row![text(format!("Share by project · {}", state.pie.metric))
+            .size(13)
+            .style(text::secondary)]
+        .align_y(iced::Alignment::Center)
+        .height(Length::Fixed(34.0)),
+        donut(state.pie.clone(), colors, 200.0),
+    ]
+    .spacing(4)
+    .width(Length::FillPortion(2));
+
+    container(row![bars, share].spacing(16))
+        .padding(10)
+        .style(container::bordered_box)
+        .into()
 }

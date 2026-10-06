@@ -127,7 +127,7 @@ cargo install tokenburn-web    # Web dashboard (static mode — see below for li
 ## CLI usage
 
 ```sh
-tokenburn                       # current month, pi+zed combined + per-tool breakdown
+tokenburn                       # current month, all tools combined + per-tool breakdown
 tokenburn --tool pi             # pi only   (--tool zed | all)
 tokenburn --hourly              # today, bucketed by hour
 tokenburn --daily               # this month, bucketed by day
@@ -201,7 +201,7 @@ tokenburn-web ────┘
 
 ```
 crates/
-├── tokenburn-core/   # collectors (pi, zed), Query, aggregation, formatting
+├── tokenburn-core/   # collectors (pi, Zed, Claude, Codex, Copilot, Gemini, OpenCode, Amp), Query, aggregation, formatting
 ├── tokenburn-cli/    # clap args + table renderer
 ├── tokenburn-tui/    # app / events / layout / features / widgets
 ├── tokenburn-web/    # flat: app, pages, api, components, params, data, style

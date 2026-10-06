@@ -132,8 +132,30 @@ impl App {
         }
     }
 
+    /// How long the event loop may sleep before it must look again: a frame
+    /// (~30 fps) while a load animates the spinner, otherwise until the next
+    /// auto-refresh is due (capped, so a finished load shows up promptly).
+    pub fn poll_timeout(&self) -> std::time::Duration {
+        use std::time::Duration;
+        const FRAME: Duration = Duration::from_millis(33);
+        const IDLE: Duration = Duration::from_millis(250);
+        if self.is_loading {
+            return FRAME;
+        }
+        if !self.options.auto_refresh {
+            return IDLE;
+        }
+        let due_in = match self.last_reload {
+            None => Duration::ZERO,
+            Some(t) => self.options.refresh_interval().saturating_sub(t.elapsed()),
+        };
+        due_in.clamp(FRAME, IDLE)
+    }
+
     /// Drain finished background work. Results for a stale query are dropped.
-    pub fn poll_background(&mut self) {
+    /// Returns `true` when new data arrived (the screen needs a redraw).
+    pub fn poll_background(&mut self) -> bool {
+        let mut changed = false;
         while let Ok(msg) = self.bg_rx.try_recv() {
             match msg {
                 BackgroundResult::Loaded { query, collected } => {
@@ -145,9 +167,11 @@ impl App {
                     self.is_loading = false;
                     self.last_refresh = Some(Local::now());
                     self.rebuild();
+                    changed = true;
                 }
             }
         }
+        changed
     }
 
     /// Re-apply the filter to the loaded rows and rebuild everything derived from
@@ -446,6 +470,53 @@ mod tests {
             .unwrap();
         app.poll_background();
         assert!(app.all_rows.is_empty());
+    }
+
+    #[test]
+    fn poll_background_reports_whether_anything_arrived() {
+        let mut app = App::new();
+        assert!(!app.poll_background(), "nothing queued → no redraw needed");
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: app.query,
+                collected: Collected::default(),
+            })
+            .unwrap();
+        assert!(app.poll_background());
+        assert!(!app.poll_background());
+    }
+
+    #[test]
+    fn the_event_loop_sleeps_longer_when_idle() {
+        let mut app = App::new();
+        app.is_loading = true;
+        assert_eq!(
+            app.poll_timeout(),
+            Duration::from_millis(33),
+            "animate while loading"
+        );
+
+        app.is_loading = false;
+        app.last_reload = Some(Instant::now());
+        let idle = app.poll_timeout();
+        assert!(
+            idle > Duration::from_millis(33) && idle <= Duration::from_millis(250),
+            "{idle:?}"
+        );
+
+        app.last_reload = Some(Instant::now() - Duration::from_secs(60));
+        assert_eq!(
+            app.poll_timeout(),
+            Duration::from_millis(33),
+            "a refresh is due: wake up now"
+        );
+
+        app.options.auto_refresh = false;
+        assert_eq!(
+            app.poll_timeout(),
+            Duration::from_millis(250),
+            "no refresh scheduled: sleep"
+        );
     }
 
     #[test]

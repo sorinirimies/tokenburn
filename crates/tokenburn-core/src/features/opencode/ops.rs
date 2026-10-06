@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use chrono::{DateTime, TimeZone, Utc};
@@ -7,6 +8,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::features::usage::{Row, Tool};
+use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{dir_basename, env_path, modified_since, num, walk_ext};
 
 /// OpenCode data directories: `$OPENCODE_DATA_DIR`, else
@@ -61,35 +63,64 @@ pub fn collect_opencode_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Ro
     Ok(collect_dir(root, start, &mut HashSet::new()))
 }
 
+/// `(message id, row)` pairs per database, valid while the database (and its
+/// `-wal`) are unchanged for the same window start.
+static DB_CACHE: LazyLock<FileCache<Vec<(String, Row)>>> = LazyLock::new(FileCache::default);
+/// The row of one legacy message file, if it is an assistant message with usage.
+static FILE_CACHE: LazyLock<FileCache<Option<Row>>> = LazyLock::new(FileCache::default);
+
 fn collect_dir(root: &Path, start: DateTime<Utc>, seen: &mut HashSet<String>) -> Vec<Row> {
     let mut rows = Vec::new();
     for db in databases(root) {
-        match read_db(&db, start, seen) {
-            Ok(r) => rows.extend(r),
-            Err(e) => tracing::warn!("opencode: {}: {e}", db.display()),
-        }
+        let wal = PathBuf::from(format!("{}-wal", db.display()));
+        let Some(sig) = Sig::of_all(&[db.clone(), wal], start.timestamp_millis()) else {
+            continue;
+        };
+        let parsed = DB_CACHE.get_or_parse(&db, sig, || match read_db(&db, start) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!("opencode: {}: {e}", db.display());
+                Vec::new()
+            }
+        });
+        // `seen` also de-duplicates against the legacy files below.
+        rows.extend(
+            parsed
+                .iter()
+                .filter(|(id, _)| seen.insert(id.clone()))
+                .map(|(_, r)| r.clone()),
+        );
     }
-    for file in walk_ext(&root.join("storage/message"), &["json"]) {
+
+    let messages = root.join("storage/message");
+    let files = walk_ext(&messages, &["json"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
+    for file in files {
         if !modified_since(&file, start) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&file) else {
-            continue;
-        };
         let id = file
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let session = file
-            .parent()
-            .and_then(|p| p.file_name())
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if let Some(row) = parse_message(&text, &session, None).filter(|_| seen.insert(id.clone()))
-        {
+        let Some(sig) = Sig::of(&file, 0) else {
+            continue;
+        };
+        let parsed = FILE_CACHE.get_or_parse(&file, sig, || {
+            let session = file
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            std::fs::read_to_string(&file)
+                .ok()
+                .and_then(|text| parse_message(&text, &session, None))
+        });
+        if let Some(row) = parsed.as_ref().clone().filter(|_| seen.insert(id)) {
             rows.push(row);
         }
     }
+    FILE_CACHE.prune_under(&messages, &live);
     rows.retain(|r| r.ts >= start);
     rows
 }
@@ -112,7 +143,7 @@ fn databases(root: &Path) -> Vec<PathBuf> {
     dbs
 }
 
-fn read_db(db: &Path, start: DateTime<Utc>, seen: &mut HashSet<String>) -> Result<Vec<Row>> {
+fn read_db(db: &Path, start: DateTime<Utc>) -> Result<Vec<(String, Row)>> {
     let conn = Connection::open_with_flags(
         db,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -141,11 +172,8 @@ fn read_db(db: &Path, start: DateTime<Utc>, seen: &mut HashSet<String>) -> Resul
     let mut rows = Vec::new();
     for item in mapped.flatten() {
         let (id, session, created, data) = item;
-        if !seen.insert(id) {
-            continue;
-        }
         if let Some(row) = parse_message(&data, &session, Some(created)) {
-            rows.push(row);
+            rows.push((id, row));
         }
     }
     Ok(rows)

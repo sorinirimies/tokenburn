@@ -1,7 +1,10 @@
 //! Loading and shaping the data shown on the dashboard.
 
 use chrono::Local;
-use tokenburn_core::{Collected, Query, ReportRow, Summary, build_report, by_project, collect};
+use tokenburn_core::{
+    Collected, Pie, Query, ReportRow, Summary, TimeSeries, build_report, by_project, collect, pie,
+    time_series,
+};
 
 /// Everything a page render needs.
 #[derive(Debug, Clone)]
@@ -12,6 +15,10 @@ pub struct Dashboard {
     pub projects: Vec<(String, Summary)>,
     pub warnings: Vec<String>,
     pub row_count: usize,
+    /// Stacked per-tool totals over time (the bar chart).
+    pub series: TimeSeries,
+    /// Share by project (the donut).
+    pub pie: Pie,
     /// Local wall-clock time the snapshot was taken (`HH:MM:SS`).
     pub updated_at: String,
 }
@@ -22,6 +29,8 @@ pub fn build_dashboard(query: Query, collected: Collected) -> Dashboard {
         query,
         total: Summary::of(&collected.rows),
         report: build_report(&collected.rows, &query),
+        series: time_series(&collected.rows, &query),
+        pie: pie(&by_project(&collected.rows), 8),
         projects: by_project(&collected.rows),
         row_count: collected.rows.len(),
         updated_at: Local::now().format("%H:%M:%S").to_string(),

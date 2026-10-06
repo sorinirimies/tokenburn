@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::features::usage::{Row, Tool};
+use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{modified_since, num_any, read_lines, split_paths, walk_ext};
 use crate::utils::time::parse_ts;
 
@@ -29,34 +32,57 @@ pub fn collect_gemini(start: DateTime<Utc>) -> Result<Vec<Row>> {
     Ok(rows)
 }
 
+/// Parsed rows per chat recording, reused while the file is unchanged.
+static CACHE: LazyLock<FileCache<Vec<Row>>> = LazyLock::new(FileCache::default);
+
 /// Read every chat recording (`<project>/chats/*.json` and `*.jsonl`).
 pub fn collect_gemini_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
+    let files = walk_ext(root, &["json", "jsonl"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in walk_ext(root, &["json", "jsonl"]) {
+    for file in files {
         if !file.components().any(|c| c.as_os_str() == "chats") || !modified_since(&file, start) {
             continue;
         }
-        let project = project_of(root, &file);
-        let id = file
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let fallback = std::fs::metadata(&file)
-            .and_then(|m| m.modified())
-            .ok()
-            .map(DateTime::<Utc>::from)
-            .unwrap_or(start);
-        if file.extension().is_some_and(|e| e == "json") {
-            if let Ok(text) = std::fs::read_to_string(&file) {
-                rows.extend(parse_json(&text, &project, &id, fallback));
-            }
-        } else if let Some(lines) = read_lines(&file) {
-            rows.extend(lines.filter_map(|l| {
-                parse_message(&serde_json::from_str(&l).ok()?, &project, &id, fallback)
-            }));
-        }
+        let Some(sig) = Sig::of(&file, 0) else {
+            continue;
+        };
+        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(root, &file, start));
+        rows.extend(parsed.iter().cloned());
     }
+    CACHE.prune_under(root, &live);
     Ok(rows)
+}
+
+fn parse_file(root: &Path, file: &Path, start: DateTime<Utc>) -> Vec<Row> {
+    let project = project_of(root, file);
+    let id = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    // Messages without their own timestamp fall back to the file's mtime — a
+    // value that changes whenever the file does, i.e. exactly when the cache entry
+    // is invalidated anyway.
+    let fallback = std::fs::metadata(file)
+        .and_then(|m| m.modified())
+        .ok()
+        .map(DateTime::<Utc>::from)
+        .unwrap_or(start);
+    if file.extension().is_some_and(|e| e == "json") {
+        std::fs::read_to_string(file)
+            .map(|text| parse_json(&text, &project, &id, fallback))
+            .unwrap_or_default()
+    } else {
+        read_lines(file)
+            .map(|lines| {
+                lines
+                    .filter_map(|l| {
+                        parse_message(&serde_json::from_str(&l).ok()?, &project, &id, fallback)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 /// `<root>/<project-hash-or-name>/chats/x.json` → the directory below `root`.

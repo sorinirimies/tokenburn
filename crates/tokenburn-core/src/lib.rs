@@ -25,7 +25,9 @@ pub mod features;
 pub mod utils;
 
 pub use features::report::{
-    build_report, by_project, Bucket, Query, ReportRow, RowFilter, ToolFilter, Window,
+    axis_label, axis_tokens, bucket_at, build_report, by_project, chart_bucket, nice_max, pie,
+    short_label, short_name, slice_angles, time_series, Bucket, Metric, Pie, Query, ReportRow,
+    RowFilter, Slice, TimeSeries, ToolFilter, Window,
 };
 pub use features::settings::{self, Settings};
 pub use features::theme::{

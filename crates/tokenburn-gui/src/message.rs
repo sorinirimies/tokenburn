@@ -9,6 +9,8 @@ use crate::state::View;
 pub enum Message {
     /// Re-read the logs for the current query.
     Refresh,
+    /// Chart y-axis: tokens or cost.
+    MetricSelected(tokenburn_core::Metric),
     /// Periodic tick: refresh unless a load is already in flight.
     AutoRefresh,
     /// Background load finished (the query it was started for + the result).

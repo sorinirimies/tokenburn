@@ -11,8 +11,6 @@ pub mod layout;
 pub mod utils;
 pub mod widgets;
 
-use std::time::Duration;
-
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::backend::Backend;
@@ -56,19 +54,31 @@ where
     }
     app.reload();
 
+    // Redraw only when something changed. An idle dashboard sleeps in `poll`
+    // instead of repainting 30 times a second (which cost ~4 % of a core).
+    let mut dirty = true;
     while !app.should_quit {
-        app.tick_count = app.tick_count.wrapping_add(1);
-        app.poll_background();
+        dirty |= app.poll_background();
         app.tick_auto_refresh();
+        if app.is_loading {
+            // Animate the spinner while a load is in flight.
+            app.tick_count = app.tick_count.wrapping_add(1);
+            dirty = true;
+        }
 
-        terminal.draw(|frame| layout::render(&mut app, frame))?;
+        if dirty {
+            terminal.draw(|frame| layout::render(&mut app, frame))?;
+            dirty = false;
+        }
 
-        // ~30 fps so background results and the spinner feel prompt.
-        if event::poll(Duration::from_millis(33))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
+        if event::poll(app.poll_timeout())? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
                     events::handle_key(&mut app, key);
+                    dirty = true;
                 }
+                Event::Resize(..) => dirty = true,
+                _ => {}
             }
         }
     }

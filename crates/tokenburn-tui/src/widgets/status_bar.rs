@@ -50,3 +50,74 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     };
     frame.render_widget(Paragraph::new(text).style(bar), right);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn draw(app: &App) -> String {
+        let mut term = Terminal::new(TestBackend::new(140, 1)).unwrap();
+        term.draw(|f| render(app, f, f.area())).unwrap();
+        term.backend().to_string()
+    }
+
+    #[test]
+    fn idle_shows_the_key_hints() {
+        let out = draw(&App::new());
+        assert!(out.contains("q quit") && out.contains("/ filter"), "{out}");
+    }
+
+    #[test]
+    fn a_status_message_precedes_the_hints() {
+        let mut app = App::new();
+        app.status_message = Some("Updated 10:00:00".into());
+        let out = draw(&app);
+        assert!(out.contains("Updated 10:00:00") && out.contains("q quit"));
+    }
+
+    #[test]
+    fn a_warning_wins_over_the_status_message() {
+        let mut app = App::new();
+        app.status_message = Some("Updated".into());
+        app.warnings = vec!["codex: unreadable".into()];
+        let out = draw(&app);
+        assert!(out.contains("⚠ codex: unreadable"));
+        assert!(!out.contains("Updated"));
+    }
+
+    #[test]
+    fn loading_draws_the_spinner_in_the_left_gutter() {
+        let mut app = App::new();
+        app.is_loading = true;
+        let mut seen = std::collections::HashSet::new();
+        for t in 0..8 {
+            app.tick_count = t;
+            let out = draw(&app);
+            seen.insert(out.chars().skip(1).take(3).collect::<String>());
+        }
+        assert!(seen.len() > 1, "the spinner animates: {seen:?}");
+        app.is_loading = false;
+        assert_eq!(
+            draw(&app)
+                .chars()
+                .skip(1)
+                .take(3)
+                .collect::<String>()
+                .trim(),
+            ""
+        );
+    }
+
+    #[test]
+    fn filter_editing_shows_the_text_box_and_its_keys() {
+        let mut app = App::new();
+        app.filter_editing = true;
+        app.filter.text = "pi -zed".into();
+        let out = draw(&app);
+        assert!(out.contains("/ pi -zed█"), "{out}");
+        assert!(out.contains("Enter keep") && out.contains("Esc clear"));
+        assert!(!out.contains("q quit"), "hints give way to the editor");
+    }
+}

@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::features::usage::{Row, Tool};
+use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{dir_basename, env_path, modified_since, num, read_lines, walk_ext};
 use crate::utils::time::parse_ts;
 
@@ -23,17 +26,28 @@ pub fn collect_codex(start: DateTime<Utc>) -> Result<Vec<Row>> {
     Ok(rows)
 }
 
+/// Parsed rows per rollout file, reused while the file is unchanged.
+static CACHE: LazyLock<FileCache<Vec<Row>>> = LazyLock::new(FileCache::default);
+
 pub fn collect_codex_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
+    let files = walk_ext(root, &["jsonl"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in walk_ext(root, &["jsonl"]) {
+    for file in files {
         if !modified_since(&file, start) {
             continue;
         }
-        let Some(lines) = read_lines(&file) else {
+        let Some(sig) = Sig::of(&file, 0) else {
             continue;
         };
-        rows.extend(parse_session(lines, &file));
+        let parsed = CACHE.get_or_parse(&file, sig, || {
+            read_lines(&file)
+                .map(|lines| parse_session(lines, &file))
+                .unwrap_or_default()
+        });
+        rows.extend(parsed.iter().cloned());
     }
+    CACHE.prune_under(root, &live);
     Ok(rows)
 }
 

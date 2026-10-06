@@ -30,6 +30,18 @@ tr:hover td { background:var(--sel); }
 .badge { padding:2px 8px; border-radius:10px; border:1px solid var(--line); }
 .badge.live { color:var(--ok); border-color:var(--ok); }
 .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.charts { display:grid; grid-template-columns:3fr 2fr; gap:16px; }
+@media (max-width:900px) { .charts { grid-template-columns:1fr; } }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+.panel h2 { margin:0 0 6px; }
+svg.chart { display:block; max-width:100%; height:auto; }
+svg.chart rect:hover, svg.chart path:hover { opacity:.82; }
+.legend { list-style:none; margin:6px 0 0; padding:0; display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--dim); }
+.legend.vertical { flex-direction:column; flex-wrap:nowrap; margin:0; gap:6px; color:var(--fg); }
+.legend .sw { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; }
+.legend .pct { color:var(--dim); margin-left:6px; }
+.donut-row { display:flex; align-items:center; gap:16px; }
+.donut-box { width:190px; flex:none; }
 footer { color:var(--dim); font-size:12px; }
 a { color:var(--accent); }
 "#;

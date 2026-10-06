@@ -4,13 +4,13 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use tui_piechart::{PieChart, PieSlice};
 
-use super::pie_data;
 use crate::app::App;
 use crate::utils::truncate;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let th = app.theme;
-    let (data, metric) = pie_data(&app.projects, app.options.top_n());
+    let pie = tokenburn_core::pie(&app.projects, app.options.top_n());
+    let (data, metric) = (&pie.slices, pie.metric);
     let title = format!(" Share by project · {} ", metric.label());
     let block = Block::default()
         .borders(Borders::ALL)
@@ -27,11 +27,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    let names: Vec<String> = data.iter().map(|(n, _)| truncate(n, 18)).collect();
+    let names: Vec<String> = data.iter().map(|s| truncate(&s.label, 18)).collect();
     let slices: Vec<PieSlice> = data
         .iter()
         .enumerate()
-        .map(|(i, (_, v))| PieSlice::new(&names[i], *v, th.slice(i)))
+        .map(|(i, s)| PieSlice::new(&names[i], s.value, th.slice(i)))
         .collect();
 
     frame.render_widget(

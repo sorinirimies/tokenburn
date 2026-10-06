@@ -40,6 +40,19 @@ pub fn rgb_to_color(c: Rgb) -> Color {
     Color::from_rgb(r, g, b)
 }
 
+/// The colours the canvas charts need, resolved from theme `index`.
+pub fn chart_colors(index: usize) -> crate::widgets::charts::ChartColors {
+    let t = theme_by_index(index);
+    crate::widgets::charts::ChartColors {
+        series: t.series.map(rgb_to_color),
+        text: rgb_to_color(t.text_primary),
+        muted: rgb_to_color(t.text_muted),
+        grid: rgb_to_color(t.border),
+        background: rgb_to_color(t.surface),
+        accent: rgb_to_color(t.accent),
+    }
+}
+
 /// A **custom** iced theme built from the core theme at `index`.
 ///
 /// Deriving the `Palette` is what makes every built-in widget (buttons, pick
@@ -86,5 +99,14 @@ mod tests {
     #[test]
     fn out_of_range_index_does_not_panic() {
         let _ = iced_theme(usize::MAX);
+        let _ = chart_colors(usize::MAX);
+    }
+
+    #[test]
+    fn chart_colours_follow_the_theme() {
+        let (a, b) = (chart_colors(0), chart_colors(9));
+        assert_ne!(a.background, b.background);
+        assert_ne!(a.series, b.series);
+        assert_eq!(a.series.len(), 8);
     }
 }

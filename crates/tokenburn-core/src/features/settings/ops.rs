@@ -114,4 +114,45 @@ mod tests {
         std::fs::write(&p, r#"{"theme":"Dracula","future_option":1}"#).unwrap();
         assert_eq!(load_from(&p).theme, "Dracula");
     }
+
+    /// `TOKENBURN_CONFIG_DIR` is process-wide: one test owns it.
+    #[test]
+    fn the_env_override_drives_the_public_load_and_save_api() {
+        let d = tempfile::tempdir().unwrap();
+        // SAFETY: the only test in this binary that touches TOKENBURN_CONFIG_DIR.
+        unsafe { std::env::set_var("TOKENBURN_CONFIG_DIR", d.path()) };
+
+        assert_eq!(config_dir().unwrap(), d.path());
+        assert_eq!(settings_path().unwrap(), d.path().join("settings.json"));
+        assert_eq!(load(), Settings::default());
+        assert_eq!(theme_index(), 0);
+
+        save_theme(5).unwrap();
+        assert_eq!(theme_index(), 5);
+        assert_eq!(load().theme, THEME_NAMES[5]);
+
+        // Same theme again, and an out-of-range index, are no-ops.
+        let before = std::fs::metadata(settings_path().unwrap())
+            .unwrap()
+            .modified()
+            .unwrap();
+        save_theme(5).unwrap();
+        save_theme(THEME_NAMES.len() + 10).unwrap();
+        assert_eq!(theme_index(), 5);
+        assert_eq!(
+            std::fs::metadata(settings_path().unwrap())
+                .unwrap()
+                .modified()
+                .unwrap(),
+            before,
+            "unchanged theme must not rewrite the file"
+        );
+
+        save(&Settings {
+            theme: "Nord".into(),
+        })
+        .unwrap();
+        assert_eq!(load().theme, "Nord");
+        unsafe { std::env::remove_var("TOKENBURN_CONFIG_DIR") };
+    }
 }

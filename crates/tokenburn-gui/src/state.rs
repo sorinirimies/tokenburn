@@ -5,7 +5,10 @@ use std::fmt;
 use iced::Theme;
 
 use crate::features::theme;
-use tokenburn_core::{build_report, by_project, Collected, Query, ReportRow, Row, Summary};
+use tokenburn_core::{
+    build_report, by_project, pie, time_series, Collected, Metric, Pie, Query, ReportRow, Row,
+    Summary, TimeSeries,
+};
 
 /// How often the GUI re-reads the logs by itself.
 pub const AUTO_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
@@ -41,6 +44,12 @@ pub struct TokenBurn {
     pub rows: Vec<Row>,
     pub report: Vec<ReportRow>,
     pub projects: Vec<(String, Summary)>,
+    /// Stacked per-tool totals over time (the bar chart).
+    pub series: TimeSeries,
+    /// Share by project (the donut).
+    pub pie: Pie,
+    /// What the charts measure.
+    pub chart_metric: Metric,
     pub warnings: Vec<String>,
     pub is_loading: bool,
     pub status_message: Option<String>,
@@ -71,6 +80,12 @@ impl TokenBurn {
             rows: Vec::new(),
             report: Vec::new(),
             projects: Vec::new(),
+            series: TimeSeries::default(),
+            pie: Pie {
+                metric: Metric::Tokens,
+                slices: Vec::new(),
+            },
+            chart_metric: Metric::Tokens,
             warnings: Vec::new(),
             is_loading: false,
             status_message: None,
@@ -98,6 +113,8 @@ impl TokenBurn {
         self.last_updated = Some(chrono::Local::now());
         self.report = build_report(&collected.rows, &self.query);
         self.projects = by_project(&collected.rows);
+        self.series = time_series(&collected.rows, &self.query);
+        self.pie = pie(&self.projects, 8);
         self.status_message = Some(format!(
             "Updated {} · {} rows · auto-refresh every {} s",
             chrono::Local::now().format("%H:%M:%S"),

@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::features::usage::{Row, Tool};
+use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{env_path, modified_since, num, num_any, walk_ext};
 use crate::utils::time::parse_ts;
 
@@ -37,22 +40,33 @@ pub fn collect_amp(start: DateTime<Utc>) -> Result<Vec<Row>> {
 }
 
 /// Read every `threads/*.json` below `root`.
+/// Parsed rows per thread file, reused while the file is unchanged.
+static CACHE: LazyLock<FileCache<Vec<Row>>> = LazyLock::new(FileCache::default);
+
 pub fn collect_amp_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
+    let threads = root.join("threads");
+    let files = walk_ext(&threads, &["json"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in walk_ext(&root.join("threads"), &["json"]) {
+    for file in files {
         if !modified_since(&file, start) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&file) else {
+        let Some(sig) = Sig::of(&file, 0) else {
             continue;
         };
-        let id = file
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        rows.extend(parse_thread(&text, &id));
+        let parsed = CACHE.get_or_parse(&file, sig, || {
+            let id = file
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            std::fs::read_to_string(&file)
+                .map(|text| parse_thread(&text, &id))
+                .unwrap_or_default()
+        });
+        rows.extend(parsed.iter().filter(|r| r.ts >= start).cloned());
     }
-    rows.retain(|r| r.ts >= start);
+    CACHE.prune_under(&threads, &live);
     Ok(rows)
 }
 

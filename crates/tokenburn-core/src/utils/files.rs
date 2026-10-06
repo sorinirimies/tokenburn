@@ -60,6 +60,12 @@ pub fn num(v: Option<&Value>) -> u64 {
     }
 }
 
+/// An optional JSON number (already deserialised as `f64`) as `u64`: clamps
+/// negatives and NaN to 0. Used by the typed per-line parsers.
+pub fn num_f(v: Option<f64>) -> u64 {
+    v.filter(|x| x.is_finite()).map_or(0, |x| x.max(0.0) as u64)
+}
+
 /// First of `keys` present in `obj` as a number (aliases across versions).
 pub fn num_any(obj: &Value, keys: &[&str]) -> u64 {
     keys.iter()
@@ -111,6 +117,15 @@ mod tests {
         assert_eq!(num(Some(&json!(-3))), 0);
         assert_eq!(num(Some(&json!("7"))), 0);
         assert_eq!(num(None), 0);
+    }
+
+    #[test]
+    fn num_f_clamps_and_tolerates_junk() {
+        assert_eq!(num_f(Some(7.9)), 7);
+        assert_eq!(num_f(Some(-1.0)), 0);
+        assert_eq!(num_f(Some(f64::NAN)), 0);
+        assert_eq!(num_f(Some(f64::INFINITY)), 0);
+        assert_eq!(num_f(None), 0);
     }
 
     #[test]

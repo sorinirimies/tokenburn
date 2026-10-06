@@ -1,13 +1,14 @@
 //! Server-rendered page components.
 
 use tokenburn_core::utils::fmt::{compact, thousands, usd};
-use tokenburn_core::{Bucket, Query, ReportRow, Summary, ToolFilter, Window};
+use tokenburn_core::{Bucket, Metric, Query, ReportRow, Summary, ToolFilter, Window};
 use topcoat::{
     Result,
     runtime::{Event, Signal},
     view::{View, component, view},
 };
 
+use crate::charts::{bars_svg, donut_svg};
 use crate::data::{Dashboard, share_percent};
 use crate::params::WINDOW_CHOICES;
 use crate::theme;
@@ -30,7 +31,7 @@ pub async fn summary_cards(total: Summary) -> Result<impl View> {
 
 /// GET form that drives the query string.
 #[component]
-pub async fn filters(query: Query, theme: usize) -> Result<impl View> {
+pub async fn filters(query: Query, theme: usize, metric: Metric) -> Result<impl View> {
     Ok(view! {
         <form class="filters" method="get" action="/">
             <label>"tool "
@@ -51,6 +52,13 @@ pub async fn filters(query: Query, theme: usize) -> Result<impl View> {
                 <select name="window" onchange="this.form.submit()">
                     for w in Window::ALL {
                         <option value=(w.label()) selected=(w == query.window)>(w.label())</option>
+                    }
+                </select>
+            </label>
+            <label>"chart "
+                <select name="metric" onchange="this.form.submit()">
+                    for m in Metric::ALL {
+                        <option value=(m.label()) selected=(m == metric)>(m.label())</option>
                     }
                 </select>
             </label>
@@ -162,12 +170,14 @@ pub async fn live_filters(
     bucket: &Signal<String>,
     window: &Signal<String>,
     theme: &Signal<String>,
+    metric: &Signal<String>,
 ) -> Result<impl View> {
-    let (t, b, w, th) = (
+    let (t, b, w, th, m) = (
         tool.get_untracked(),
         bucket.get_untracked(),
         window.get_untracked(),
         theme.get_untracked(),
+        metric.get_untracked(),
     );
     Ok(view! {
         <div class="filters">
@@ -192,6 +202,13 @@ pub async fn live_filters(
                     }
                 </select>
             </label>
+            <label>"chart "
+                <select :value=$(metric.get()) @change=$(|e: Event| metric.set(e.target.value))>
+                    for x in Metric::ALL {
+                        <option value=(x.label()) selected=(x.label() == m)>(x.label())</option>
+                    }
+                </select>
+            </label>
             <label>"theme "
                 <select :value=$(theme.get()) @change=$(|e: Event| theme.set(e.target.value))>
                     for n in theme::names() {
@@ -208,13 +225,15 @@ pub async fn live_filters(
 /// `live` shows the "live" badge (the page has an open connection and is
 /// refreshing itself).
 #[component]
-pub async fn dashboard_body(d: &Dashboard, live: bool) -> Result<impl View> {
+pub async fn dashboard_body(d: &Dashboard, live: bool, metric: Metric) -> Result<impl View> {
     Ok(view! {
         for w in &d.warnings {
             <div class="warn">"⚠ " (w.clone())</div>
         }
 
         summary_cards(total: d.total)
+
+        charts_panel(d: d, metric: metric)
 
         <section>
             <h2>"Report · " (d.query.bucket.label())</h2>
@@ -254,4 +273,73 @@ pub async fn dashboard_body(d: &Dashboard, live: bool) -> Result<impl View> {
 pub async fn theme_style(index: usize) -> Result<impl View> {
     let css = theme::css(index);
     Ok(view! { <style>(css)</style> })
+}
+
+/// Raw, trusted markup (the SVG strings from [`crate::charts`], built only from
+/// numbers and escaped labels).
+pub struct Raw(pub String);
+
+impl topcoat::view::NodeViewParts for Raw {
+    fn into_view_parts(
+        self,
+        _cx: &topcoat::context::Cx,
+        parts: &mut topcoat::view::PartsWriter<'_>,
+    ) {
+        parts.push_string_unescaped(self.0);
+    }
+}
+
+/// Stacked bars over time and the share donut.
+#[component]
+pub async fn charts_panel(d: &Dashboard, metric: Metric) -> Result<impl View> {
+    let bars = Raw(bars_svg(&d.series, metric));
+    let donut = Raw(donut_svg(&d.pie));
+    let pie_total: f64 = d.pie.total();
+    let pie_metric = d.pie.metric;
+    // Legend rows: swatch, label, share. The tail is already folded into "other".
+    let legend: Vec<(usize, String, String)> = d
+        .pie
+        .slices
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let pct = if pie_total > 0.0 {
+                s.value / pie_total * 100.0
+            } else {
+                0.0
+            };
+            (i % 8, s.label.clone(), format!("{pct:.0}%"))
+        })
+        .collect();
+    let swatches: Vec<(String, String)> = d
+        .series
+        .active_tools(metric)
+        .into_iter()
+        .map(|t| (crate::charts::tool_var(t), t.display_name().to_string()))
+        .collect();
+
+    Ok(view! {
+        <section class="charts">
+            <div class="panel">
+                <h2>(if metric == Metric::Cost { "Cost over time" } else { "Tokens over time" })</h2>
+                (bars)
+                <ul class="legend">
+                    for (var, name) in swatches {
+                        <li><span class="sw" style=(format!("background:{var}"))></span>(name)</li>
+                    }
+                </ul>
+            </div>
+            <div class="panel">
+                <h2>"Share by project · " (pie_metric.label())</h2>
+                <div class="donut-row">
+                    <div class="donut-box">(donut)</div>
+                    <ul class="legend vertical">
+                        for (i, name, pct) in legend {
+                            <li><span class="sw" style=(format!("background:var(--s{i})"))></span>(name) <span class="pct">(pct)</span></li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </section>
+    })
 }

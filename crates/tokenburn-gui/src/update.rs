@@ -56,6 +56,10 @@ impl TokenBurn {
                 self.set_theme(choice.index);
                 Task::none()
             }
+            Message::MetricSelected(metric) => {
+                self.chart_metric = metric;
+                Task::none()
+            }
             Message::ViewSelected(view) => {
                 self.view = view;
                 Task::none()

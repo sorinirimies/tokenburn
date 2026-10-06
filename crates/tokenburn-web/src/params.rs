@@ -1,6 +1,6 @@
 //! Query-string handling: `?tool=pi&bucket=daily&window=month`.
 
-use tokenburn_core::{Bucket, Query, ToolFilter, Window};
+use tokenburn_core::{Bucket, Metric, Query, ToolFilter, Window};
 use topcoat::router::query_params;
 
 /// Window choices offered by the interactive UI. `auto` means "the chosen
@@ -16,6 +16,8 @@ pub struct UsageParams {
     pub window: Option<String>,
     /// Colour theme name (see `/api/themes`). Unknown names are ignored.
     pub theme: Option<String>,
+    /// Chart metric: `tokens` (default) or `cost`.
+    pub metric: Option<String>,
 }
 
 impl UsageParams {
@@ -50,6 +52,11 @@ pub fn parse(tool: Option<&str>, bucket: Option<&str>, window: Option<&str>) -> 
     }
 }
 
+/// The chart metric from an optional string (unknown values fall back to tokens).
+pub fn parse_metric(s: Option<&str>) -> Metric {
+    s.and_then(|m| m.parse().ok()).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,6 +81,14 @@ mod tests {
             (q.tool, q.bucket, q.window),
             (ToolFilter::PI, Bucket::Day, Window::All)
         );
+    }
+
+    #[test]
+    fn metric_parses_and_defaults_to_tokens() {
+        assert_eq!(parse_metric(Some("cost")), Metric::Cost);
+        assert_eq!(parse_metric(Some("COST")), Metric::Cost);
+        assert_eq!(parse_metric(Some("bytes")), Metric::Tokens);
+        assert_eq!(parse_metric(None), Metric::Tokens);
     }
 
     #[test]

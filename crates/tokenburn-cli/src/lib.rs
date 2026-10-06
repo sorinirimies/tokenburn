@@ -1,7 +1,7 @@
 //! TokenBurn CLI — a [`clap`] front-end over [`tokenburn_core`].
 //!
 //! ```text
-//! tokenburn                      current month total, pi+zed combined
+//! tokenburn                      current month total, all tools combined
 //! tokenburn --tool pi            pi only
 //! tokenburn --hourly             today, bucketed by hour
 //! tokenburn --daily              this month, bucketed by day

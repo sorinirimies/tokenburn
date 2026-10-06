@@ -1,13 +1,16 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::features::usage::{Row, Tool};
+use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{
-    env_path, modified_since, num, project_from_dirname, read_lines, split_paths, walk_ext,
+    env_path, modified_since, num, num_f, project_from_dirname, read_lines, split_paths, walk_ext,
 };
 use crate::utils::time::parse_ts;
 
@@ -70,6 +73,7 @@ pub fn collect_claude_from(projects: &Path, start: DateTime<Utc>) -> Result<Vec<
 }
 
 /// A candidate row plus what is needed to pick the best duplicate.
+#[derive(Clone)]
 struct Cand {
     row: Row,
     sidechain: bool,
@@ -79,25 +83,41 @@ fn finish(all: HashMap<String, Cand>) -> Vec<Row> {
     all.into_values().map(|c| c.row).collect()
 }
 
+/// Parsed `(dedupe key, candidate)` pairs per transcript, reused while the file
+/// is unchanged. De-duplication ACROSS files happens after the cache, on every
+/// refresh, because duplicates (sidechain replays) live in different files.
+static CACHE: LazyLock<FileCache<Vec<(String, Cand)>>> = LazyLock::new(FileCache::default);
+
 fn scan(projects: &Path, start: DateTime<Utc>, all: &mut HashMap<String, Cand>) {
-    for file in walk_ext(projects, &["jsonl"]) {
+    let files = walk_ext(projects, &["jsonl"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
+    for file in files {
         if !modified_since(&file, start) {
             continue;
         }
-        let project = project_of(projects, &file);
-        let id = file
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let Some(lines) = read_lines(&file) else {
+        let Some(sig) = Sig::of(&file, 0) else {
             continue;
         };
-        for line in lines {
-            if let Some((key, cand)) = parse_line(&line, &project, &id) {
-                insert_best(all, key, cand);
-            }
+        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(projects, &file));
+        for (key, cand) in parsed.iter() {
+            insert_best(all, key.clone(), cand.clone());
         }
     }
+    CACHE.prune_under(projects, &live);
+}
+
+fn parse_file(projects: &Path, file: &Path) -> Vec<(String, Cand)> {
+    let project = project_of(projects, file);
+    let id = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let Some(lines) = read_lines(file) else {
+        return Vec::new();
+    };
+    lines
+        .filter_map(|line| parse_line(&line, &project, &id))
+        .collect()
 }
 
 /// Claude Code rewrites a streamed message several times (growing `output_tokens`)
@@ -134,51 +154,82 @@ fn project_of(projects: &Path, file: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// The parts of a Claude Code transcript line tokenburn reads (the message
+/// `content` — most of the bytes — is skipped without being allocated).
+#[derive(Deserialize)]
+struct Line {
+    timestamp: Option<String>,
+    #[serde(rename = "requestId")]
+    request_id: Option<String>,
+    #[serde(rename = "isApiErrorMessage")]
+    is_api_error: Option<bool>,
+    #[serde(rename = "isSidechain")]
+    is_sidechain: Option<bool>,
+    #[serde(rename = "costUSD")]
+    cost_usd: Option<f64>,
+    message: Option<Msg>,
+}
+
+#[derive(Deserialize)]
+struct Msg {
+    id: Option<String>,
+    model: Option<String>,
+    usage: Option<Usage>,
+}
+
+#[derive(Deserialize)]
+struct Usage {
+    input_tokens: Option<f64>,
+    output_tokens: Option<f64>,
+    cache_creation_input_tokens: Option<f64>,
+    cache_read_input_tokens: Option<f64>,
+    /// Newer logs split cache writes by TTL (`ephemeral_5m_input_tokens`, …).
+    cache_creation: Option<HashMap<String, Value>>,
+}
+
 fn parse_line(line: &str, project: &str, id: &str) -> Option<(String, Cand)> {
-    let rec: Value = serde_json::from_str(line).ok()?;
-    let msg = rec.get("message")?;
-    let usage = msg.get("usage").filter(|u| u.is_object())?;
-    if rec.get("isApiErrorMessage").and_then(Value::as_bool) == Some(true) {
+    // Lines without usage (user turns, tool results) are skipped before parsing.
+    if !line.contains("\"usage\"") {
+        return None;
+    }
+    let rec: Line = serde_json::from_str(line).ok()?;
+    let msg = rec.message?;
+    let usage = msg.usage?;
+    if rec.is_api_error == Some(true) {
         return None;
     }
     // `<synthetic>` marks locally generated messages (no real API call).
-    let model = msg.get("model").and_then(Value::as_str)?;
+    let model = msg.model?;
     if model == "<synthetic>" {
         return None;
     }
-    let ts = parse_ts(rec.get("timestamp")?.as_str()?)?;
+    let ts = parse_ts(&rec.timestamp?)?;
 
-    let cache_creation = {
-        let flat = num(usage.get("cache_creation_input_tokens"));
-        if flat > 0 {
-            flat
-        } else {
-            // Newer logs split cache writes by TTL.
-            usage
-                .get("cache_creation")
-                .and_then(Value::as_object)
-                .map(|o| o.values().map(|v| num(Some(v))).sum())
-                .unwrap_or(0)
-        }
+    let flat = num_f(usage.cache_creation_input_tokens);
+    let cache_creation = if flat > 0 {
+        flat
+    } else {
+        usage
+            .cache_creation
+            .map(|o| o.values().map(|v| num(Some(v))).sum())
+            .unwrap_or(0)
     };
     let row = Row {
         tool: Tool::Claude,
         project: project.to_string(),
         id: id.to_string(),
         ts,
-        input: num(usage.get("input_tokens")),
-        output: num(usage.get("output_tokens")),
-        cache_read: num(usage.get("cache_read_input_tokens")),
+        input: num_f(usage.input_tokens),
+        output: num_f(usage.output_tokens),
+        cache_read: num_f(usage.cache_read_input_tokens),
         cache_write: cache_creation,
-        cost: rec.get("costUSD").and_then(Value::as_f64).unwrap_or(0.0),
+        cost: rec.cost_usd.unwrap_or(0.0),
     };
     if total(&row) == 0 {
         return None;
     }
 
-    let msg_id = msg.get("id").and_then(Value::as_str);
-    let req_id = rec.get("requestId").and_then(Value::as_str);
-    let key = match (msg_id, req_id) {
+    let key = match (msg.id.as_deref(), rec.request_id.as_deref()) {
         (Some(m), Some(r)) => format!("{m}\u{1}{r}"),
         // Without a request id, collapse repeats of one message in one session
         // at one instant; distinct timestamps stay separate.
@@ -190,7 +241,7 @@ fn parse_line(line: &str, project: &str, id: &str) -> Option<(String, Cand)> {
             total(&row)
         ),
     };
-    let sidechain = rec.get("isSidechain").and_then(Value::as_bool) == Some(true);
+    let sidechain = rec.is_sidechain == Some(true);
     Some((key, Cand { row, sidechain }))
 }
 

@@ -12,7 +12,7 @@ use crate::{
     app::is_interactive,
     components::{dashboard_body, filters, live_filters, theme_style},
     data::{REFRESH_EVERY, load},
-    params::{UsageParams, parse},
+    params::{UsageParams, parse, parse_metric},
     theme,
 };
 
@@ -49,6 +49,7 @@ pub async fn document(interactive: bool, theme: usize, child: Child<'_>) -> Resu
 async fn home(cx: &Cx) -> Result<impl View> {
     let params = query_params::<UsageParams>(cx)?;
     let interactive = is_interactive(cx);
+    let metric = parse_metric(params.metric.as_deref());
 
     // An explicit, valid `?theme=` wins and is remembered (shared with the TUI and GUI).
     let saved = settings::theme_index();
@@ -74,12 +75,12 @@ async fn home(cx: &Cx) -> Result<impl View> {
             if let Some(d) = &snapshot {
                 <header class="top">
                     <h1>"🔥 TokenBurn"</h1>
-                    filters(query: d.query, theme: theme_index)
+                    filters(query: d.query, theme: theme_index, metric: metric)
                 </header>
-                dashboard_body(d: d, live: false)
+                dashboard_body(d: d, live: false, metric: metric)
             } else {
                 <header class="top"><h1>"🔥 TokenBurn"</h1></header>
-                live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::names()[theme_index].to_string())
+                live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::names()[theme_index].to_string(), metric: metric.label().to_string())
             }
         )
     })
@@ -95,15 +96,18 @@ async fn live_dashboard(
     bucket: String,
     window: String,
     theme: String,
+    metric: String,
 ) -> Result<impl View> {
     let tool = signal(cx, move || tool);
     let bucket = signal(cx, move || bucket);
     let window = signal(cx, move || window);
     let theme = signal(cx, move || theme);
+    let metric = signal(cx, move || metric);
 
     // Signal values come back from the browser: treat them as untrusted.
     // `parse` ignores anything that is not a known choice.
     let query = parse(Some(&tool.get()), Some(&bucket.get()), Some(&window.get()));
+    let chart_metric = parse_metric(Some(&metric.get()));
     // Same for the theme; an unknown name keeps the saved one. A change is remembered.
     let saved = settings::theme_index();
     let theme_index = theme::resolve(Some(&theme.get()), saved);
@@ -114,12 +118,12 @@ async fn live_dashboard(
     Ok(view! {
         // Re-emitted on every theme change; later in the document than the <head> one.
         theme_style(index: theme_index)
-        live_filters(tool: &tool, bucket: &bucket, window: &window, theme: &theme)
+        live_filters(tool: &tool, bucket: &bucket, window: &window, theme: &theme, metric: &metric)
         (live! {
             loop {
                 let d = load(query).await;
                 let is_connected = connected(cx);
-                let token = emit! { dashboard_body(d: &d, live: is_connected) }?;
+                let token = emit! { dashboard_body(d: &d, live: is_connected, metric: chart_metric) }?;
                 if !is_connected {
                     // HTTP render: emit once and finish.
                     break Ok(token);

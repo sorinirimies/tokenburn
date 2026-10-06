@@ -8,7 +8,7 @@ use tokenburn_core::{Query, ToolFilter};
 #[derive(Debug, Parser, Clone)]
 #[command(name = "tokenburn-tui", version, about, long_about = None)]
 pub struct Args {
-    /// Initial source: pi, zed or all.
+    /// Initial source: all, pi, zed, claude, codex, copilot, gemini, opencode or amp.
     #[arg(long, short, value_name = "TOOL", default_value = "all")]
     pub tool: ToolFilter,
 
