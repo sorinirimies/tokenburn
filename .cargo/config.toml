@@ -1,0 +1,9 @@
+# Keep debug builds small. Full debuginfo made `target/` grow past 10 GB on this
+# workspace (iced + wgpu + topcoat), which filled laptops mid-`just bump`.
+# Line tables are enough for backtraces and `RUST_BACKTRACE`; set
+# CARGO_PROFILE_DEV_DEBUG=2 when you need to step through code in a debugger.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
