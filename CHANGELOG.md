@@ -4,6 +4,17 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.1.7](https://github.com/sorinirimies/tokenburn/compare/v0.1.6...v0.1.7) — 2026-10-06
+
+### 🔄 CI and release
+
+- **release:** Prune old Gitea release files with nushell; no python in the release pipeline ([`b071dc8`](https://github.com/sorinirimies/tokenburn/commit/b071dc81bd2292838e40481773ffba257e8066f6))
+- **release:** Keep only the latest release's files on Gitea (prune older assets) ([`10ca942`](https://github.com/sorinirimies/tokenburn/commit/10ca94230b0489f51bb3037ab10783b34adcb199))
+
+### 🔧 Chores
+
+- Ignore __pycache__ ([`9ff506c`](https://github.com/sorinirimies/tokenburn/commit/9ff506c8027a946a0b525e739cb6619b00f086de))
+
 ## [0.1.6](https://github.com/sorinirimies/tokenburn/compare/v0.1.5...v0.1.6) — 2026-10-06
 
 ### 📚 Documentation
