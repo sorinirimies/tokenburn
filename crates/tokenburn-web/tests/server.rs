@@ -241,3 +241,111 @@ async fn themes_are_listed_and_a_chosen_one_is_applied_and_remembered() {
     let saved = std::fs::read_to_string(sandbox().config.join("settings.json")).unwrap();
     assert!(saved.contains("Dracula"));
 }
+
+/// The first `href="…sel_<kind>=…"` in `html`, HTML-unescaped.
+fn first_link(html: &str, kind: &str) -> String {
+    let needle = format!("sel_{kind}=");
+    let at = html
+        .find(&needle)
+        .unwrap_or_else(|| panic!("no {needle} link in the page"));
+    let start = html[..at].rfind("href=\"").unwrap() + 6;
+    let end = at + html[at..].find('"').unwrap();
+    html[start..end].replace("&amp;", "&")
+}
+
+#[tokio::test]
+async fn bars_and_slices_are_links_in_static_mode() {
+    let addr = start().await;
+    let html = get(addr, &format!("/?{ALL_DAILY}")).await.body;
+    let bar = first_link(&html, "bucket");
+    assert!(
+        bar.starts_with("/?tool=pi&bucket=daily&window=all&metric=tokens&sel_bucket="),
+        "{bar}"
+    );
+    let slice = first_link(&html, "project");
+    assert!(slice.contains("sel_project=pi%3A"), "{slice}");
+    assert!(html.contains("click a bar or a slice to drill down"));
+    assert!(!html.contains("class=\"col sel"), "nothing selected yet");
+}
+
+#[tokio::test]
+async fn clicking_a_bar_scopes_the_page_to_that_bucket_and_the_link_toggles_it_off() {
+    let addr = start().await;
+    let all = get(addr, &format!("/?{ALL_DAILY}")).await.body;
+    let bar = first_link(&all, "bucket");
+    assert!(bar.contains("sel_bucket=2026-05-01"), "{bar}");
+
+    let r = get(addr, &bar).await;
+    assert_eq!(r.status, 200);
+    let html = r.body;
+    assert!(html.contains("col sel"), "the clicked bar is marked");
+    assert!(
+        html.contains("bars chart") || html.contains("has-sel"),
+        "the others dim"
+    );
+    assert!(html.contains("click to clear"));
+    assert!(html.contains("class=\"chip\"") && html.contains("2026-05-01"));
+    // Only that day's rows remain in the table (day 2 is gone from it).
+    let table = html.split("<table").nth(1).unwrap();
+    assert!(
+        table.contains("2026-05-01") && !table.contains("2026-05-02"),
+        "table scoped"
+    );
+    // The bars still show every day: day 2's column is there to click.
+    assert!(html.contains("sel_bucket=2026-05-02"));
+    // Clicking the selected bar again links back to the unselected page.
+    let again = first_link(&html, "bucket");
+    assert!(!again.is_empty());
+    let clear_href = {
+        let at = html.find("class=\"clear\"").unwrap();
+        let start = html[at..].find("href=\"").unwrap() + at + 6;
+        let end = start + html[start..].find('"').unwrap();
+        html[start..end].replace("&amp;", "&")
+    };
+    assert!(!clear_href.contains("sel_"), "{clear_href}");
+}
+
+#[tokio::test]
+async fn clicking_a_slice_scopes_to_that_project() {
+    let addr = start().await;
+    let all = get(addr, &format!("/?{ALL_DAILY}")).await.body;
+    let slice = first_link(&all, "project");
+    let r = get(addr, &slice).await.body;
+    assert!(r.contains("slice sel"), "the clicked slice is marked");
+    assert!(r.contains("click to clear"));
+    assert!(r.contains("legend vertical has-sel"));
+    assert!(r.contains("class=\"item sel\""));
+}
+
+#[tokio::test]
+async fn both_selections_combine_and_junk_selections_are_ignored() {
+    let addr = start().await;
+    let r = get(
+        addr,
+        &format!("/?{ALL_DAILY}&sel_bucket=2026-05-02&sel_project=pi%3Anope"),
+    )
+    .await;
+    assert_eq!(r.status, 200);
+    assert_eq!(
+        r.body.matches("class=\"chip\"").count(),
+        1,
+        "only the real bucket is kept"
+    );
+    assert!(
+        !r.body.contains("pi:nope"),
+        "the unknown project is dropped, not echoed"
+    );
+    let r = get(addr, &format!("/?{ALL_DAILY}&sel_bucket=%3Cscript%3E")).await;
+    assert!(!r.body.contains("<script>"), "never reflected");
+    assert!(
+        !r.body.contains("class=\"chip\""),
+        "an unknown bucket is dropped"
+    );
+}
+
+#[tokio::test]
+async fn there_is_no_manual_refresh_control() {
+    let addr = start().await;
+    let html = get(addr, &format!("/?{ALL_DAILY}")).await.body;
+    assert!(!html.contains(">Refresh<"));
+}

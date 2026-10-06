@@ -8,10 +8,11 @@ use topcoat::{
     view::{View, component, view},
 };
 
-use crate::charts::{bars_svg, donut_svg};
+use crate::charts::{self, Bars, Col, SliceGeom};
 use crate::data::{Dashboard, share_percent};
 use crate::params::WINDOW_CHOICES;
 use crate::theme;
+use tokenburn_core::Selection;
 
 /// Row of headline totals.
 #[component]
@@ -69,7 +70,7 @@ pub async fn filters(query: Query, theme: usize, metric: Metric) -> Result<impl 
                     }
                 </select>
             </label>
-            <button type="submit">"Refresh"</button>
+            <noscript><button type="submit">"Apply"</button></noscript>
         </form>
     })
 }
@@ -225,7 +226,14 @@ pub async fn live_filters(
 /// `live` shows the "live" badge (the page has an open connection and is
 /// refreshing itself).
 #[component]
-pub async fn dashboard_body(d: &Dashboard, live: bool, metric: Metric) -> Result<impl View> {
+pub async fn dashboard_body(
+    d: &Dashboard,
+    live: bool,
+    metric: Metric,
+    base: &str,
+    click_bucket: Option<&Signal<String>>,
+    click_project: Option<&Signal<String>>,
+) -> Result<impl View> {
     Ok(view! {
         for w in &d.warnings {
             <div class="warn">"⚠ " (w.clone())</div>
@@ -233,7 +241,7 @@ pub async fn dashboard_body(d: &Dashboard, live: bool, metric: Metric) -> Result
 
         summary_cards(total: d.total)
 
-        charts_panel(d: d, metric: metric)
+        charts_panel(d: d, metric: metric, base: base, animate: live, click_bucket: click_bucket, click_project: click_project)
 
         <section>
             <h2>"Report · " (d.query.bucket.label())</h2>
@@ -275,54 +283,270 @@ pub async fn theme_style(index: usize) -> Result<impl View> {
     Ok(view! { <style>(css)</style> })
 }
 
-/// Raw, trusted markup (the SVG strings from [`crate::charts`], built only from
-/// numbers and escaped labels).
-pub struct Raw(pub String);
+/// What a click on a bar or slice does.
+///
+/// * **Live** (runtime available): the handler sets the page's selection signals; the
+///   shard re-renders in place, so CSS transitions animate the change.
+/// * **Static**: every bar and slice is a link to the same page with the new
+///   selection in the query string (`base` is that page's URL without it).
+#[derive(Clone, Copy)]
+pub struct Clicks<'a> {
+    pub bucket: Option<&'a Signal<String>>,
+    pub project: Option<&'a Signal<String>>,
+}
 
-impl topcoat::view::NodeViewParts for Raw {
-    fn into_view_parts(
-        self,
-        _cx: &topcoat::context::Cx,
-        parts: &mut topcoat::view::PartsWriter<'_>,
-    ) {
-        parts.push_string_unescaped(self.0);
+/// One bar: native tooltip, full-height hit area, the stacked segments and a
+/// selection outline. The wrapper (`<g>` + click handler/link) is added by the caller.
+#[component]
+pub async fn bar_col(col: &Col) -> Result<impl View> {
+    Ok(view! {
+        <title>(col.title.clone())</title>
+        <rect class="hit" x=(col.slot_x.clone()) y=(col.plot_y.clone()) width=(col.slot_w.clone()) height=(col.plot_h.clone())></rect>
+        for seg in &col.segs {
+            <rect class="seg" x=(seg.x.clone()) y=(seg.y.clone()) width=(seg.w.clone()) height=(seg.h.clone()) fill=(seg.var.clone())></rect>
+        }
+        <rect class="outline" x=(col.slot_x.clone()) y=(col.plot_y.clone()) width=(col.slot_w.clone()) height=(col.plot_h.clone())></rect>
+    })
+}
+
+/// One donut slice (the ring segment with its tooltip).
+#[component]
+pub async fn slice_path(slice: &SliceGeom) -> Result<impl View> {
+    Ok(view! {
+        <path d=(slice.path.clone()) fill=(slice.var.clone())>
+            <title>(slice.title.clone())</title>
+        </path>
+    })
+}
+
+fn col_class(c: &Col) -> String {
+    if c.selected {
+        "col sel".into()
+    } else {
+        "col".into()
     }
 }
 
-/// Stacked bars over time and the share donut.
+fn slice_class(s: &SliceGeom) -> String {
+    let mut c = String::from("slice");
+    if s.selected {
+        c.push_str(" sel");
+    }
+    if s.key.is_none() {
+        c.push_str(" other");
+    }
+    c
+}
+
+/// Stagger so the whole sweep takes ~0.6 s however many bars there are.
+fn bar_delay(index: usize, n: usize) -> String {
+    let step = (600.0 / n.max(1) as f32).min(14.0);
+    format!("--d:{:.0}ms", step * index as f32)
+}
+
+/// The bar chart (`<svg>`).
 #[component]
-pub async fn charts_panel(d: &Dashboard, metric: Metric) -> Result<impl View> {
-    let bars = Raw(bars_svg(&d.series, metric));
-    let donut = Raw(donut_svg(&d.pie));
-    let pie_total: f64 = d.pie.total();
-    let pie_metric = d.pie.metric;
-    // Legend rows: swatch, label, share. The tail is already folded into "other".
-    let legend: Vec<(usize, String, String)> = d
-        .pie
+pub async fn bars_chart(
+    bars: &Bars,
+    metric: Metric,
+    base: &str,
+    sel: &Selection,
+    animate: bool,
+    click: Option<&Signal<String>>,
+) -> Result<impl View> {
+    let n = bars.cols.len();
+    // The selection each column would produce when clicked (toggle).
+    let cols: Vec<(Col, String, String, String)> = bars
+        .cols
+        .iter()
+        .map(|c| {
+            let mut next = sel.clone();
+            next.toggle_bucket(&c.label);
+            (
+                c.clone(),
+                charts::href(base, &next),
+                next.bucket.clone().unwrap_or_default(),
+                format!("{} {}", col_class(c), if animate { "anim" } else { "" }),
+            )
+        })
+        .collect();
+    let class = format!(
+        "chart bars{}{}",
+        if bars.has_selection { " has-sel" } else { "" },
+        if animate { " animate" } else { "" }
+    );
+    let label = format!("{} over time", metric.label());
+
+    Ok(view! {
+        <svg class=(class) viewBox=(format!("0 0 {} {}", charts::BARS_W, charts::BARS_H)) width="100%" role="img" aria-label=(label)>
+            if bars.empty {
+                <text class="empty-note" x=(charts::BARS_W / 2.0) y=(charts::BARS_H / 2.0) text-anchor="middle">"No data in this window"</text>
+            }
+            for g in &bars.grid {
+                <line class="grid" x1=(bars.left.clone()) x2=(bars.right.clone()) y1=(g.y.clone()) y2=(g.y.clone())></line>
+                <text class="axis" x=(charts::LEFT - 6.0) y=(g.text_y.clone()) text-anchor="end">(g.label.clone())</text>
+            }
+            for (c, href, next, class) in cols {
+                if let Some(sig) = click {
+                    <g class=(class) style=(bar_delay(c.index, n)) @click=$(|_e| sig.set(next))>
+                        bar_col(col: &c)
+                    </g>
+                } else {
+                    <a href=(href)>
+                        <g class=(class) style=(bar_delay(c.index, n))>
+                            bar_col(col: &c)
+                        </g>
+                    </a>
+                }
+            }
+            for l in &bars.x_labels {
+                <text class="axis" x=(l.x.clone()) y=(l.y.clone()) text-anchor="middle">(l.text.clone())</text>
+            }
+        </svg>
+    })
+}
+
+/// The share donut (`<svg>`), its slices sweeping in through a mask.
+#[component]
+pub async fn donut_chart(
+    donut: &charts::Donut,
+    base: &str,
+    sel: &Selection,
+    animate: bool,
+    click: Option<&Signal<String>>,
+) -> Result<impl View> {
+    let slices: Vec<(SliceGeom, String, String, String)> = donut
         .slices
         .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let pct = if pie_total > 0.0 {
-                s.value / pie_total * 100.0
+        .map(|s| {
+            let mut next = sel.clone();
+            if let Some(k) = &s.key {
+                next.toggle_project(k);
+            }
+            (
+                s.clone(),
+                charts::href(base, &next),
+                next.project.clone().unwrap_or_default(),
+                format!("--dx:{};--dy:{}", s.dx, s.dy),
+            )
+        })
+        .collect();
+    let class = format!(
+        "chart donut{}{}",
+        if donut.has_selection { " has-sel" } else { "" },
+        if animate { " animate" } else { "" }
+    );
+    let total = donut.total_label.clone();
+
+    Ok(view! {
+        <svg class=(class) viewBox="0 0 200 200" width="100%" role="img" aria-label="share by project">
+            if donut.empty {
+                <text class="empty-note" x="100" y="104" text-anchor="middle">"No data"</text>
             } else {
-                0.0
-            };
-            (i % 8, s.label.clone(), format!("{pct:.0}%"))
+                <defs>
+                    <mask id="sweep" maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+                        <circle class="sweep" cx="100" cy="100" r="74" fill="none" stroke="white" stroke-width="60" pathLength="1" transform="rotate(-90 100 100)"></circle>
+                    </mask>
+                </defs>
+                <g mask="url(#sweep)">
+                    for (s, href, next, vars) in slices {
+                        if s.key.is_none() {
+                            <g class=(slice_class(&s)) style=(vars)>
+                                slice_path(slice: &s)
+                            </g>
+                        } else if let Some(sig) = click {
+                            <g class=(slice_class(&s)) style=(vars) @click=$(|_e| sig.set(next))>
+                                slice_path(slice: &s)
+                            </g>
+                        } else {
+                            <a href=(href)>
+                                <g class=(slice_class(&s)) style=(vars)>
+                                    slice_path(slice: &s)
+                                </g>
+                            </a>
+                        }
+                    }
+                </g>
+                <text class="total" x="100" y="106" text-anchor="middle">(total)</text>
+            }
+        </svg>
+    })
+}
+
+/// "Showing …" chips with a clear control, or a hint when nothing is selected.
+#[component]
+pub async fn selection_bar(
+    sel: &Selection,
+    base: &str,
+    click_bucket: Option<&Signal<String>>,
+    click_project: Option<&Signal<String>>,
+) -> Result<impl View> {
+    let chips = sel.describe();
+    let clear = charts::href(base, &Selection::default());
+    // Runtime expressions only take single-identifier paths, so the empty values are passed in.
+    let (blank_a, blank_b) = (String::new(), String::new());
+    Ok(view! {
+        <div class="selbar">
+            if chips.is_empty() {
+                <span class="hint">"click a bar or a slice to drill down"</span>
+            } else {
+                <span class="hint">"Showing"</span>
+                for chip in chips {
+                    <span class="chip">(chip)</span>
+                }
+                if let (Some(b), Some(p)) = (click_bucket, click_project) {
+                    <button class="clear" @click=$(|_e| { b.set(blank_a); p.set(blank_b); })>"✕ clear"</button>
+                } else {
+                    <a class="clear" href=(clear)>"✕ clear"</a>
+                }
+            }
+        </div>
+    })
+}
+
+/// Stacked bars over time and the share donut, both clickable.
+#[component]
+pub async fn charts_panel(
+    d: &Dashboard,
+    metric: Metric,
+    base: &str,
+    animate: bool,
+    click_bucket: Option<&Signal<String>>,
+    click_project: Option<&Signal<String>>,
+) -> Result<impl View> {
+    let bars = charts::bars(&d.series, metric, d.selection.bucket.as_deref());
+    let donut = charts::donut(&d.pie, d.selection.project.as_deref());
+    let sel = d.selection.clone();
+    let pie_metric = d.pie.metric;
+
+    // Legend rows (clickable like the slices): swatch, label, share.
+    let legend: Vec<(SliceGeom, String, String)> = donut
+        .slices
+        .iter()
+        .map(|s| {
+            let mut next = sel.clone();
+            if let Some(k) = &s.key {
+                next.toggle_project(k);
+            }
+            (
+                s.clone(),
+                charts::href(base, &next),
+                next.project.clone().unwrap_or_default(),
+            )
         })
         .collect();
     let swatches: Vec<(String, String)> = d
         .series
         .active_tools(metric)
         .into_iter()
-        .map(|t| (crate::charts::tool_var(t), t.display_name().to_string()))
+        .map(|t| (charts::tool_var(t), t.display_name().to_string()))
         .collect();
 
     Ok(view! {
         <section class="charts">
             <div class="panel">
                 <h2>(if metric == Metric::Cost { "Cost over time" } else { "Tokens over time" })</h2>
-                (bars)
+                bars_chart(bars: &bars, metric: metric, base: base, sel: &sel, animate: animate, click: click_bucket)
                 <ul class="legend">
                     for (var, name) in swatches {
                         <li><span class="sw" style=(format!("background:{var}"))></span>(name)</li>
@@ -332,14 +556,27 @@ pub async fn charts_panel(d: &Dashboard, metric: Metric) -> Result<impl View> {
             <div class="panel">
                 <h2>"Share by project · " (pie_metric.label())</h2>
                 <div class="donut-row">
-                    <div class="donut-box">(donut)</div>
-                    <ul class="legend vertical">
-                        for (i, name, pct) in legend {
-                            <li><span class="sw" style=(format!("background:var(--s{i})"))></span>(name) <span class="pct">(pct)</span></li>
+                    <div class="donut-box">
+                        donut_chart(donut: &donut, base: base, sel: &sel, animate: animate, click: click_project)
+                    </div>
+                    <ul class=(if donut.has_selection { "legend vertical has-sel" } else { "legend vertical" })>
+                        for (s, href, next) in legend {
+                            if s.key.is_none() {
+                                <li class="item other"><span class="sw" style=(format!("background:{}", s.var))></span>(s.label.clone()) <span class="pct">(s.pct.clone())</span></li>
+                            } else if let Some(sig) = click_project {
+                                <li class=(if s.selected { "item sel" } else { "item" }) @click=$(|_e| sig.set(next))>
+                                    <span class="sw" style=(format!("background:{}", s.var))></span>(s.label.clone()) <span class="pct">(s.pct.clone())</span>
+                                </li>
+                            } else {
+                                <li class=(if s.selected { "item sel" } else { "item" })>
+                                    <a href=(href)><span class="sw" style=(format!("background:{}", s.var))></span>(s.label.clone()) <span class="pct">(s.pct.clone())</span></a>
+                                </li>
+                            }
                         }
                     </ul>
                 </div>
             </div>
         </section>
+        selection_bar(sel: &sel, base: base, click_bucket: click_bucket, click_project: click_project)
     })
 }

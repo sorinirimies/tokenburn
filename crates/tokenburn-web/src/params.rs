@@ -1,6 +1,6 @@
 //! Query-string handling: `?tool=pi&bucket=daily&window=month`.
 
-use tokenburn_core::{Bucket, Metric, Query, ToolFilter, Window};
+use tokenburn_core::{Bucket, Metric, Query, Selection, ToolFilter, Window};
 use topcoat::router::query_params;
 
 /// Window choices offered by the interactive UI. `auto` means "the chosen
@@ -18,6 +18,10 @@ pub struct UsageParams {
     pub theme: Option<String>,
     /// Chart metric: `tokens` (default) or `cost`.
     pub metric: Option<String>,
+    /// Clicked chart bucket (a label such as `2026-09-22`).
+    pub sel_bucket: Option<String>,
+    /// Clicked donut slice (a `tool:project` key).
+    pub sel_project: Option<String>,
 }
 
 impl UsageParams {
@@ -31,6 +35,22 @@ impl UsageParams {
             self.bucket.as_deref(),
             self.window.as_deref(),
         )
+    }
+}
+
+/// A selection from optional strings; empty strings mean "nothing selected".
+pub fn parse_selection(bucket: Option<&str>, project: Option<&str>) -> Selection {
+    let non_empty = |s: Option<&str>| s.filter(|v| !v.is_empty()).map(str::to_string);
+    Selection {
+        bucket: non_empty(bucket),
+        project: non_empty(project),
+    }
+}
+
+impl UsageParams {
+    /// The clicked bar / slice from the URL.
+    pub fn selection(&self) -> Selection {
+        parse_selection(self.sel_bucket.as_deref(), self.sel_project.as_deref())
     }
 }
 
@@ -81,6 +101,15 @@ mod tests {
             (q.tool, q.bucket, q.window),
             (ToolFilter::PI, Bucket::Day, Window::All)
         );
+    }
+
+    #[test]
+    fn selections_ignore_empty_strings() {
+        assert!(parse_selection(None, None).is_empty());
+        assert!(parse_selection(Some(""), Some("")).is_empty());
+        let s = parse_selection(Some("2026-09-22"), Some("pi:atlas"));
+        assert_eq!(s.bucket.as_deref(), Some("2026-09-22"));
+        assert_eq!(s.project.as_deref(), Some("pi:atlas"));
     }
 
     #[test]

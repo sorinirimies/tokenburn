@@ -2,8 +2,7 @@
 
 use chrono::Local;
 use tokenburn_core::{
-    Collected, Pie, Query, ReportRow, Summary, TimeSeries, build_report, by_project, collect, pie,
-    time_series,
+    Collected, Pie, Query, ReportRow, Selection, Summary, TimeSeries, collect, drill,
 };
 
 /// Everything a page render needs.
@@ -19,19 +18,24 @@ pub struct Dashboard {
     pub series: TimeSeries,
     /// Share by project (the donut).
     pub pie: Pie,
+    /// The clicked bar and/or slice that everything above is scoped to (stale
+    /// parts already dropped).
+    pub selection: Selection,
     /// Local wall-clock time the snapshot was taken (`HH:MM:SS`).
     pub updated_at: String,
 }
 
-/// Shape collected rows into a [`Dashboard`] (pure — no I/O).
-pub fn build_dashboard(query: Query, collected: Collected) -> Dashboard {
+/// Shape collected rows into a [`Dashboard`] scoped to `selection` (pure — no I/O).
+pub fn build_dashboard(query: Query, collected: Collected, selection: &Selection) -> Dashboard {
+    let d = drill(&collected.rows, &query, selection);
     Dashboard {
         query,
-        total: Summary::of(&collected.rows),
-        report: build_report(&collected.rows, &query),
-        series: time_series(&collected.rows, &query),
-        pie: pie(&by_project(&collected.rows), 8),
-        projects: by_project(&collected.rows),
+        total: d.total,
+        report: d.report,
+        series: d.series,
+        pie: d.pie,
+        projects: d.projects,
+        selection: d.selection,
         row_count: collected.rows.len(),
         updated_at: Local::now().format("%H:%M:%S").to_string(),
         warnings: collected.warnings,
@@ -42,7 +46,7 @@ pub fn build_dashboard(query: Query, collected: Collected) -> Dashboard {
 pub const REFRESH_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Read the logs on a blocking thread and build the [`Dashboard`].
-pub async fn load(query: Query) -> Dashboard {
+pub async fn load(query: Query, selection: &Selection) -> Dashboard {
     let collected =
         tokio::task::spawn_blocking(move || collect(query.tool, query.window.start(Local::now())))
             .await
@@ -50,7 +54,7 @@ pub async fn load(query: Query) -> Dashboard {
                 rows: Vec::new(),
                 warnings: vec![format!("loader failed: {e}")],
             });
-    build_dashboard(query, collected)
+    build_dashboard(query, collected, selection)
 }
 
 /// Width (0–100) of a share bar for `value` against `max`.
@@ -89,7 +93,7 @@ mod tests {
             rows: vec![row(0.5), row(0.25)],
             warnings: vec!["w".into()],
         };
-        let d = build_dashboard(Query::default(), c);
+        let d = build_dashboard(Query::default(), c, &Selection::default());
         assert_eq!(d.row_count, 2);
         assert_eq!(d.total.input, 20);
         assert_eq!(d.warnings.len(), 1);
@@ -99,8 +103,35 @@ mod tests {
 
     #[test]
     fn empty_dashboard_has_no_report() {
-        let d = build_dashboard(Query::default(), Collected::default());
+        let d = build_dashboard(
+            Query::default(),
+            Collected::default(),
+            &Selection::default(),
+        );
         assert!(d.report.is_empty() && d.projects.is_empty());
+    }
+
+    #[test]
+    fn a_selection_scopes_the_dashboard_and_stale_ones_are_dropped() {
+        let c = || Collected {
+            rows: vec![row(0.5), row(0.25)],
+            warnings: vec![],
+        };
+        let sel = Selection {
+            project: Some("pi:p".into()),
+            ..Selection::default()
+        };
+        let d = build_dashboard(Query::default(), c(), &sel);
+        assert_eq!(d.selection, sel);
+        assert_eq!(d.total.turns, 2);
+
+        let stale = Selection {
+            project: Some("pi:ghost".into()),
+            bucket: Some("nope".into()),
+        };
+        let d = build_dashboard(Query::default(), c(), &stale);
+        assert!(d.selection.is_empty());
+        assert_eq!(d.total.turns, 2);
     }
 
     #[test]

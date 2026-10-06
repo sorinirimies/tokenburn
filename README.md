@@ -58,22 +58,37 @@ A refresh re-parses only the files that changed (see [Performance](#performance)
 
 ## Charts
 
-Every front-end draws the same two charts from the same data (`tokenburn-core::chart`):
+Every front-end draws the same two charts from the same data (`tokenburn-core::chart`), and in the GUI and web dashboard they are **interactive and animated**:
 
-- **Tokens / cost over time** — one stacked bar per hour, day or month (follows the bucket you picked), one colour per tool, gap-filled so quiet days show as gaps, not as a squashed axis. Switch the y-axis between tokens and cost.
+- **Tokens / cost over time** — one stacked bar per hour, day or month (follows the bucket you picked), one colour per tool, gap-filled so quiet days show as gaps. Switch the y-axis between tokens and cost.
 - **Share by project** — a donut of the biggest projects (the tail folds into "other"), with the total in the middle.
+
+**Click to drill down** (GUI and web):
+
+| Click | Effect |
+|-------|--------|
+| a **bar** | the table, the totals and the donut are scoped to that bucket; the other bars dim |
+| a **donut slice** (or its legend row) | the table, the totals and the bars are scoped to that project; the slice pops out, the others fade |
+| both | they intersect |
+| the same bar / slice again, or **✕ clear** | back to everything |
+
+Changing the tool, view or window drops the selection. A selection that disappears on a refresh (the data moved on) is dropped too. In the web dashboard a selection is part of the URL (`?sel_bucket=2026-09-22&sel_project=pi%3Aatlas`), so a drilled-down view can be bookmarked or shared.
+
+**Animation**: the bars grow up from the axis with a stagger and the ring sweeps round when a view first appears (not on every auto-refresh), then hover and selection transition smoothly. The web honours `prefers-reduced-motion`.
 
 | Front-end | How it is drawn |
 |-----------|-----------------|
 | TUI | Ratatui bar chart + [`tui-piechart`](https://crates.io/crates/tui-piechart); toggle each panel in `o` |
-| GUI | Iced canvas — hover a bar for a tooltip; the tokens/cost pick list sits above the chart |
-| Web | server-rendered inline SVG (no JavaScript charting library); hover for native tooltips; `?metric=cost` or the *chart* select |
+| GUI | Iced canvas, driven by display frames only while something animates (an idle window costs nothing); hover highlight + tooltip, click to select |
+| Web | server-rendered inline SVG, no JavaScript charting library; CSS animations and transitions; in live mode a click sets a [Topcoat signal](https://github.com/tokio-rs/topcoat) and the shard re-renders in place, in static mode every bar and slice is a plain link |
 
 Chart colours come from the active theme, so all 43 themes restyle them.
 
 | GUI | Web |
 |-----|-----|
 | ![GUI](examples/vhs/generated/gui.gif) | ![Web](examples/vhs/generated/web.gif) |
+
+![Web: hover and click a bar, a slice and a legend row, then clear](examples/vhs/generated/web-interactive.gif)
 
 ## Performance
 

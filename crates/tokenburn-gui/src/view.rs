@@ -143,4 +143,108 @@ mod tests {
         app.set_theme(usize::MAX); // clamped, never panics
         assert_eq!(app.theme_index, tokenburn_core::THEME_COUNT - 1);
     }
+
+    #[test]
+    fn clicking_a_bar_scopes_the_dashboard_and_clicking_again_clears_it() {
+        let mut app = loaded();
+        let all = app.total();
+        let label = app.series.labels[1].clone();
+        let _ = app.update(Message::BucketClicked(label.clone()));
+        assert_eq!(app.selection.bucket.as_deref(), Some(label.as_str()));
+        assert!(app.total().total_tokens < all.total_tokens);
+        assert!(app
+            .report
+            .iter()
+            .all(|r| r.bucket.as_deref() == Some(label.as_str()) || r.bucket.is_none()));
+        let _ = app.view(); // the "Showing …" chips build
+        let _ = app.update(Message::BucketClicked(label));
+        assert!(app.selection.is_empty());
+        assert_eq!(app.total(), all);
+    }
+
+    #[test]
+    fn clicking_a_slice_scopes_to_that_project_and_clear_resets() {
+        let mut app = loaded();
+        let key = app.pie.slices[0].key.clone().unwrap();
+        let _ = app.update(Message::SliceClicked(key.clone()));
+        assert_eq!(app.selection.project.as_deref(), Some(key.as_str()));
+        assert!(app.total().turns < 3);
+        let _ = app.view();
+        let _ = app.update(Message::ClearSelection);
+        assert!(app.selection.is_empty());
+        assert_eq!(app.total().turns, 3);
+    }
+
+    #[test]
+    fn changing_the_query_drops_the_selection() {
+        let mut app = loaded();
+        let label = app.series.labels[0].clone();
+        let _ = app.update(Message::BucketClicked(label));
+        let _ = app.update(Message::ToolSelected(tokenburn_core::ToolFilter::PI));
+        assert!(app.selection.is_empty());
+    }
+
+    #[test]
+    fn a_selection_that_vanishes_on_refresh_is_dropped() {
+        let mut app = loaded();
+        let _ = app.update(Message::SliceClicked(
+            app.pie.slices[0].key.clone().unwrap(),
+        ));
+        app.apply(Collected {
+            rows: vec![],
+            warnings: vec![],
+        });
+        assert!(app.selection.is_empty());
+    }
+
+    #[test]
+    fn the_entry_animation_runs_once_per_view_not_on_every_refresh() {
+        let mut app = loaded();
+        assert!(app.is_animating(), "the first data grows in");
+        assert_eq!(app.anim, 0.0);
+        app.tick_animation(std::time::Instant::now() + crate::state::ENTRY_ANIMATION * 2);
+        assert_eq!(app.anim, 1.0);
+        assert!(
+            !app.is_animating(),
+            "finished animations switch the frame subscription off"
+        );
+
+        // Same query, same metric: a refresh keeps the charts still.
+        app.apply(Collected {
+            rows: app.rows.clone(),
+            warnings: vec![],
+        });
+        assert!(!app.is_animating());
+
+        // A new metric replays it.
+        let _ = app.update(Message::MetricSelected(tokenburn_core::Metric::Cost));
+        assert!(app.is_animating());
+    }
+
+    #[test]
+    fn a_selection_animates_a_pop_and_settles() {
+        let mut app = loaded();
+        app.tick_animation(std::time::Instant::now() + crate::state::ENTRY_ANIMATION * 2);
+        let key = app.pie.slices[0].key.clone().unwrap();
+        let _ = app.update(Message::SliceClicked(key));
+        assert!(app.is_animating());
+        assert_eq!(app.sel_anim, 0.0);
+        let _ = app.update(Message::Frame(
+            std::time::Instant::now() + crate::state::SELECT_ANIMATION * 2,
+        ));
+        assert_eq!(app.sel_anim, 1.0);
+        assert!(!app.is_animating());
+    }
+
+    #[test]
+    fn easing_is_monotonic_and_bounded() {
+        let mut prev = -1.0;
+        for i in 0..=20 {
+            let v = crate::state::ease_out(i as f32 / 20.0);
+            assert!((0.0..=1.0).contains(&v) && v >= prev);
+            prev = v;
+        }
+        assert_eq!(crate::state::ease_out(2.0), 1.0);
+        assert_eq!(crate::state::ease_out(-1.0), 0.0);
+    }
 }

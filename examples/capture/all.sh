@@ -5,7 +5,8 @@
 # Needs: a debug build of tokenburn-gui and tokenburn-web, the topcoat asset bundle
 # (`topcoat asset bundle --package tokenburn-web --out target/debug/assets`), ffmpeg,
 # node >= 22 and a Chromium-based browser (BROWSER=/path/to/it to override).
-# The GUI half needs macOS; on other systems it is skipped.
+# The GUI half needs macOS and a free desktop (it brings the window to the front);
+# it is skipped elsewhere, or with SKIP_GUI=1.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 gen="$root/examples/vhs/generated"
@@ -16,13 +17,13 @@ THEMES=("Tokyo Night" "Catppuccin Mocha" "Solarized Light" "Dracula")
 slug() { printf '%s' "$1" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-'; }
 
 # ── GUI ──────────────────────────────────────────────────────────────────────
-if [ "$(uname)" = Darwin ]; then
+if [ "$(uname)" = Darwin ] && [ -z "${SKIP_GUI:-}" ]; then
     bash "$root/examples/capture/gui.sh" "$shots" "${THEMES[@]}"
     cp "$shots/gui-tokyo-night.png" "$gen/gui.png"
     frames=(); for t in "${THEMES[@]}"; do frames+=("$shots/gui-$(slug "$t").png"); done
     bash "$root/examples/capture/gif.sh" "$gen/gui.gif" 1.8 "${frames[@]}"
 else
-    echo "skipping the GUI (macOS only)"
+    echo "skipping the GUI (macOS only, or SKIP_GUI is set)"
 fi
 
 # ── Web ──────────────────────────────────────────────────────────────────────
@@ -44,6 +45,9 @@ browser=$!
 trap 'kill $web $browser 2>/dev/null || true; rm -rf "$shots" "$prof" 2>/dev/null || true' EXIT
 sleep 8
 DEBUG_PORT="$debug" node "$root/examples/capture/web.mjs" "$port" "$shots" "${THEMES[@]}"
+# The interactive session: hover/click a bar, a slice and a legend row, then clear.
+DEBUG_PORT="$debug" node "$root/examples/capture/web_interactive.mjs" "$port" "$shots/interactive"
+bash "$root/examples/capture/gif.sh" "$gen/web-interactive.gif" 0.7 "$shots"/interactive/step-*.png
 cp "$shots/web-tokyo-night.png" "$gen/web.png"
 frames=(); for t in "${THEMES[@]}"; do frames+=("$shots/web-$(slug "$t").png"); done
 bash "$root/examples/capture/gif.sh" "$gen/web.gif" 1.8 "${frames[@]}"

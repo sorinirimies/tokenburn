@@ -60,7 +60,14 @@ fn subscription(state: &TokenBurn) -> iced::Subscription<Message> {
     } else {
         iced::Subscription::none()
     };
-    iced::Subscription::batch([auto_refresh, animation])
+    // Display frames only while a chart animation is running, so an idle window
+    // costs nothing.
+    let frames = if state.is_animating() {
+        iced::window::frames().map(Message::Frame)
+    } else {
+        iced::Subscription::none()
+    };
+    iced::Subscription::batch([auto_refresh, animation, frames])
 }
 
 /// Emits `AutoRefresh` every [`AUTO_REFRESH`]. Blocking sleep is fine: Iced runs

@@ -119,6 +119,12 @@ fn label(ts: DateTime<Local>, bucket: Bucket) -> String {
     ts.format(bucket.format()).to_string()
 }
 
+/// The label of the chart bucket containing `row` — the same string
+/// [`TimeSeries::labels`] uses, so a clicked bar can be matched to its rows.
+pub fn bucket_label_of(row: &Row, bucket: Bucket) -> String {
+    label(row.ts.with_timezone(&Local), bucket)
+}
+
 /// Build the stacked series for `rows` at [`chart_bucket`] granularity, with
 /// empty buckets filled in so gaps in time show as gaps in the chart.
 pub fn time_series(rows: &[Row], query: &Query) -> TimeSeries {
@@ -288,6 +294,9 @@ pub struct Slice {
     pub label: String,
     /// The tool, when the label starts with `tool:` (for colouring).
     pub tool: Option<Tool>,
+    /// The full `tool:project` key (what [`super::Selection`] matches on);
+    /// `None` for the folded `other` slice, which can't be selected.
+    pub key: Option<String>,
     pub value: f64,
 }
 
@@ -325,6 +334,7 @@ pub fn pie(projects: &[(String, Summary)], top_n: usize) -> Pie {
             tool: name
                 .split_once(':')
                 .and_then(|(t, _)| t.parse::<Tool>().ok()),
+            key: Some(name.clone()),
             value: value(s),
         })
         .filter(|s| s.value > 0.0)
@@ -341,6 +351,7 @@ pub fn pie(projects: &[(String, Summary)], top_n: usize) -> Pie {
         slices.push(Slice {
             label: "other".into(),
             tool: None,
+            key: None,
             value: rest,
         });
     }

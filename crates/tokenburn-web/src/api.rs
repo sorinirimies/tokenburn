@@ -15,7 +15,7 @@ use crate::{data::load, params::UsageParams, style::CSS};
 #[route(GET "/api/report")]
 async fn report(cx: &Cx) -> Result<Json<Vec<tokenburn_core::ReportRow>>> {
     let query = query_params::<UsageParams>(cx)?.to_query();
-    Ok(Json(load(query).await.report))
+    Ok(Json(load(query, &Default::default()).await.report))
 }
 
 /// Liveness probe.

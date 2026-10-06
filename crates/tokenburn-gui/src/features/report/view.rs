@@ -1,7 +1,9 @@
 //! Aggregated report table, with a share-of-tokens bar per line.
 
 use iced::alignment::Horizontal;
-use iced::widget::{column, container, pick_list, progress_bar, row, scrollable, space, text};
+use iced::widget::{
+    button, column, container, pick_list, progress_bar, row, scrollable, space, text,
+};
 use iced::{Element, Length};
 use tokenburn_core::utils::fmt::{thousands, usd};
 
@@ -140,7 +142,14 @@ fn charts(state: &TokenBurn) -> Element<'_, Message> {
         ]
         .align_y(iced::Alignment::Center)
         .height(Length::Fixed(34.0)),
-        stacked_bars(state.series.clone(), metric, colors, 200.0),
+        stacked_bars(
+            state.series.clone(),
+            metric,
+            colors,
+            state.selection.bucket.as_deref(),
+            (state.anim, state.sel_anim),
+            200.0
+        ),
     ]
     .spacing(4)
     .width(Length::FillPortion(3));
@@ -151,12 +160,50 @@ fn charts(state: &TokenBurn) -> Element<'_, Message> {
             .style(text::secondary)]
         .align_y(iced::Alignment::Center)
         .height(Length::Fixed(34.0)),
-        donut(state.pie.clone(), colors, 200.0),
+        donut(
+            state.pie.clone(),
+            colors,
+            state.selection.project.as_deref(),
+            (state.anim, state.sel_anim),
+            200.0
+        ),
     ]
     .spacing(4)
     .width(Length::FillPortion(2));
 
-    container(row![bars, share].spacing(16))
+    let mut panel = column![row![bars, share].spacing(16)].spacing(8);
+    if !state.selection.is_empty() {
+        let mut chips = row![text("Showing").size(12).style(text::secondary)]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+        for chip in state.selection.describe() {
+            chips = chips.push(
+                container(text(chip).size(12))
+                    .padding([2, 8])
+                    .style(container::rounded_box),
+            );
+        }
+        chips = chips.push(
+            button(text("✕ clear").size(12))
+                .padding([2, 8])
+                .style(button::secondary)
+                .on_press(Message::ClearSelection),
+        );
+        chips = chips.push(
+            text("click a bar or slice again to deselect")
+                .size(11)
+                .style(text::secondary),
+        );
+        panel = panel.push(chips);
+    } else {
+        panel = panel.push(
+            text("click a bar or a slice to drill down")
+                .size(11)
+                .style(text::secondary),
+        );
+    }
+
+    container(panel)
         .padding(10)
         .style(container::bordered_box)
         .into()

@@ -7,7 +7,7 @@
 //! |---|---|
 //! | [`app`] | [`ServerOptions`], router construction, [`serve`] |
 //! | [`pages`] | the document shell, the home page and the live shard |
-//! | [`charts`] | server-rendered SVG charts (stacked bars, donut) |
+//! | [`charts`] | clickable, animated SVG charts (stacked bars, donut) |
 //! | [`api`] | JSON + static routes (`/api/report`, `/api/health`, `/style.css`) |
 //! | [`components`] | reusable view components (cards, tables, filters) |
 //! | [`params`] | query-string / signal values → core `Query` |
@@ -21,6 +21,10 @@
 //! **Live mode** (asset bundle present): filters are signals and the data
 //! refreshes itself over a WebSocket. **Static mode** (no bundle): GET-form
 //! filters and a `<meta refresh>`.
+
+// The live shard takes one plain argument per signal it starts with (Topcoat's shard
+// API has no struct form), and the lint fires inside the generated function.
+#![allow(clippy::too_many_arguments)]
 
 pub mod api;
 pub mod app;

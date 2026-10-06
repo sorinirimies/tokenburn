@@ -40,15 +40,18 @@ impl TokenBurn {
             }
             Message::ToolSelected(tool) => {
                 self.query.tool = tool;
+                self.selection.clear();
                 self.reload()
             }
             Message::BucketSelected(bucket) => {
                 self.query.bucket = bucket;
                 self.query.window = bucket.default_window();
+                self.selection.clear();
                 self.reload()
             }
             Message::WindowSelected(window) => {
                 self.query.window = window;
+                self.selection.clear();
                 self.reload()
             }
             Message::ThemeSelected(choice) => {
@@ -57,6 +60,23 @@ impl TokenBurn {
             }
             Message::MetricSelected(metric) => {
                 self.chart_metric = metric;
+                self.restart_entry_animation();
+                Task::none()
+            }
+            Message::BucketClicked(label) => {
+                self.click_bucket(&label);
+                Task::none()
+            }
+            Message::SliceClicked(key) => {
+                self.click_project(&key);
+                Task::none()
+            }
+            Message::ClearSelection => {
+                self.clear_selection();
+                Task::none()
+            }
+            Message::Frame(now) => {
+                self.tick_animation(now);
                 Task::none()
             }
             Message::ViewSelected(view) => {
