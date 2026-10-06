@@ -6,6 +6,8 @@
 
 A terminal UI, a desktop GUI and a web dashboard (plus a CLI for scripts), all in Rust, all showing the same live numbers.
 
+**Cross-platform: Linux, macOS and Windows are supported.**
+
 [![Crates.io](https://img.shields.io/crates/v/tokenburn.svg)](https://crates.io/crates/tokenburn)
 [![docs.rs](https://docs.rs/tokenburn-core/badge.svg)](https://docs.rs/tokenburn-core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -89,8 +91,8 @@ tokenburn --json           # machine-readable (always US dollars)
 
 | `--tool` | Tool | Where it reads (default) | `$` cost |
 |----------|------|--------------------------|:---:|
-| `pi` | [pi](https://github.com/earendil-works/pi-coding-agent) | `~/.pi/agent/sessions/**/*.jsonl` | ✅ |
-| `zed` | Zed agent panel | `threads.db` (sqlite + zstd JSON) | – |
+| `pi` | [pi](https://github.com/earendil-works/pi-coding-agent) | `~/.pi/agent/sessions/**/*.jsonl` (`$TOKENBURN_PI_SESSIONS`, `$PI_CODING_AGENT_DIR`) | ✅ |
+| `zed` | Zed agent panel | `threads.db` (sqlite + zstd JSON; `$TOKENBURN_ZED_DB`) | – |
 | `claude` | Claude Code | `~/.claude/projects/**/*.jsonl` (`$CLAUDE_CONFIG_DIR`) | when logged |
 | `codex` | OpenAI Codex CLI | `~/.codex/sessions/**/*.jsonl` (`$CODEX_HOME`) | – |
 | `copilot` | GitHub Copilot CLI | `~/.copilot/session-state` (`$COPILOT_HOME`) | – |
@@ -101,8 +103,6 @@ tokenburn --json           # machine-readable (always US dollars)
 `all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.00` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
 
 > The Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp readers follow the formats documented by [ccusage](https://github.com/ryoppippi/ccusage) and are covered by fixture tests; pi and Zed were also checked against real logs. If one misreads your data, open an issue with a (redacted) log line.
-
-Per-platform locations and the full list of overrides are in [Platform support](#platform-support).
 
 ## Shared by every front-end
 
@@ -221,29 +221,6 @@ tokenburn-web --port 8080 --no-open # flags: --host, --port (or HOST / PORT), --
 It binds to `127.0.0.1`. `--host 0.0.0.0` exposes it on the network — there is no authentication, and token/cost data is private, so only do that deliberately.
 
 **Live mode** needs Topcoat's browser runtime. Release archives, the DMG, the Windows installer and the `.deb`/`.rpm` include it. When building yourself, `just run-web` bundles it (needs `cargo install topcoat-cli`), or run `topcoat asset bundle` and point `TOKENBURN_WEB_ASSETS` at the result. Without it, `tokenburn-web` still works and serves a static dashboard (form filters, links instead of clicks, reload every 10 s) — which is what `cargo install tokenburn-web` gives you. Search order: `$TOKENBURN_WEB_ASSETS`, `<exe dir>/assets`, `<exe dir>/../share/tokenburn-web/assets`, `/usr/share/…`, `/usr/local/share/…`.
-
-## Platform support
-
-macOS, Linux and Windows, all four binaries:
-
-| Binary | macOS (arm64 + x86_64) | Linux (x86_64 + aarch64) | Windows (x86_64) |
-|--------|:---:|:---:|:---:|
-| `tokenburn`, `tokenburn-tui`, `tokenburn-web` | ✅ | ✅ | ✅ |
-| `tokenburn-gui` | ✅ `.app` in a universal DMG | ✅ X11 **and** Wayland | ✅ |
-
-Log locations are found per platform; every one can be overridden:
-
-| Source | macOS | Linux | Windows | Override |
-|--------|-------|-------|---------|----------|
-| pi | `~/.pi/agent/sessions` | `~/.pi/agent/sessions` | `%USERPROFILE%\.pi\agent\sessions` | `TOKENBURN_PI_SESSIONS`, `PI_CODING_AGENT_SESSION_DIR`, `PI_CODING_AGENT_DIR` |
-| Zed | `~/Library/Application Support/Zed/threads/threads.db` | `$XDG_DATA_HOME/zed/…`, Flatpak `~/.var/app/dev.zed.Zed/…` | `%LOCALAPPDATA%\Zed\threads\threads.db` | `TOKENBURN_ZED_DB` |
-
-### Linux notes
-
-- **One GUI binary serves X11 and Wayland.** It links only libc/libm and loads X11, Wayland, xkbcommon and the GPU libraries at runtime. It picks Wayland when `WAYLAND_DISPLAY` is set; force X11 with `env -u WAYLAND_DISPLAY tokenburn-gui`.
-- **Software rendering** is the automatic fallback without a usable GPU (VMs, remote desktops); force it with `ICED_BACKEND=tiny-skia`.
-- **glibc builds** (AppImage, `.deb`, `.rpm`, `*-gnu`) are linked on Ubuntu 22.04, so they need glibc ≥ 2.35. **Static musl builds** (CLI, TUI, web) run anywhere — Alpine, containers, NixOS.
-- The GUI needs `libxkbcommon` and fonts, as any desktop Linux has.
 
 ## Development
 
