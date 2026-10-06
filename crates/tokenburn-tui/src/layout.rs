@@ -66,6 +66,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     if app.theme_picker_open {
         theme::view::render(app, frame, frame.area());
     }
+    if app.currency_picker_open {
+        crate::features::currency::view::render(app, frame, frame.area());
+    }
 }
 
 #[cfg(test)]
@@ -242,5 +245,64 @@ mod tests {
     fn renders_empty_state() {
         let mut app = App::new();
         assert!(draw(&mut app).contains("No tokenburn results"));
+    }
+
+    #[test]
+    fn costs_follow_the_currency_everywhere_and_the_header_says_which() {
+        let mut app = app_with_rows();
+        let usd_screen = draw(&mut app);
+        assert!(
+            usd_screen.contains("$0.50") && usd_screen.contains("cur:USD"),
+            "{usd_screen}"
+        );
+
+        app.set_currency(tokenburn_core::features::currency::index_of("EUR"));
+        let eur_screen = draw(&mut app);
+        assert!(
+            eur_screen.contains("€0.46"),
+            "0.50 USD at 0.92: {eur_screen}"
+        );
+        assert!(
+            eur_screen.contains("cur:EUR ≈"),
+            "built-in rates are marked approximate"
+        );
+        assert!(!eur_screen.contains("$0.50"));
+
+        // The user's own rate is not marked approximate.
+        app.rates.insert("EUR".into(), 0.5);
+        app.set_currency(tokenburn_core::features::currency::index_of("EUR"));
+        let own = draw(&mut app);
+        assert!(own.contains("€0.25") && own.contains("cur:EUR ") && !own.contains("cur:EUR ≈"));
+
+        app.toggle_view();
+        assert!(draw(&mut app).contains("€0.25"), "the projects table too");
+    }
+
+    #[test]
+    fn the_currency_picker_lists_currencies_with_their_rates() {
+        let mut app = app_with_rows();
+        app.currency_picker_open = true;
+        let out = draw(&mut app);
+        assert!(
+            out.contains("Currency") && out.contains("EUR") && out.contains("Euro"),
+            "{out}"
+        );
+        assert!(out.contains("fixed estimates"));
+        assert!(
+            out.contains("settings.json"),
+            "tells you where exact rates go"
+        );
+        app.set_currency(tokenburn_core::features::currency::index_of("JPY"));
+        assert!(
+            draw(&mut app).contains("150 per $"),
+            "the rate shown is the one in use"
+        );
+    }
+
+    #[test]
+    fn the_status_bar_hints_the_currency_key() {
+        let mut app = app_with_rows();
+        let out = draw(&mut app);
+        assert!(out.contains("C currency"), "{out}");
     }
 }

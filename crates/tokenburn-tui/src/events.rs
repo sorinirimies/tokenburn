@@ -20,6 +20,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         crate::features::filter::events::handle_tool_key(app, key);
         return;
     }
+    if app.currency_picker_open {
+        crate::features::currency::events::handle_key(app, key);
+        return;
+    }
     if app.theme_picker_open {
         crate::features::theme::events::handle_key(app, key);
         return;
@@ -32,6 +36,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Char('o') => app.options.open = true,
         KeyCode::Char('T') => app.theme_picker_open = true,
+        KeyCode::Char('C') => app.currency_picker_open = true,
         KeyCode::Char(']') => app.cycle_theme(1),
         KeyCode::Char('[') => app.cycle_theme(-1),
         KeyCode::Char('/') => app.filter_editing = true,
@@ -77,6 +82,17 @@ mod tests {
         handle_key(&mut app, KeyEvent::from(KeyCode::Char('q')));
         assert!(!app.options.open);
         assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn capital_c_opens_the_currency_picker_and_swallows_keys_until_closed() {
+        let mut app = App::new();
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('C')));
+        assert!(app.currency_picker_open);
+        handle_key(&mut app, KeyEvent::from(KeyCode::Down));
+        assert_ne!(app.currency.code, "USD");
+        handle_key(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert!(!app.currency_picker_open && !app.should_quit);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use clap::Parser;
-use tokenburn_core::{Query, ToolFilter};
+use tokenburn_core::{Currency, Query, ToolFilter};
 
 /// Desktop GUI for local AI token/cost usage (pi, Zed, Claude Code, Codex, …).
 ///
@@ -31,6 +31,15 @@ pub struct Args {
     #[arg(long, value_name = "NAME", value_parser = parse_theme)]
     pub theme: Option<usize>,
 
+    /// Show costs in this currency (e.g. EUR, GBP, JPY); remembered for the other
+    /// front-ends. Rates are fixed estimates: set exact ones under "rates" in settings.json.
+    #[arg(long, short = 'c', value_name = "CODE")]
+    pub currency: Option<Currency>,
+
+    /// Print every supported currency and exit.
+    #[arg(long)]
+    pub list_currencies: bool,
+
     /// Print every theme name and exit.
     #[arg(long)]
     pub list_themes: bool,
@@ -58,6 +67,14 @@ mod tests {
         assert_eq!(q.bucket, Bucket::None);
         let q = Args::parse_from(["tokenburn-gui", "--daily", "--all"]).query();
         assert_eq!((q.bucket, q.window), (Bucket::Day, Window::All));
+    }
+
+    #[test]
+    fn currency_flags() {
+        let a = Args::parse_from(["tokenburn-gui", "-c", "chf"]);
+        assert_eq!(a.currency.unwrap().code, "CHF");
+        assert!(Args::parse_from(["tokenburn-gui"]).currency.is_none());
+        assert!(Args::try_parse_from(["tokenburn-gui", "--currency", "zzz"]).is_err());
     }
 
     #[test]

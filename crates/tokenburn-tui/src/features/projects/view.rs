@@ -2,7 +2,7 @@ use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 use ratatui::Frame;
-use tokenburn_core::utils::fmt::{thousands, usd};
+use tokenburn_core::utils::fmt::thousands;
 
 use crate::app::App;
 
@@ -33,7 +33,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                     .style(Style::default().fg(th.tool(name.split(':').next().unwrap_or("")))),
                 Cell::from(thousands(s.turns)),
                 Cell::from(thousands(s.total_tokens)),
-                Cell::from(usd(s.cost_usd)).style(Style::default().fg(th.success)),
+                Cell::from(app.currency.format(s.cost_usd)).style(Style::default().fg(th.success)),
             ])
         })
         .collect();

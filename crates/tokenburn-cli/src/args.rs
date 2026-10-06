@@ -1,5 +1,5 @@
 use clap::Parser;
-use tokenburn_core::{Query, ToolFilter};
+use tokenburn_core::{Currency, Query, ToolFilter};
 
 /// Local AI token/cost usage report for AI coding agents (pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Amp), read from their session logs on disk.
 ///
@@ -27,9 +27,19 @@ pub struct Args {
     #[arg(long, short)]
     pub all: bool,
 
-    /// Print JSON instead of a table.
+    /// Print JSON instead of a table. JSON costs are always US dollars (`cost_usd`).
     #[arg(long)]
     pub json: bool,
+
+    /// Show costs in this currency (e.g. EUR, GBP, JPY). Defaults to the one saved by
+    /// the other front-ends (USD if none). Rates are fixed estimates: set exact ones under
+    /// "rates" in settings.json.
+    #[arg(long, short = 'c', value_name = "CODE")]
+    pub currency: Option<Currency>,
+
+    /// Print every supported currency and exit.
+    #[arg(long)]
+    pub list_currencies: bool,
 }
 
 impl Args {
@@ -52,6 +62,15 @@ mod tests {
             (q.tool, q.bucket, q.window),
             (ToolFilter::All, Bucket::None, Window::Month)
         );
+    }
+
+    #[test]
+    fn currency_flags() {
+        let a = Args::parse_from(["tokenburn", "--currency", "eur"]);
+        assert_eq!(a.currency.unwrap().code, "EUR");
+        assert!(Args::parse_from(["tokenburn"]).currency.is_none());
+        assert!(Args::parse_from(["tokenburn", "--list-currencies"]).list_currencies);
+        assert!(Args::try_parse_from(["tokenburn", "-c", "xyz"]).is_err());
     }
 
     #[test]

@@ -9,5 +9,11 @@ fn main() -> anyhow::Result<()> {
         }
         return Ok(());
     }
-    tokenburn_tui::run(args.query(), args.theme)
+    if args.list_currencies {
+        for c in tokenburn_core::CURRENCIES {
+            println!("{:<4}{}", c.code, c.name);
+        }
+        return Ok(());
+    }
+    tokenburn_tui::run(args.query(), args.theme, args.currency)
 }

@@ -18,17 +18,17 @@ use ratatui::Terminal;
 
 use crate::app::App;
 pub use crate::args::Args;
-use tokenburn_core::Query;
+use tokenburn_core::{Currency, Query};
 
 /// Run the TUI until the user quits, starting from `query`.
 ///
 /// `theme` (an index into [`tokenburn_core::THEME_NAMES`]) overrides the saved theme;
 /// `None` uses the one in the shared settings file.
-pub fn run(query: Query, theme: Option<usize>) -> Result<()> {
+pub fn run(query: Query, theme: Option<usize>, currency: Option<Currency>) -> Result<()> {
     // `ratatui::init` enables raw mode + alternate screen and installs a
     // panic hook that restores the terminal.
     let mut terminal = ratatui::init();
-    let result = run_app(&mut terminal, query, theme);
+    let result = run_app(&mut terminal, query, theme, currency);
     ratatui::restore();
     result
 }
@@ -38,6 +38,7 @@ pub fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     query: Query,
     theme: Option<usize>,
+    currency: Option<Currency>,
 ) -> Result<()>
 where
     B::Error: Send + Sync + 'static,
@@ -51,6 +52,13 @@ where
             app.theme_index = tokenburn_core::settings::theme_index();
             app.theme = crate::features::theme::UiTheme::by_index(app.theme_index);
         }
+    }
+    // The user's own exchange rates, then the currency: an explicit --currency is
+    // remembered like --theme, otherwise the saved one is used.
+    app.rates = tokenburn_core::settings::load().rates;
+    match currency {
+        Some(c) => app.set_currency(tokenburn_core::features::currency::index_of(c.code)),
+        None => app.currency = tokenburn_core::settings::currency(),
     }
     app.reload();
 

@@ -1,7 +1,9 @@
 //! Server-rendered page components.
 
-use tokenburn_core::utils::fmt::{compact, thousands, usd};
-use tokenburn_core::{Bucket, Metric, Query, ReportRow, Summary, ToolFilter, Window};
+use tokenburn_core::utils::fmt::{compact, thousands};
+use tokenburn_core::{
+    Bucket, CURRENCIES, Currency, Metric, Query, ReportRow, Summary, ToolFilter, Window,
+};
 use topcoat::{
     Result,
     runtime::{Event, Signal},
@@ -16,7 +18,9 @@ use tokenburn_core::Selection;
 
 /// Row of headline totals.
 #[component]
-pub async fn summary_cards(total: Summary) -> Result<impl View> {
+pub async fn summary_cards(total: Summary, currency: Currency) -> Result<impl View> {
+    // "cost ≈" when the exchange rate is a built-in estimate.
+    let cost_label = format!("cost{}", currency.approx_mark());
     Ok(view! {
         <section class="cards">
             <div class="card"><div class="label">"turns"</div><div class="value">(thousands(total.turns))</div></div>
@@ -25,14 +29,19 @@ pub async fn summary_cards(total: Summary) -> Result<impl View> {
             <div class="card"><div class="label">"output"</div><div class="value">(compact(total.output))</div></div>
             <div class="card"><div class="label">"cache read"</div><div class="value">(compact(total.cache_read))</div></div>
             <div class="card"><div class="label">"cache write"</div><div class="value">(compact(total.cache_write))</div></div>
-            <div class="card cost"><div class="label">"cost"</div><div class="value">(usd(total.cost_usd))</div></div>
+            <div class="card cost"><div class="label">(cost_label)</div><div class="value">(currency.format(total.cost_usd))</div></div>
         </section>
     })
 }
 
 /// GET form that drives the query string.
 #[component]
-pub async fn filters(query: Query, theme: usize, metric: Metric) -> Result<impl View> {
+pub async fn filters(
+    query: Query,
+    theme: usize,
+    metric: Metric,
+    currency: Currency,
+) -> Result<impl View> {
     Ok(view! {
         <form class="filters" method="get" action="/">
             <label>"tool "
@@ -63,6 +72,13 @@ pub async fn filters(query: Query, theme: usize, metric: Metric) -> Result<impl 
                     }
                 </select>
             </label>
+            <label>"currency "
+                <select name="currency" onchange="this.form.submit()">
+                    for cur in CURRENCIES {
+                        <option value=(cur.code) selected=(cur.code == currency.code)>(format!("{} · {}", cur.code, cur.name))</option>
+                    }
+                </select>
+            </label>
             <label>"theme "
                 <select name="theme" onchange="this.form.submit()">
                     for (i, n) in theme::names().iter().enumerate() {
@@ -77,7 +93,7 @@ pub async fn filters(query: Query, theme: usize, metric: Metric) -> Result<impl 
 
 /// Aggregated report table with a share-of-tokens bar per line.
 #[component]
-pub async fn report_table(report: &[ReportRow]) -> Result<impl View> {
+pub async fn report_table(report: &[ReportRow], currency: Currency) -> Result<impl View> {
     let bucketed = report.iter().any(|r| r.bucket.is_some());
     let max = report
         .iter()
@@ -113,7 +129,7 @@ pub async fn report_table(report: &[ReportRow]) -> Result<impl View> {
                         <td>(thousands(r.summary.cache_read))</td>
                         <td>(thousands(r.summary.cache_write))</td>
                         <td>(thousands(r.summary.total_tokens))</td>
-                        <td class="cost">(usd(r.summary.cost_usd))</td>
+                        <td class="cost">(currency.format(r.summary.cost_usd))</td>
                         <td class="left">
                             if r.tool != "TOTAL" {
                                 <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent(r.summary.total_tokens, max), theme::series_var(&r.tool)))></span></span>
@@ -128,7 +144,10 @@ pub async fn report_table(report: &[ReportRow]) -> Result<impl View> {
 
 /// Per-project / per-model breakdown, most expensive first.
 #[component]
-pub async fn projects_table(projects: &[(String, Summary)]) -> Result<impl View> {
+pub async fn projects_table(
+    projects: &[(String, Summary)],
+    currency: Currency,
+) -> Result<impl View> {
     let max = projects
         .iter()
         .map(|(_, s)| (s.cost_usd * 10_000.0) as u64)
@@ -152,7 +171,7 @@ pub async fn projects_table(projects: &[(String, Summary)]) -> Result<impl View>
                         <td class="left">(name.clone())</td>
                         <td>(thousands(s.turns))</td>
                         <td>(thousands(s.total_tokens))</td>
-                        <td class="cost">(usd(s.cost_usd))</td>
+                        <td class="cost">(currency.format(s.cost_usd))</td>
                         <td class="left">
                             <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent((s.cost_usd * 10_000.0) as u64, max), theme::series_var(name.split(':').next().unwrap_or(""))))></span></span>
                         </td>
@@ -172,7 +191,9 @@ pub async fn live_filters(
     window: &Signal<String>,
     theme: &Signal<String>,
     metric: &Signal<String>,
+    currency: &Signal<String>,
 ) -> Result<impl View> {
+    let cur = currency.get_untracked();
     let (t, b, w, th, m) = (
         tool.get_untracked(),
         bucket.get_untracked(),
@@ -210,6 +231,13 @@ pub async fn live_filters(
                     }
                 </select>
             </label>
+            <label>"currency "
+                <select :value=$(currency.get()) @change=$(|e: Event| currency.set(e.target.value))>
+                    for cc in CURRENCIES {
+                        <option value=(cc.code) selected=(cc.code == cur)>(format!("{} · {}", cc.code, cc.name))</option>
+                    }
+                </select>
+            </label>
             <label>"theme "
                 <select :value=$(theme.get()) @change=$(|e: Event| theme.set(e.target.value))>
                     for n in theme::names() {
@@ -239,7 +267,7 @@ pub async fn dashboard_body(
             <div class="warn">"⚠ " (w.clone())</div>
         }
 
-        summary_cards(total: d.total)
+        summary_cards(total: d.total, currency: d.currency)
 
         charts_panel(d: d, metric: metric, base: base, animate: live, click_bucket: click_bucket, click_project: click_project)
 
@@ -251,14 +279,14 @@ pub async fn dashboard_body(
                     ", window=" (d.query.window.label()) "."
                 </div>
             } else {
-                report_table(report: &d.report)
+                report_table(report: &d.report, currency: d.currency)
             }
         </section>
 
         if !d.projects.is_empty() {
             <section>
                 <h2>"Projects / models (by cost)"</h2>
-                projects_table(projects: &d.projects)
+                projects_table(projects: &d.projects, currency: d.currency)
             </section>
         }
 
@@ -514,8 +542,18 @@ pub async fn charts_panel(
     click_bucket: Option<&Signal<String>>,
     click_project: Option<&Signal<String>>,
 ) -> Result<impl View> {
-    let bars = charts::bars(&d.series, metric, d.selection.bucket.as_deref());
-    let donut = charts::donut(&d.pie, d.selection.project.as_deref());
+    let cur = d.currency;
+    let bars = charts::bars(
+        &d.series.in_currency(&cur),
+        metric,
+        d.selection.bucket.as_deref(),
+        &cur,
+    );
+    let donut = charts::donut(
+        &d.pie.in_currency(&cur),
+        d.selection.project.as_deref(),
+        &cur,
+    );
     let sel = d.selection.clone();
     let pie_metric = d.pie.metric;
 

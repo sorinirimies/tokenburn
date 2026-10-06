@@ -1,10 +1,10 @@
 //! Plain-text table renderer.
 
-use tokenburn_core::utils::fmt::{thousands, usd};
-use tokenburn_core::ReportRow;
+use tokenburn_core::utils::fmt::thousands;
+use tokenburn_core::{Currency, ReportRow};
 
 const HEAD_BUCKET: [&str; 1] = ["bucket"];
-const HEAD: [&str; 8] = [
+const HEAD: [&str; 7] = [
     "tool",
     "turns",
     "input",
@@ -12,18 +12,20 @@ const HEAD: [&str; 8] = [
     "cache_read",
     "cache_write",
     "total_tokens",
-    "cost_usd",
 ];
 
-/// Render report rows as an aligned table. Numeric columns are right-aligned.
-pub fn table(rows: &[ReportRow]) -> String {
+/// Render report rows as an aligned table, costs in `currency` (the last column is
+/// `cost_usd`, `cost_eur`, …). Numeric columns are right-aligned.
+pub fn table(rows: &[ReportRow], currency: &Currency) -> String {
     let bucketed = rows.iter().any(|r| r.bucket.is_some());
 
+    let cost_head = format!("cost_{}", currency.code.to_ascii_lowercase());
     let mut head: Vec<&str> = Vec::new();
     if bucketed {
         head.extend(HEAD_BUCKET);
     }
     head.extend(HEAD);
+    head.push(&cost_head);
 
     let body: Vec<Vec<String>> = rows
         .iter()
@@ -41,7 +43,7 @@ pub fn table(rows: &[ReportRow]) -> String {
                 thousands(s.cache_read),
                 thousands(s.cache_write),
                 thousands(s.total_tokens),
-                usd(s.cost_usd),
+                currency.format(s.cost_usd),
             ]);
             cells
         })
@@ -107,17 +109,32 @@ mod tests {
 
     #[test]
     fn unbucketed_table() {
-        let t = table(&[rr(None, "pi", 1234), rr(None, "TOTAL", 1234)]);
+        let t = table(
+            &[rr(None, "pi", 1234), rr(None, "TOTAL", 1234)],
+            &Currency::USD,
+        );
         assert!(t.starts_with("tool"));
         assert!(t.contains("1,234"));
-        assert!(t.contains("$1.5"));
+        assert!(t.contains("$1.50"));
+        assert!(t.contains("cost_usd"));
         assert!(!t.contains("bucket"));
     }
 
     #[test]
     fn bucketed_table_has_bucket_column() {
-        let t = table(&[rr(Some("2026-05"), "pi", 10)]);
+        let t = table(&[rr(Some("2026-05"), "pi", 10)], &Currency::USD);
         assert!(t.starts_with("bucket"));
         assert!(t.contains("2026-05"));
+    }
+
+    #[test]
+    fn costs_are_shown_in_the_chosen_currency() {
+        let eur = tokenburn_core::currency_by_code("EUR").unwrap();
+        let t = table(&[rr(None, "pi", 100)], &eur);
+        assert!(t.contains("cost_eur"), "{t}");
+        assert!(t.contains("€1.38"), "1.50 USD at 0.92: {t}");
+        assert!(!t.contains("cost_usd"));
+        let jpy = tokenburn_core::currency_by_code("JPY").unwrap();
+        assert!(table(&[rr(None, "pi", 100)], &jpy).contains("¥225"));
     }
 }

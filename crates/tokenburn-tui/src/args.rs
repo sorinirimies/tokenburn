@@ -32,6 +32,15 @@ pub struct Args {
     #[arg(long, value_name = "NAME", value_parser = parse_theme)]
     pub theme: Option<usize>,
 
+    /// Show costs in this currency (e.g. EUR, GBP, JPY); remembered for the other
+    /// front-ends. Rates are fixed estimates: set exact ones under "rates" in settings.json.
+    #[arg(long, short = 'c', value_name = "CODE")]
+    pub currency: Option<tokenburn_core::Currency>,
+
+    /// Print every supported currency and exit.
+    #[arg(long)]
+    pub list_currencies: bool,
+
     /// Print every theme name and exit.
     #[arg(long)]
     pub list_themes: bool,
@@ -52,6 +61,15 @@ impl Args {
 mod tests {
     use super::*;
     use tokenburn_core::{Bucket, Window};
+
+    #[test]
+    fn currency_flags() {
+        let a = Args::parse_from(["tokenburn-tui", "--currency", "gbp"]);
+        assert_eq!(a.currency.unwrap().code, "GBP");
+        assert!(Args::parse_from(["tokenburn-tui"]).currency.is_none());
+        assert!(Args::parse_from(["tokenburn-tui", "--list-currencies"]).list_currencies);
+        assert!(Args::try_parse_from(["tokenburn-tui", "-c", "zzz"]).is_err());
+    }
 
     #[test]
     fn defaults_match_cli() {

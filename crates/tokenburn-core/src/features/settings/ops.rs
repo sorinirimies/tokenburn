@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use super::types::Settings;
+use crate::features::currency::{find, resolve, Currency};
 use crate::features::theme::{find_theme, THEME_NAMES};
 use crate::utils::files::env_path;
 
@@ -53,6 +54,26 @@ pub fn theme_index() -> usize {
     find_theme(&load().theme).unwrap_or(0)
 }
 
+/// The saved display currency, with the user's own rate applied (USD when unset or unknown).
+pub fn currency() -> Currency {
+    let s = load();
+    resolve(&s.currency, &s.rates)
+}
+
+/// Persist the display currency by code (case-insensitive; unknown codes are ignored).
+/// The user's `rates` are left untouched.
+pub fn save_currency(code: &str) -> Result<()> {
+    let Some(cur) = find(code) else {
+        return Ok(());
+    };
+    let mut s = load();
+    if s.currency == cur.code {
+        return Ok(());
+    }
+    s.currency = cur.code.to_string();
+    save(&s)
+}
+
 /// Persist the theme at `index` (ignored when out of range).
 pub fn save_theme(index: usize) -> Result<()> {
     let Some(name) = THEME_NAMES.get(index) else {
@@ -84,6 +105,7 @@ mod tests {
             &p,
             &Settings {
                 theme: "Nord".into(),
+                ..Settings::default()
             },
         )
         .unwrap();
@@ -103,6 +125,18 @@ mod tests {
         std::fs::write(&p, "{ not json").unwrap();
         assert_eq!(load_from(&p), Settings::default());
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn older_files_without_a_currency_default_to_usd_and_empty_rates_are_not_written() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("settings.json");
+        std::fs::write(&p, r#"{"theme":"Dracula"}"#).unwrap();
+        let s = load_from(&p);
+        assert_eq!((s.theme.as_str(), s.currency.as_str()), ("Dracula", "USD"));
+        assert!(s.rates.is_empty());
+        save_to(&p, &s).unwrap();
+        assert!(!std::fs::read_to_string(&p).unwrap().contains("rates"));
     }
 
     #[test]
@@ -150,9 +184,25 @@ mod tests {
 
         save(&Settings {
             theme: "Nord".into(),
+            ..Settings::default()
         })
         .unwrap();
         assert_eq!(load().theme, "Nord");
+
+        // The currency: default USD, saved by code, the user's own rates untouched.
+        assert_eq!(currency().code, "USD");
+        std::fs::write(
+            settings_path().unwrap(),
+            r#"{"theme":"Nord","rates":{"EUR":0.5}}"#,
+        )
+        .unwrap();
+        save_currency("eur").unwrap();
+        assert_eq!(load().currency, "EUR");
+        let cur = currency();
+        assert_eq!((cur.code, cur.per_usd, cur.custom_rate), ("EUR", 0.5, true));
+        assert_eq!(load().rates.get("EUR"), Some(&0.5), "rates survive a save");
+        save_currency("nonsense").unwrap();
+        assert_eq!(load().currency, "EUR", "an unknown code changes nothing");
         unsafe { std::env::remove_var("TOKENBURN_CONFIG_DIR") };
     }
 }

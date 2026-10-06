@@ -12,7 +12,8 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use tokenburn_core::utils::fmt::percent;
 use tokenburn_core::{
-    Metric, Pie, Selection, TimeSeries, Tool, axis_label, nice_max, short_label, slice_angles,
+    Currency, Metric, Pie, Selection, TimeSeries, Tool, axis_label, nice_max, short_label,
+    slice_angles,
 };
 
 pub const BARS_W: f32 = 700.0;
@@ -109,8 +110,14 @@ pub struct Bars {
     pub right: String,
 }
 
-/// Lay out `series` for `metric`; `selected` is the selected bucket label.
-pub fn bars(series: &TimeSeries, metric: Metric, selected: Option<&str>) -> Bars {
+/// Lay out `series` for `metric`; `selected` is the selected bucket label. A cost
+/// series must already be in `currency` (`TimeSeries::in_currency`).
+pub fn bars(
+    series: &TimeSeries,
+    metric: Metric,
+    selected: Option<&str>,
+    currency: &Currency,
+) -> Bars {
     let n = series.labels.len();
     let mut out = Bars {
         empty: n == 0,
@@ -133,7 +140,7 @@ pub fn bars(series: &TimeSeries, metric: Metric, selected: Option<&str>) -> Bars
         out.grid.push(GridLine {
             y: f(y),
             text_y: f(y + 4.0),
-            label: axis_label(metric, max * f64::from(i) / 4.0),
+            label: axis_label(metric, max * f64::from(i) / 4.0, currency),
         });
     }
 
@@ -154,7 +161,7 @@ pub fn bars(series: &TimeSeries, metric: Metric, selected: Option<&str>) -> Bars
             lines.push(format!(
                 "{}: {}",
                 tool.display_name(),
-                axis_label(metric, v)
+                axis_label(metric, v, currency)
             ));
             segs.push(Seg {
                 x: f(x),
@@ -166,7 +173,7 @@ pub fn bars(series: &TimeSeries, metric: Metric, selected: Option<&str>) -> Bars
         }
         lines.push(format!(
             "total: {}",
-            axis_label(metric, series.bucket_total(metric, i))
+            axis_label(metric, series.bucket_total(metric, i), currency)
         ));
         let is_sel = selected == Some(series.labels[i].as_str());
         lines.push(if is_sel {
@@ -250,13 +257,14 @@ pub struct Donut {
     pub has_selection: bool,
 }
 
-/// Lay out `pie`; `selected` is the selected project key.
-pub fn donut(pie: &Pie, selected: Option<&str>) -> Donut {
+/// Lay out `pie`; `selected` is the selected project key. A cost pie must already be
+/// in `currency` (`Pie::in_currency`).
+pub fn donut(pie: &Pie, selected: Option<&str>, currency: &Currency) -> Donut {
     let total = pie.total();
     let mut out = Donut {
         empty: total <= 0.0,
         slices: Vec::new(),
-        total_label: axis_label(pie.metric, total),
+        total_label: axis_label(pie.metric, total, currency),
         has_selection: selected
             .is_some_and(|k| pie.slices.iter().any(|s| s.key.as_deref() == Some(k))),
     };
@@ -278,7 +286,7 @@ pub fn donut(pie: &Pie, selected: Option<&str>) -> Donut {
             title: format!(
                 "{}\n{} ({pct})\n{}",
                 s.label,
-                axis_label(pie.metric, s.value),
+                axis_label(pie.metric, s.value, currency),
                 match (&s.key, is_sel) {
                     (None, _) => "(several small projects)",
                     (_, true) => "click to clear",
@@ -366,7 +374,7 @@ mod tests {
 
     #[test]
     fn there_is_a_column_per_bucket_and_a_segment_per_tool() {
-        let b = bars(&series(), Metric::Tokens, None);
+        let b = bars(&series(), Metric::Tokens, None, &Currency::USD);
         assert!(!b.empty);
         assert_eq!(b.cols.len(), 3, "May 10, 11 (gap) and 12");
         assert_eq!(b.cols[0].segs.len(), 2, "pi + claude");
@@ -378,7 +386,7 @@ mod tests {
 
     #[test]
     fn tooltips_list_the_tools_and_the_total_and_the_click_hint() {
-        let b = bars(&series(), Metric::Tokens, None);
+        let b = bars(&series(), Metric::Tokens, None, &Currency::USD);
         let t = &b.cols[0].title;
         assert!(
             t.contains("Claude Code") && t.contains("total: 1.5k"),
@@ -391,17 +399,17 @@ mod tests {
     fn the_selected_bucket_is_flagged_and_its_hint_flips() {
         let s = series();
         let label = s.labels[2].clone();
-        let b = bars(&s, Metric::Tokens, Some(&label));
+        let b = bars(&s, Metric::Tokens, Some(&label), &Currency::USD);
         assert!(b.has_selection);
         assert!(b.cols[2].selected && !b.cols[0].selected);
         assert!(b.cols[2].title.ends_with("click to clear"));
         // A stale label selects nothing.
-        assert!(!bars(&s, Metric::Tokens, Some("1999-01-01")).has_selection);
+        assert!(!bars(&s, Metric::Tokens, Some("1999-01-01"), &Currency::USD).has_selection);
     }
 
     #[test]
     fn the_axis_tops_out_at_a_nice_maximum() {
-        let b = bars(&series(), Metric::Tokens, None);
+        let b = bars(&series(), Metric::Tokens, None, &Currency::USD);
         assert_eq!(b.grid.len(), 5);
         assert_eq!(b.grid[0].label, "0");
         assert_eq!(b.grid[4].label, "2k");
@@ -409,19 +417,19 @@ mod tests {
 
     #[test]
     fn the_cost_metric_uses_dollars() {
-        let b = bars(&series(), Metric::Cost, None);
+        let b = bars(&series(), Metric::Cost, None, &Currency::USD);
         assert!(b.grid[4].label.starts_with('$'));
     }
 
     #[test]
     fn an_empty_series_is_flagged_not_drawn() {
-        let b = bars(&TimeSeries::default(), Metric::Tokens, None);
+        let b = bars(&TimeSeries::default(), Metric::Tokens, None, &Currency::USD);
         assert!(b.empty && b.cols.is_empty() && b.grid.is_empty());
     }
 
     #[test]
     fn everything_stays_inside_the_viewbox() {
-        for c in bars(&series(), Metric::Tokens, None).cols {
+        for c in bars(&series(), Metric::Tokens, None, &Currency::USD).cols {
             for s in c.segs {
                 let (x, w): (f32, f32) = (s.x.parse().unwrap(), s.w.parse().unwrap());
                 assert!(x >= LEFT && x + w <= BARS_W - RIGHT + 0.1, "{x} {w}");
@@ -433,7 +441,7 @@ mod tests {
 
     #[test]
     fn x_labels_are_thinned_and_shortened() {
-        let b = bars(&series(), Metric::Tokens, None);
+        let b = bars(&series(), Metric::Tokens, None, &Currency::USD);
         assert!(!b.x_labels.is_empty() && b.x_labels.len() <= b.cols.len());
         assert!(b.x_labels[0].text.len() <= 5, "{}", b.x_labels[0].text);
     }
@@ -447,9 +455,9 @@ mod tests {
                 slice("pi:b", Some("pi:full-b"), 10.0),
             ],
         };
-        let d = donut(&pie, None);
+        let d = donut(&pie, None, &Currency::USD);
         assert_eq!(d.slices.len(), 2);
-        assert_eq!(d.total_label, "$40.0");
+        assert_eq!(d.total_label, "$40.00");
         assert_eq!(d.slices[0].pct, "75%");
         assert_eq!(d.slices[0].var, "var(--s0)");
         assert_eq!(d.slices[1].var, "var(--s1)");
@@ -464,11 +472,11 @@ mod tests {
             metric: Metric::Tokens,
             slices: vec![slice("pi:a", Some("pi:a"), 3.0), slice("other", None, 1.0)],
         };
-        let d = donut(&pie, Some("pi:a"));
+        let d = donut(&pie, Some("pi:a"), &Currency::USD);
         assert!(d.has_selection && d.slices[0].selected && !d.slices[1].selected);
         assert!(d.slices[0].title.contains("click to clear"));
         assert!(d.slices[1].title.contains("several small projects"));
-        assert!(!donut(&pie, Some("pi:gone")).has_selection);
+        assert!(!donut(&pie, Some("pi:gone"), &Currency::USD).has_selection);
     }
 
     #[test]
@@ -477,7 +485,7 @@ mod tests {
             metric: Metric::Tokens,
             slices: vec![slice("a", Some("a"), 1.0), slice("b", Some("b"), 1.0)],
         };
-        let d = donut(&pie, None);
+        let d = donut(&pie, None, &Currency::USD);
         // First half is the right-hand side (12 → 6 o'clock): offset points right; the other left.
         assert!(d.slices[0].dx.parse::<f32>().unwrap() > 0.0);
         assert!(d.slices[1].dx.parse::<f32>().unwrap() < 0.0);
@@ -493,7 +501,7 @@ mod tests {
             metric: Metric::Tokens,
             slices: vec![slice("only", Some("only"), 1.0)],
         };
-        let d = donut(&pie, None);
+        let d = donut(&pie, None, &Currency::USD);
         assert_eq!(d.slices.len(), 1);
         assert!(!d.slices[0].path.contains("NaN") && !d.slices[0].path.contains("inf"));
     }
@@ -506,7 +514,8 @@ mod tests {
                     metric: Metric::Tokens,
                     slices: vec![]
                 },
-                None
+                None,
+                &Currency::USD
             )
             .empty
         );

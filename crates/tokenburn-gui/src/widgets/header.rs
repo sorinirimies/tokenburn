@@ -4,6 +4,7 @@ use iced::widget::{pick_list, row, space, text};
 use iced::Element;
 use tokenburn_core::{Bucket, ToolFilter, Window};
 
+use crate::features::currency::CurrencyChoice;
 use crate::features::theme::ThemeChoice;
 use crate::message::Message;
 use crate::state::{TokenBurn, View};
@@ -43,6 +44,12 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
             Message::ThemeSelected
         )
         .placeholder("Theme"),
+        pick_list(
+            CurrencyChoice::all(),
+            Some(CurrencyChoice::of(state.currency.code)),
+            Message::CurrencySelected
+        )
+        .placeholder("Currency"),
     ]
     .spacing(10)
     .align_y(iced::Alignment::Center)

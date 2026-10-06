@@ -8,10 +8,13 @@ use crate::features::options::Options;
 use crate::features::theme::UiTheme;
 use chrono::Local;
 use ratatui::widgets::TableState;
+use std::collections::BTreeMap;
+use tokenburn_core::features::currency::{index_of, resolve};
 use tokenburn_core::{
     build_report, by_project, collect, Bucket, Collected, Query, ReportRow, Row, RowFilter,
     Summary, Tool, ToolFilter, Window,
 };
+use tokenburn_core::{Currency, CURRENCIES};
 
 /// Which main panel is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -37,6 +40,11 @@ pub struct App {
     /// Colours of the active theme (what every view reads).
     pub theme: UiTheme,
     pub theme_picker_open: bool,
+    /// Display currency (costs are logged in US dollars; this is presentation only).
+    pub currency: Currency,
+    /// The user's own exchange rates from settings.json (code → units per dollar).
+    pub rates: BTreeMap<String, f64>,
+    pub currency_picker_open: bool,
     /// When the last reload was started (drives auto-refresh).
     pub last_reload: Option<Instant>,
     /// Everything the last load returned (the filter works on this).
@@ -83,6 +91,9 @@ impl App {
             theme_index: 0,
             theme: UiTheme::by_index(0),
             theme_picker_open: false,
+            currency: Currency::USD,
+            rates: BTreeMap::new(),
+            currency_picker_open: false,
             last_reload: None,
             all_rows: Vec::new(),
             rows: Vec::new(),
@@ -302,6 +313,23 @@ impl App {
         let n = tokenburn_core::THEME_COUNT as isize;
         let next = (self.theme_index as isize + delta).rem_euclid(n) as usize;
         self.set_theme(next);
+    }
+
+    /// Show costs in the currency at `index` of [`CURRENCIES`] (clamped), with the
+    /// user's own rate if they set one, and remember the choice for the other front-ends.
+    pub fn set_currency(&mut self, index: usize) {
+        let code = CURRENCIES[index.min(CURRENCIES.len() - 1)].code;
+        self.currency = resolve(code, &self.rates);
+        if self.persist {
+            let _ = tokenburn_core::settings::save_currency(code);
+        }
+    }
+
+    /// Move `delta` currencies forward (negative: back), wrapping around.
+    pub fn cycle_currency(&mut self, delta: isize) {
+        let n = CURRENCIES.len() as isize;
+        let at = index_of(self.currency.code) as isize;
+        self.set_currency((at + delta).rem_euclid(n) as usize);
     }
 
     /// Best-effort save; tests opt out so they never touch the user's real config.

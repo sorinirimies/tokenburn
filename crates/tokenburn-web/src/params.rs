@@ -1,6 +1,8 @@
 //! Query-string handling: `?tool=pi&bucket=daily&window=month`.
 
-use tokenburn_core::{Bucket, Metric, Query, Selection, ToolFilter, Window};
+use std::collections::BTreeMap;
+
+use tokenburn_core::{Bucket, Currency, Metric, Query, Selection, ToolFilter, Window};
 use topcoat::router::query_params;
 
 /// Window choices offered by the interactive UI. `auto` means "the chosen
@@ -18,6 +20,8 @@ pub struct UsageParams {
     pub theme: Option<String>,
     /// Chart metric: `tokens` (default) or `cost`.
     pub metric: Option<String>,
+    /// Display currency code (`EUR`, `GBP`, …). Unknown codes are ignored.
+    pub currency: Option<String>,
     /// Clicked chart bucket (a label such as `2026-09-22`).
     pub sel_bucket: Option<String>,
     /// Clicked donut slice (a `tool:project` key).
@@ -35,6 +39,19 @@ impl UsageParams {
             self.bucket.as_deref(),
             self.window.as_deref(),
         )
+    }
+}
+
+/// The currency to show: an explicit, valid `requested` code wins (with the user's own
+/// rate from `rates` if they set one), otherwise `saved`.
+pub fn pick_currency(
+    requested: Option<&str>,
+    saved: Currency,
+    rates: &BTreeMap<String, f64>,
+) -> Currency {
+    match requested.and_then(tokenburn_core::currency_by_code) {
+        Some(c) => tokenburn_core::features::currency::resolve(c.code, rates),
+        None => saved,
     }
 }
 
@@ -100,6 +117,20 @@ mod tests {
         assert_eq!(
             (q.tool, q.bucket, q.window),
             (ToolFilter::PI, Bucket::Day, Window::All)
+        );
+    }
+
+    #[test]
+    fn an_explicit_currency_wins_and_junk_keeps_the_saved_one() {
+        let rates = BTreeMap::from([("EUR".to_string(), 0.5)]);
+        let saved = Currency::USD;
+        assert_eq!(pick_currency(Some("gbp"), saved, &rates).code, "GBP");
+        assert_eq!(pick_currency(None, saved, &rates).code, "USD");
+        assert_eq!(pick_currency(Some("nope"), saved, &rates).code, "USD");
+        let eur = pick_currency(Some("EUR"), saved, &rates);
+        assert!(
+            eur.custom_rate && eur.per_usd == 0.5,
+            "the user's own rate is applied"
         );
     }
 

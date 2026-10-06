@@ -2,7 +2,7 @@
 
 use chrono::Local;
 use tokenburn_core::{
-    Collected, Pie, Query, ReportRow, Selection, Summary, TimeSeries, collect, drill,
+    Collected, Currency, Pie, Query, ReportRow, Selection, Summary, TimeSeries, collect, drill,
 };
 
 /// Everything a page render needs.
@@ -21,12 +21,19 @@ pub struct Dashboard {
     /// The clicked bar and/or slice that everything above is scoped to (stale
     /// parts already dropped).
     pub selection: Selection,
+    /// The display currency (costs in the data stay US dollars).
+    pub currency: Currency,
     /// Local wall-clock time the snapshot was taken (`HH:MM:SS`).
     pub updated_at: String,
 }
 
 /// Shape collected rows into a [`Dashboard`] scoped to `selection` (pure — no I/O).
-pub fn build_dashboard(query: Query, collected: Collected, selection: &Selection) -> Dashboard {
+pub fn build_dashboard(
+    query: Query,
+    collected: Collected,
+    selection: &Selection,
+    currency: Currency,
+) -> Dashboard {
     let d = drill(&collected.rows, &query, selection);
     Dashboard {
         query,
@@ -36,6 +43,7 @@ pub fn build_dashboard(query: Query, collected: Collected, selection: &Selection
         pie: d.pie,
         projects: d.projects,
         selection: d.selection,
+        currency,
         row_count: collected.rows.len(),
         updated_at: Local::now().format("%H:%M:%S").to_string(),
         warnings: collected.warnings,
@@ -46,7 +54,7 @@ pub fn build_dashboard(query: Query, collected: Collected, selection: &Selection
 pub const REFRESH_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Read the logs on a blocking thread and build the [`Dashboard`].
-pub async fn load(query: Query, selection: &Selection) -> Dashboard {
+pub async fn load(query: Query, selection: &Selection, currency: Currency) -> Dashboard {
     let collected =
         tokio::task::spawn_blocking(move || collect(query.tool, query.window.start(Local::now())))
             .await
@@ -54,7 +62,7 @@ pub async fn load(query: Query, selection: &Selection) -> Dashboard {
                 rows: Vec::new(),
                 warnings: vec![format!("loader failed: {e}")],
             });
-    build_dashboard(query, collected, selection)
+    build_dashboard(query, collected, selection, currency)
 }
 
 /// Width (0–100) of a share bar for `value` against `max`.
@@ -93,7 +101,7 @@ mod tests {
             rows: vec![row(0.5), row(0.25)],
             warnings: vec!["w".into()],
         };
-        let d = build_dashboard(Query::default(), c, &Selection::default());
+        let d = build_dashboard(Query::default(), c, &Selection::default(), Currency::USD);
         assert_eq!(d.row_count, 2);
         assert_eq!(d.total.input, 20);
         assert_eq!(d.warnings.len(), 1);
@@ -107,6 +115,7 @@ mod tests {
             Query::default(),
             Collected::default(),
             &Selection::default(),
+            Currency::USD,
         );
         assert!(d.report.is_empty() && d.projects.is_empty());
     }
@@ -121,7 +130,7 @@ mod tests {
             project: Some("pi:p".into()),
             ..Selection::default()
         };
-        let d = build_dashboard(Query::default(), c(), &sel);
+        let d = build_dashboard(Query::default(), c(), &sel, Currency::USD);
         assert_eq!(d.selection, sel);
         assert_eq!(d.total.turns, 2);
 
@@ -129,7 +138,7 @@ mod tests {
             project: Some("pi:ghost".into()),
             bucket: Some("nope".into()),
         };
-        let d = build_dashboard(Query::default(), c(), &stale);
+        let d = build_dashboard(Query::default(), c(), &stale, Currency::USD);
         assert!(d.selection.is_empty());
         assert_eq!(d.total.turns, 2);
     }

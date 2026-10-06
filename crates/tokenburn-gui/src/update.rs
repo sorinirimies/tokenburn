@@ -58,6 +58,10 @@ impl TokenBurn {
                 self.set_theme(choice.index);
                 Task::none()
             }
+            Message::CurrencySelected(choice) => {
+                self.set_currency(choice.index);
+                Task::none()
+            }
             Message::MetricSelected(metric) => {
                 self.chart_metric = metric;
                 self.restart_entry_animation();

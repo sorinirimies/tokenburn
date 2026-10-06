@@ -3,7 +3,7 @@
 use iced::alignment::Horizontal;
 use iced::widget::{column, container, progress_bar, row, scrollable, text};
 use iced::{Element, Length};
-use tokenburn_core::utils::fmt::{thousands, usd};
+use tokenburn_core::utils::fmt::thousands;
 
 use crate::message::Message;
 use crate::state::TokenBurn;
@@ -53,7 +53,7 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
                     text(thousands(s.total_tokens))
                         .align_x(Horizontal::Right)
                         .width(Length::FillPortion(3)),
-                    text(usd(s.cost_usd))
+                    text(state.currency.format(s.cost_usd))
                         .align_x(Horizontal::Right)
                         .width(Length::FillPortion(3))
                         .style(text::success),

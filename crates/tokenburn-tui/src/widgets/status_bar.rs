@@ -31,7 +31,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         );
     }
 
-    let hints = "q quit · / filter · f tools · t tool · w window · ←/→ view · p projects · o options · T theme";
+    let hints = "q quit · / filter · f tools · T theme · C currency · t tool · w window · ←/→ view · p projects · o options";
     if app.filter_editing {
         // The text box: show the cursor and what the keys do.
         let line = format!(

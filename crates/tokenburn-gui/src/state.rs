@@ -5,10 +5,12 @@ use std::fmt;
 use iced::Theme;
 
 use crate::features::theme;
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use tokenburn_core::{
-    drill, Collected, Metric, Pie, Query, ReportRow, Row, Selection, Summary, TimeSeries,
+    drill, Collected, Currency, Metric, Pie, Query, ReportRow, Row, Selection, Summary, TimeSeries,
+    CURRENCIES,
 };
 
 /// How often the GUI re-reads the logs by itself.
@@ -57,6 +59,10 @@ pub struct TokenBurn {
     pub view: View,
     /// Index into [`tokenburn_core::THEME_NAMES`].
     pub theme_index: usize,
+    /// Display currency (costs are logged in US dollars; this is presentation only).
+    pub currency: Currency,
+    /// The user's own exchange rates from settings.json (code → units per dollar).
+    pub rates: BTreeMap<String, f64>,
     /// Write settings (theme) to disk. `false` in tests and `TokenBurn::new()`.
     pub persist: bool,
     pub rows: Vec<Row>,
@@ -107,6 +113,8 @@ impl TokenBurn {
             query,
             view: View::default(),
             theme_index: 0,
+            currency: Currency::USD,
+            rates: BTreeMap::new(),
             persist: false,
             rows: Vec::new(),
             report: Vec::new(),
@@ -143,6 +151,16 @@ impl TokenBurn {
         self.theme_index = index.min(tokenburn_core::THEME_COUNT - 1);
         if self.persist {
             let _ = tokenburn_core::settings::save_theme(self.theme_index);
+        }
+    }
+
+    /// Show costs in the currency at `index` of [`CURRENCIES`], with the user's own
+    /// rate if they set one, and remember the choice for the other front-ends.
+    pub fn set_currency(&mut self, index: usize) {
+        let code = CURRENCIES[index.min(CURRENCIES.len() - 1)].code;
+        self.currency = tokenburn_core::features::currency::resolve(code, &self.rates);
+        if self.persist {
+            let _ = tokenburn_core::settings::save_currency(code);
         }
     }
 

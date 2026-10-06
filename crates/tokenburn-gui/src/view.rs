@@ -247,4 +247,42 @@ mod tests {
         assert_eq!(crate::state::ease_out(2.0), 1.0);
         assert_eq!(crate::state::ease_out(-1.0), 0.0);
     }
+
+    #[test]
+    fn the_currency_message_converts_costs_and_every_currency_builds_a_view() {
+        let mut app = loaded();
+        assert_eq!(app.currency.code, "USD");
+        let usd_total = app.total().cost_usd;
+        let _ = app.update(Message::CurrencySelected(
+            crate::features::currency::CurrencyChoice::of("EUR"),
+        ));
+        assert_eq!(app.currency.code, "EUR");
+        assert!(app.currency.is_approximate());
+        // The data is still dollars; only the presentation changed.
+        assert_eq!(app.total().cost_usd, usd_total);
+        assert_eq!(
+            app.currency.format(app.total().cost_usd),
+            format!("€{:.2}", usd_total * 0.92)
+        );
+
+        for index in 0..tokenburn_core::CURRENCIES.len() {
+            app.set_currency(index);
+            for metric in tokenburn_core::Metric::ALL {
+                app.chart_metric = metric;
+                let _ = app.view();
+            }
+            app.view = View::Projects;
+            let _ = app.view();
+            app.view = View::Report;
+        }
+    }
+
+    #[test]
+    fn the_users_own_rate_wins_and_is_not_approximate() {
+        let mut app = loaded();
+        app.rates.insert("EUR".into(), 0.5);
+        app.set_currency(tokenburn_core::features::currency::index_of("EUR"));
+        assert_eq!(app.currency.per_usd, 0.5);
+        assert!(!app.currency.is_approximate());
+    }
 }

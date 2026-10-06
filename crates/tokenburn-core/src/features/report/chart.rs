@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike};
 
 use super::types::{Bucket, Query, Window};
+use crate::features::currency::Currency;
 use crate::features::usage::{Row, Summary, Tool};
-use crate::utils::fmt::usd_axis;
 pub use crate::utils::fmt::{axis_tokens, short_label, short_name};
 
 /// What a chart measures.
@@ -92,6 +92,20 @@ impl TimeSeries {
             .into_iter()
             .filter(|t| (0..self.labels.len()).any(|i| self.value(metric, i, *t) > 0.0))
             .collect()
+    }
+}
+
+impl TimeSeries {
+    /// The same series with every cost converted from US dollars to `currency`
+    /// (tokens are untouched), ready to be drawn with that currency's axis labels.
+    pub fn in_currency(&self, currency: &Currency) -> TimeSeries {
+        let mut out = self.clone();
+        for bucket in &mut out.cost {
+            for v in bucket.iter_mut() {
+                *v = currency.convert(*v);
+            }
+        }
+        out
     }
 }
 
@@ -229,11 +243,12 @@ pub fn nice_max(max: f64) -> f64 {
     nice * base
 }
 
-/// Axis label for a value: `1.5M` tokens or `$12.5`.
-pub fn axis_label(metric: Metric, v: f64) -> String {
+/// Axis label for a value: `1.5M` tokens or `$12.50`. A cost `v` must already be in
+/// `currency` (see [`TimeSeries::in_currency`], [`Pie::in_currency`]).
+pub fn axis_label(metric: Metric, v: f64, currency: &Currency) -> String {
     match metric {
         Metric::Tokens => axis_tokens(v),
-        Metric::Cost => usd_axis(v),
+        Metric::Cost => currency.axis(v),
     }
 }
 
@@ -288,6 +303,18 @@ pub struct Pie {
 }
 
 impl Pie {
+    /// The same pie with a cost metric converted from US dollars to `currency`
+    /// (a tokens pie is untouched). Slice proportions never change.
+    pub fn in_currency(&self, currency: &Currency) -> Pie {
+        let mut out = self.clone();
+        if out.metric == Metric::Cost {
+            for s in &mut out.slices {
+                s.value = currency.convert(s.value);
+            }
+        }
+        out
+    }
+
     pub fn total(&self) -> f64 {
         self.slices.iter().map(|s| s.value).sum()
     }
@@ -528,10 +555,18 @@ mod tests {
 
     #[test]
     fn axis_labels_use_compact_numbers_and_dollars() {
-        assert_eq!(axis_label(Metric::Tokens, 1_500_000.0), "1.5M");
-        assert_eq!(axis_label(Metric::Cost, 12.5), "$12.5");
-        assert_eq!(axis_label(Metric::Cost, 0.25), "$0.25");
-        assert_eq!(axis_label(Metric::Cost, 250.0), "$250");
+        let usd = Currency::USD;
+        assert_eq!(axis_label(Metric::Tokens, 1_500_000.0, &usd), "1.5M");
+        assert_eq!(axis_label(Metric::Cost, 12.5, &usd), "$12.50");
+        assert_eq!(axis_label(Metric::Cost, 0.25, &usd), "$0.25");
+        assert_eq!(axis_label(Metric::Cost, 250.0, &usd), "$250");
+        let eur = crate::features::currency::find("EUR").unwrap();
+        assert_eq!(axis_label(Metric::Cost, 12.5, &eur), "€12.50");
+        assert_eq!(
+            axis_label(Metric::Tokens, 2_000.0, &eur),
+            "2k",
+            "tokens ignore the currency"
+        );
     }
 
     #[test]
@@ -565,5 +600,59 @@ mod tests {
     #[test]
     fn an_empty_pie_has_no_slices() {
         assert!(pie(&[], 6).slices.is_empty());
+    }
+
+    #[test]
+    fn converting_a_series_scales_costs_only() {
+        let rows = [Row {
+            tool: Tool::Pi,
+            project: "p".into(),
+            id: "i".into(),
+            ts: utc("2026-05-10T12:00:00Z"),
+            input: 1000,
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
+            cost: 10.0,
+        }];
+        let q = Query {
+            bucket: Bucket::Day,
+            window: Window::All,
+            ..Query::default()
+        };
+        let usd = time_series(&rows, &q);
+        let eur = crate::features::currency::find("EUR").unwrap();
+        let conv = usd.in_currency(&eur);
+        assert_eq!(conv.labels, usd.labels);
+        assert_eq!(conv.tokens, usd.tokens, "tokens are not money");
+        assert!((conv.bucket_total(Metric::Cost, 0) - 9.2).abs() < 1e-9);
+        assert_eq!(usd.in_currency(&Currency::USD), usd, "USD is the identity");
+    }
+
+    #[test]
+    fn converting_a_pie_scales_a_cost_pie_and_keeps_the_proportions() {
+        let slice = |v: f64| Slice {
+            label: "x".into(),
+            tool: None,
+            key: None,
+            value: v,
+        };
+        let eur = crate::features::currency::find("EUR").unwrap();
+        let cost = Pie {
+            metric: Metric::Cost,
+            slices: vec![slice(30.0), slice(10.0)],
+        };
+        let conv = cost.in_currency(&eur);
+        assert!((conv.total() - 36.8).abs() < 1e-9);
+        assert!((conv.slices[0].value / conv.total() - 0.75).abs() < 1e-9);
+        let tokens = Pie {
+            metric: Metric::Tokens,
+            slices: vec![slice(300.0)],
+        };
+        assert_eq!(
+            tokens.in_currency(&eur),
+            tokens,
+            "a tokens pie is untouched"
+        );
     }
 }

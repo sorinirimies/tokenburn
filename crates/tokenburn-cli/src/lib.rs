@@ -17,12 +17,21 @@ use std::io::Write;
 
 use anyhow::Result;
 use chrono::Local;
-use tokenburn_core::{build_report, collect};
+use tokenburn_core::{build_report, collect, CURRENCIES};
 
 pub use args::Args;
 
 /// Run the CLI, writing the report to `out` (warnings go to stderr).
 pub fn run(args: &Args, out: &mut impl Write) -> Result<()> {
+    if args.list_currencies {
+        for c in CURRENCIES {
+            writeln!(out, "{:<4}{:<22}{} per USD", c.code, c.name, c.per_usd)?;
+        }
+        return Ok(());
+    }
+    let currency = args
+        .currency
+        .unwrap_or_else(tokenburn_core::settings::currency);
     let query = args.query();
     let now = Local::now();
     let collected = collect(query.tool, query.window.start(now));
@@ -48,7 +57,7 @@ pub fn run(args: &Args, out: &mut impl Write) -> Result<()> {
     if args.json {
         writeln!(out, "{}", serde_json::to_string_pretty(&report)?)?;
     } else {
-        write!(out, "{}", render::table(&report))?;
+        write!(out, "{}", render::table(&report, &currency))?;
     }
     Ok(())
 }

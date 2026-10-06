@@ -5,7 +5,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
-use tokenburn_core::utils::fmt::{compact, usd};
+use tokenburn_core::utils::fmt::compact;
 
 use crate::app::App;
 use crate::features::theme::UiTheme;
@@ -25,6 +25,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         chip(th, "view", q.bucket.label()),
         chip(th, "window", q.window.label()),
         chip(th, "theme", tokenburn_core::THEME_NAMES[app.theme_index]),
+        chip(
+            th,
+            "cur",
+            &format!("{}{}", app.currency.code, app.currency.approx_mark()),
+        ),
         filter_chips(app),
         Span::styled(
             if app.is_loading { " loading…" } else { "" },
@@ -43,7 +48,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             format!("{}/{}", compact(t.cache_read), compact(t.cache_write)),
         ),
         Span::styled(
-            format!(" {} ", usd(t.cost_usd)),
+            format!(" {} ", app.currency.format(t.cost_usd)),
             Style::default()
                 .fg(th.bg)
                 .bg(th.success)

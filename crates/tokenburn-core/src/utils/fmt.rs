@@ -27,22 +27,10 @@ pub fn compact(n: u64) -> String {
     }
 }
 
-/// `1.5` → `"$1.5"`: one decimal is plenty for what these numbers are used for
+/// `1.5` → `"$1.50"`: cents, so small costs like `$0.04` stay readable
 /// (the JSON output keeps the full precision).
 pub fn usd(v: f64) -> String {
-    format!("${v:.1}")
-}
-
-/// A cost on a chart axis or donut: `$250`, `$12.5`, and two decimals below a dollar
-/// (ticks like `$0.25` would all collapse to `$0.3` with one).
-pub fn usd_axis(v: f64) -> String {
-    if v >= 100.0 {
-        format!("${v:.0}")
-    } else if v >= 1.0 {
-        usd(v)
-    } else {
-        format!("${v:.2}")
-    }
+    format!("${v:.2}")
 }
 
 /// A share as a whole percentage: `0.486` of the total → `"49%"`.
@@ -107,19 +95,12 @@ mod tests {
 
     #[test]
     fn usd_four_decimals() {
-        assert_eq!(usd(1.5), "$1.5");
-        assert_eq!(usd(0.0), "$0.0");
-        assert_eq!(usd(12.34), "$12.3");
-        assert_eq!(usd(165.9051), "$165.9");
-        assert_eq!(usd(1234.56), "$1234.6");
-    }
-
-    #[test]
-    fn axis_costs_get_more_decimals_only_when_they_need_them() {
-        assert_eq!(usd_axis(250.0), "$250");
-        assert_eq!(usd_axis(12.5), "$12.5");
-        assert_eq!(usd_axis(0.25), "$0.25");
-        assert_eq!(usd_axis(0.0), "$0.00");
+        assert_eq!(usd(1.5), "$1.50");
+        assert_eq!(usd(0.0), "$0.00");
+        assert_eq!(usd(0.04), "$0.04", "small costs stay readable");
+        assert_eq!(usd(12.34), "$12.34");
+        assert_eq!(usd(165.9051), "$165.91");
+        assert_eq!(usd(1234.56), "$1234.56");
     }
 
     #[test]

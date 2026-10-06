@@ -2,6 +2,7 @@
 
 use tokenburn_core::{Bucket, Collected, Query, ToolFilter, Window};
 
+use crate::features::currency::CurrencyChoice;
 use crate::features::theme::ThemeChoice;
 use crate::state::View;
 
@@ -25,6 +26,7 @@ pub enum Message {
     BucketSelected(Bucket),
     WindowSelected(Window),
     ThemeSelected(ThemeChoice),
+    CurrencySelected(CurrencyChoice),
     ViewSelected(View),
     /// ~10 fps animation tick, only subscribed while loading.
     AnimationTick,

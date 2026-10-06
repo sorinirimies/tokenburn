@@ -5,12 +5,12 @@ use std::sync::OnceLock;
 
 use clap::Parser;
 use iced::{Settings, Task};
-use tokenburn_core::Query;
+use tokenburn_core::{Currency, Query};
 use tokenburn_gui::state::AUTO_REFRESH;
 use tokenburn_gui::{Args, Message, TokenBurn};
 
-/// Initial query and theme from the command line (read once by `boot`).
-static INITIAL: OnceLock<(Query, Option<usize>)> = OnceLock::new();
+/// Initial query, theme and currency from the command line (read once by `boot`).
+static INITIAL: OnceLock<(Query, Option<usize>, Option<Currency>)> = OnceLock::new();
 
 fn main() -> iced::Result {
     // Handles --help / --version before any window is created.
@@ -21,7 +21,13 @@ fn main() -> iced::Result {
         }
         return Ok(());
     }
-    let _ = INITIAL.set((args.query(), args.theme));
+    if args.list_currencies {
+        for c in tokenburn_core::CURRENCIES {
+            println!("{:<4}{}", c.code, c.name);
+        }
+        return Ok(());
+    }
+    let _ = INITIAL.set((args.query(), args.theme, args.currency));
 
     tracing_subscriber::fmt::init();
 
@@ -40,12 +46,19 @@ fn main() -> iced::Result {
 
 /// Boot function — initial state plus the first load.
 fn boot() -> (TokenBurn, Task<Message>) {
-    let (query, theme) = INITIAL.get().copied().unwrap_or_default();
+    let (query, theme, currency) = INITIAL.get().copied().unwrap_or_default();
     let mut state = TokenBurn::with_query(query);
     state.persist = true;
     match theme {
         Some(i) => state.set_theme(i), // an explicit --theme is remembered
         None => state.theme_index = tokenburn_core::settings::theme_index(),
+    }
+    // The user's own exchange rates, then the currency: an explicit --currency is
+    // remembered like --theme, otherwise the saved one is used.
+    state.rates = tokenburn_core::settings::load().rates;
+    match currency {
+        Some(c) => state.set_currency(tokenburn_core::features::currency::index_of(c.code)),
+        None => state.currency = tokenburn_core::settings::currency(),
     }
     let task = state.reload();
     (state, task)

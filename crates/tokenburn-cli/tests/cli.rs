@@ -114,3 +114,54 @@ fn help_and_version_work() {
     let o = tokenburn(&root, &["--version"]);
     assert!(stdout(&o).starts_with("tokenburn "));
 }
+
+#[test]
+fn costs_can_be_shown_in_another_currency_and_json_stays_in_dollars() {
+    let root = sandbox("currency");
+    let usd = stdout(&tokenburn(&root, &["--tool", "pi", "--all"]));
+    assert!(usd.contains("cost_usd") && usd.contains("$0.75"), "{usd}");
+
+    let eur = stdout(&tokenburn(
+        &root,
+        &["--tool", "pi", "--all", "--currency", "eur"],
+    ));
+    assert!(
+        eur.contains("cost_eur") && eur.contains("€0.69"),
+        "0.75 USD at 0.92: {eur}"
+    );
+
+    let json = stdout(&tokenburn(
+        &root,
+        &["--tool", "pi", "--all", "--json", "-c", "EUR"],
+    ));
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert!(v[0]["cost_usd"].is_number(), "machine output stays in USD");
+}
+
+#[test]
+fn the_saved_currency_is_the_default_and_the_flag_wins() {
+    let root = sandbox("saved-currency");
+    std::fs::create_dir_all(root.join("config")).unwrap();
+    std::fs::write(
+        root.join("config/settings.json"),
+        r#"{"currency":"GBP","rates":{"GBP":0.5}}"#,
+    )
+    .unwrap();
+    let out = stdout(&tokenburn(&root, &["--tool", "pi", "--all"]));
+    assert!(
+        out.contains("cost_gbp") && out.contains("£0.38"),
+        "custom rate 0.5: {out}"
+    );
+    let out = stdout(&tokenburn(&root, &["--tool", "pi", "--all", "-c", "USD"]));
+    assert!(out.contains("cost_usd"));
+}
+
+#[test]
+fn unknown_currencies_are_rejected_and_the_list_is_printed() {
+    let root = sandbox("list-currency");
+    let o = tokenburn(&root, &["--currency", "zzz"]);
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("unknown currency"));
+    let list = stdout(&tokenburn(&root, &["--list-currencies"]));
+    assert!(list.contains("EUR") && list.contains("Japanese yen") && list.lines().count() >= 20);
+}

@@ -6,5 +6,8 @@
 pub mod ops;
 pub mod types;
 
-pub use ops::{config_dir, load, load_from, save, save_theme, save_to, settings_path, theme_index};
+pub use ops::{
+    config_dir, currency, load, load_from, save, save_currency, save_theme, save_to, settings_path,
+    theme_index,
+};
 pub use types::Settings;

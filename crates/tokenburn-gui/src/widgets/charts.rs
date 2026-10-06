@@ -13,7 +13,7 @@ use iced::mouse;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text};
 use iced::{alignment, Color, Element, Length, Pixels, Point, Rectangle, Renderer, Size, Theme};
 use std::f32::consts::{FRAC_PI_2, TAU};
-use tokenburn_core::{Metric, Pie, TimeSeries, Tool};
+use tokenburn_core::{Currency, Metric, Pie, TimeSeries, Tool};
 
 use tokenburn_core::utils::fmt::percent;
 use tokenburn_core::{axis_label, bucket_at, nice_max, short_label, slice_angles};
@@ -62,8 +62,10 @@ fn dim(sel_anim: f32) -> f32 {
 // ── stacked bars ────────────────────────────────────────────────────────────
 
 pub struct StackedBars {
+    /// Costs already converted to `currency` (see `TimeSeries::in_currency`).
     pub series: TimeSeries,
     pub metric: Metric,
+    pub currency: Currency,
     pub colors: ChartColors,
     /// Index of the selected bucket, if any.
     pub selected: Option<usize>,
@@ -181,7 +183,7 @@ impl canvas::Program<Message> for StackedBars {
                 Stroke::default().with_color(c.grid).with_width(1.0),
             );
             frame.fill_text(Text {
-                content: axis_label(self.metric, v),
+                content: axis_label(self.metric, v, &self.currency),
                 position: Point::new(LEFT - 6.0, y),
                 color: c.muted,
                 size: Pixels(11.0),
@@ -253,13 +255,17 @@ impl canvas::Program<Message> for StackedBars {
                     lines.push(format!(
                         "{}  {}",
                         tool.display_name(),
-                        axis_label(self.metric, v)
+                        axis_label(self.metric, v, &self.currency)
                     ));
                 }
             }
             lines.push(format!(
                 "total  {}",
-                axis_label(self.metric, self.series.bucket_total(self.metric, i))
+                axis_label(
+                    self.metric,
+                    self.series.bucket_total(self.metric, i),
+                    &self.currency,
+                )
             ));
             lines.push(if self.selected == Some(i) {
                 "click to clear".to_string()
@@ -300,6 +306,7 @@ impl canvas::Program<Message> for StackedBars {
 pub fn stacked_bars<'a>(
     series: TimeSeries,
     metric: Metric,
+    currency: Currency,
     colors: ChartColors,
     selected: Option<&str>,
     (anim, sel_anim): (f32, f32),
@@ -309,6 +316,7 @@ pub fn stacked_bars<'a>(
     Canvas::new(StackedBars {
         series,
         metric,
+        currency,
         colors,
         selected,
         anim,
@@ -322,7 +330,9 @@ pub fn stacked_bars<'a>(
 // ── donut ───────────────────────────────────────────────────────────────────
 
 pub struct Donut {
+    /// Values already converted to `currency` (see `Pie::in_currency`).
     pub pie: Pie,
+    pub currency: Currency,
     pub colors: ChartColors,
     /// Index of the selected slice, if any.
     pub selected: Option<usize>,
@@ -492,7 +502,7 @@ impl canvas::Program<Message> for Donut {
             }
         }
         frame.fill_text(Text {
-            content: axis_label(self.pie.metric, total),
+            content: axis_label(self.pie.metric, total, &self.currency),
             position: center,
             color: fade(c.text, crate::state::ease_out(self.anim)),
             size: Pixels(15.0),
@@ -539,6 +549,7 @@ impl canvas::Program<Message> for Donut {
 /// The share donut as a widget.
 pub fn donut<'a>(
     pie: Pie,
+    currency: Currency,
     colors: ChartColors,
     selected: Option<&str>,
     (anim, sel_anim): (f32, f32),
@@ -548,6 +559,7 @@ pub fn donut<'a>(
         selected.and_then(|k| pie.slices.iter().position(|s| s.key.as_deref() == Some(k)));
     Canvas::new(Donut {
         pie,
+        currency,
         colors,
         selected,
         anim,
@@ -715,11 +727,26 @@ mod tests {
             ],
         };
         // Building the widgets with a selection (and with a stale one) must not panic.
-        let _ = donut(pie.clone(), colors, Some("pi:a"), (1.0, 1.0), 200.0);
-        let _ = donut(pie, colors, Some("pi:gone"), (0.4, 0.0), 200.0);
+        let _ = donut(
+            pie.clone(),
+            Currency::USD,
+            colors,
+            Some("pi:a"),
+            (1.0, 1.0),
+            200.0,
+        );
+        let _ = donut(
+            pie,
+            Currency::USD,
+            colors,
+            Some("pi:gone"),
+            (0.4, 0.0),
+            200.0,
+        );
         let _ = stacked_bars(
             TimeSeries::default(),
             Metric::Tokens,
+            Currency::USD,
             colors,
             Some("x"),
             (0.0, 0.0),
@@ -777,6 +804,7 @@ mod tests {
         StackedBars {
             series: tokenburn_core::time_series(&rows, &query),
             metric: Metric::Tokens,
+            currency: Currency::USD,
             colors: crate::features::theme::chart_colors(0),
             selected,
             anim: 1.0,
@@ -853,6 +881,7 @@ mod tests {
             value,
         };
         Donut {
+            currency: Currency::USD,
             pie: Pie {
                 metric: Metric::Tokens,
                 slices: vec![

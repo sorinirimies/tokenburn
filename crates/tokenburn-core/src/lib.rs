@@ -24,6 +24,7 @@
 pub mod features;
 pub mod utils;
 
+pub use features::currency::{find as currency_by_code, Currency, CURRENCIES};
 pub use features::report::{
     axis_label, axis_tokens, bucket_at, bucket_label_of, build_report, by_project, chart_bucket,
     drill, nice_max, pie, project_key, short_label, short_name, slice_angles, time_series, Bucket,

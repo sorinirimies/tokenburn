@@ -5,7 +5,7 @@ use iced::widget::{
     button, column, container, pick_list, progress_bar, row, scrollable, space, text,
 };
 use iced::{Element, Length};
-use tokenburn_core::utils::fmt::{thousands, usd};
+use tokenburn_core::utils::fmt::thousands;
 
 use tokenburn_core::Metric;
 
@@ -88,7 +88,7 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
             line = line.push(cell_right(thousands(n), 3));
         }
         line = line.push(
-            text(usd(s.cost_usd))
+            text(state.currency.format(s.cost_usd))
                 .align_x(Horizontal::Right)
                 .width(Length::FillPortion(3))
                 .style(text::success),
@@ -143,8 +143,9 @@ fn charts(state: &TokenBurn) -> Element<'_, Message> {
         .align_y(iced::Alignment::Center)
         .height(Length::Fixed(34.0)),
         stacked_bars(
-            state.series.clone(),
+            state.series.in_currency(&state.currency),
             metric,
+            state.currency,
             colors,
             state.selection.bucket.as_deref(),
             (state.anim, state.sel_anim),
@@ -161,7 +162,8 @@ fn charts(state: &TokenBurn) -> Element<'_, Message> {
         .align_y(iced::Alignment::Center)
         .height(Length::Fixed(34.0)),
         donut(
-            state.pie.clone(),
+            state.pie.in_currency(&state.currency),
+            state.currency,
             colors,
             state.selection.project.as_deref(),
             (state.anim, state.sel_anim),

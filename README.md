@@ -79,7 +79,8 @@ For scripts and pipes.
 tokenburn                  # this month, every tool, with a per-tool breakdown
 tokenburn --daily --all    # all history, one line per day and tool
 tokenburn --tool claude --monthly
-tokenburn --json           # machine-readable
+tokenburn --currency EUR   # costs in euros (see "Currencies" below)
+tokenburn --json           # machine-readable (always US dollars)
 ```
 
 ![CLI](examples/vhs/generated/cli.gif)
@@ -97,7 +98,7 @@ tokenburn --json           # machine-readable
 | `opencode` | OpenCode | `~/.local/share/opencode/opencode.db` (`$OPENCODE_DATA_DIR`) | ✅ |
 | `amp` | Amp | `~/.local/share/amp/threads/*.json` (`$AMP_DATA_DIR`) | – |
 
-`all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.0` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
+`all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.00` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
 
 > The Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp readers follow the formats documented by [ccusage](https://github.com/ryoppippi/ccusage) and are covered by fixture tests; pi and Zed were also checked against real logs. If one misreads your data, open an issue with a (redacted) log line.
 
@@ -129,6 +130,16 @@ Changing the tool, view or window drops the selection.
 **43 themes**, dark and light — Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, Kanagawa, Rosé Pine, Everforest and more — shared by every front-end, including one colour per tool in the charts. Pick one with `--theme "Tokyo Night"` (`--list-themes` lists them), or in the UI; the choice is remembered in `settings.json` (`~/.config/tokenburn/`, `~/Library/Application Support/tokenburn/`, `%APPDATA%\tokenburn\`; override with `TOKENBURN_CONFIG_DIR`), so all front-ends start with the same theme.
 
 ![Theme picker](examples/vhs/generated/themes.gif)
+
+**Currencies.** Every tool logs its cost in US dollars; pick another currency to see it converted — 41 are built in (EUR, GBP, CHF, JPY, RON, RUB, UAH, PLN, CZK, HUF, INR, CNY, BRL, CAD, AUD, AED, and more; `--list-currencies` prints them all). Choose one with `--currency EUR`, the pick list in the GUI, the select in the web dashboard (`?currency=EUR`) or `C` in the TUI; the choice is remembered in `settings.json` for every front-end. Amounts keep cents (`$0.04`), and yen, won, forint and the like have none.
+
+TokenBurn never goes online, so the exchange rates are **fixed estimates** (marked `≈` next to the cost label). For exact ones, add your own to `settings.json` — they win over the built-in values and lose the `≈`:
+
+```json
+{ "currency": "EUR", "rates": { "EUR": 0.91, "RON": 4.55 } }
+```
+
+(rates are units per US dollar). JSON output (`--json`, `/api/report`) always stays in dollars.
 
 ## Install
 
@@ -168,6 +179,7 @@ No `python3` or `zstd` binary needed — sqlite and zstd are bundled.
 | `f` | per-tool checkboxes with counts — `␣` toggle, `a` all, `n` none, `x` clear |
 | `o` | options: auto-refresh and interval, bar chart, pie chart, pie slices |
 | `T`, `[`, `]` | theme picker / previous / next |
+| `C` | currency picker (preview as you move, saved) |
 | `↑/↓`, `j/k`, `g/G` | scroll |
 | `q`, `Esc` | quit (`Esc` first clears an active filter) |
 

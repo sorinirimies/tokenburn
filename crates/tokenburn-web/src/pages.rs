@@ -12,7 +12,7 @@ use crate::{
     app::is_interactive,
     components::{dashboard_body, filters, live_filters, theme_style},
     data::{REFRESH_EVERY, load},
-    params::{UsageParams, parse, parse_metric, parse_selection},
+    params::{UsageParams, parse, parse_metric, parse_selection, pick_currency},
     theme,
 };
 
@@ -58,6 +58,18 @@ pub fn page_base(query: &tokenburn_core::Query, metric: tokenburn_core::Metric) 
     )
 }
 
+/// The currency to show for an optional explicit code: a valid one wins and is saved
+/// (shared with the TUI, GUI and CLI), anything else keeps the saved one.
+fn effective_currency(requested: Option<&str>) -> tokenburn_core::Currency {
+    let st = settings::load();
+    let saved = tokenburn_core::features::currency::resolve(&st.currency, &st.rates);
+    let currency = pick_currency(requested, saved, &st.rates);
+    if currency.code != saved.code {
+        let _ = settings::save_currency(currency.code);
+    }
+    currency
+}
+
 #[page("/")]
 async fn home(cx: &Cx) -> Result<impl View> {
     let params = query_params::<UsageParams>(cx)?;
@@ -71,12 +83,15 @@ async fn home(cx: &Cx) -> Result<impl View> {
         let _ = settings::save_theme(theme_index);
     }
 
+    // Likewise `?currency=`: explicit and valid wins and is remembered.
+    let currency = effective_currency(params.currency.as_deref());
+
     // Static fallback loads once here; the live path loads inside the shard.
     let selection = params.selection();
     let snapshot = if interactive {
         None
     } else {
-        Some(load(params.to_query(), &selection).await)
+        Some(load(params.to_query(), &selection, currency).await)
     };
     let base = snapshot
         .as_ref()
@@ -93,12 +108,12 @@ async fn home(cx: &Cx) -> Result<impl View> {
             if let Some(d) = &snapshot {
                 <header class="top">
                     <h1>"🔥 TokenBurn"</h1>
-                    filters(query: d.query, theme: theme_index, metric: metric)
+                    filters(query: d.query, theme: theme_index, metric: metric, currency: currency)
                 </header>
                 dashboard_body(d: d, live: false, metric: metric, base: &base, click_bucket: None, click_project: None)
             } else {
                 <header class="top"><h1>"🔥 TokenBurn"</h1></header>
-                live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::names()[theme_index].to_string(), metric: metric.label().to_string(), sel_bucket: selection.bucket.clone().unwrap_or_default(), sel_project: selection.project.clone().unwrap_or_default())
+                live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::names()[theme_index].to_string(), metric: metric.label().to_string(), currency: currency.code.to_string(), sel_bucket: selection.bucket.clone().unwrap_or_default(), sel_project: selection.project.clone().unwrap_or_default())
             }
         )
     })
@@ -115,6 +130,7 @@ async fn live_dashboard(
     window: String,
     theme: String,
     metric: String,
+    currency: String,
     sel_bucket: String,
     sel_project: String,
 ) -> Result<impl View> {
@@ -123,6 +139,7 @@ async fn live_dashboard(
     let window = signal(cx, move || window);
     let theme = signal(cx, move || theme);
     let metric = signal(cx, move || metric);
+    let currency_sig = signal(cx, move || currency);
     // What the user clicked (empty = nothing). Untrusted like every signal: the
     // core only ever *compares* these against real labels, and drops stale ones.
     let sel_bucket = signal(cx, move || sel_bucket);
@@ -132,6 +149,8 @@ async fn live_dashboard(
     // `parse` ignores anything that is not a known choice.
     let query = parse(Some(&tool.get()), Some(&bucket.get()), Some(&window.get()));
     let chart_metric = parse_metric(Some(&metric.get()));
+    // Signal values are untrusted: only a known code counts, and a change is remembered.
+    let currency = effective_currency(Some(&currency_sig.get()));
     let selection = parse_selection(Some(&sel_bucket.get()), Some(&sel_project.get()));
     // Same for the theme; an unknown name keeps the saved one. A change is remembered.
     let saved = settings::theme_index();
@@ -143,10 +162,10 @@ async fn live_dashboard(
     Ok(view! {
         // Re-emitted on every theme change; later in the document than the <head> one.
         theme_style(index: theme_index)
-        live_filters(tool: &tool, bucket: &bucket, window: &window, theme: &theme, metric: &metric)
+        live_filters(tool: &tool, bucket: &bucket, window: &window, theme: &theme, metric: &metric, currency: &currency_sig)
         (live! {
             loop {
-                let d = load(query, &selection).await;
+                let d = load(query, &selection, currency).await;
                 let is_connected = connected(cx);
                 let token = emit! { dashboard_body(d: &d, live: is_connected, metric: chart_metric, base: "", click_bucket: Some(&sel_bucket), click_project: Some(&sel_project)) }?;
                 if !is_connected {
