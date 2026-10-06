@@ -55,13 +55,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
-      - name: Install Linux GUI libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt,clippy
@@ -136,14 +129,11 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.tag }}
 
-      - name: Install Linux GUI libraries + packaging tools
+      - name: Install packaging tools
         if: matrix.os == 'linux'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev \
+          sudo apt-get -o Acquire::Retries=5 update -qq
+          sudo apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
             gcc-aarch64-linux-gnu libc6-dev-arm64-cross dpkg-dev rpm alien fakeroot \
             musl-tools
 
@@ -380,15 +370,6 @@ jobs:
         if: env.HAS_TOKEN == 'true'
         with:
           ref: ${{ needs.validate.outputs.tag }}
-
-      - name: Install Linux GUI libraries
-        if: env.HAS_TOKEN == 'true'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
 
       - uses: dtolnay/rust-toolchain@stable
         if: env.HAS_TOKEN == 'true'

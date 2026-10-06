@@ -52,22 +52,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
       - name: Install Rust stable + clippy
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -85,22 +69,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -150,8 +118,8 @@ jobs:
 
       - name: Install musl toolchain
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends musl-tools
+          sudo apt-get -o Acquire::Retries=5 update -qq
+          sudo apt-get -o Acquire::Retries=5 install -y --no-install-recommends musl-tools
 
       - name: Install Rust stable + musl target
         uses: dtolnay/rust-toolchain@stable
@@ -239,22 +207,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
@@ -283,23 +235,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      # Use nightly for doc(cfg) and intra-doc link checking.
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
 

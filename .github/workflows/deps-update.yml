@@ -95,15 +95,6 @@ jobs:
         with:
           name: cargo-lock
 
-      - name: Install Linux GUI system libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -175,14 +166,6 @@ jobs:
       # verified lockfile no longer matches them.
       - name: Verify the lockfile still matches the manifests
         run: cargo metadata --locked --format-version 1 > /dev/null
-
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:

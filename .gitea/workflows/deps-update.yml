@@ -48,14 +48,6 @@ jobs:
           git reset --hard origin/main
           git log -1 --oneline
 
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
-
       - name: Install Rust stable
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --component rustfmt --component clippy
