@@ -10,6 +10,10 @@ A terminal UI, a desktop GUI and a web dashboard (plus a CLI for scripts), all i
 [![docs.rs](https://docs.rs/tokenburn-core/badge.svg)](https://docs.rs/tokenburn-core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+[![TUI installs](https://img.shields.io/crates/d/tokenburn-tui?label=tokenburn-tui%20installs&logo=rust&color=orange)](https://crates.io/crates/tokenburn-tui)
+[![GUI installs](https://img.shields.io/crates/d/tokenburn-gui?label=tokenburn-gui%20installs&logo=rust&color=orange)](https://crates.io/crates/tokenburn-gui)
+[![Web installs](https://img.shields.io/crates/d/tokenburn-web?label=tokenburn-web%20installs&logo=rust&color=orange)](https://crates.io/crates/tokenburn-web)
+
 <img src="examples/vhs/generated/dashboard.gif" alt="TokenBurn terminal UI" width="900">
 
 </div>
