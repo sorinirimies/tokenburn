@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### 📚 Documentation
+- rewrite the README around the TUI, GUI and web front-ends; drop the performance section
+- install badges for the TUI, GUI and web crates
 ## [0.1.3] - 2026-10-06
 ### ⚡ Performance
 - per-file parse caches + dirty-only TUI redraw; feat: charts in GUI and web; test: web e2e, CLI e2e, view tests
@@ -26,3 +30,7 @@ All notable changes to this project will be documented in this file.
 - independent fully-automatic nightly dependency updates on GitHub and Gitea (no mirroring)
 - drop the Linux GUI -dev apt packages (nothing links them) and retry apt
 - release only when something that ships changed (ignore dev/test-only lockfile churn)
+- run the quality gate first; bump, changelog, commit and tag only once it is green, with rollback
+### 🖥️ Front-ends
+- remove the Refresh button (everything auto-updates); refresh GUI screenshots
+- remove the manual refresh key (r / F5); everything self-updates

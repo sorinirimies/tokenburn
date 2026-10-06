@@ -35,7 +35,10 @@ commit_parsers = [
     # Skip version-bump chores — they're noise, not substance
     { message = "^chore: bump version",   skip = true },
     { message = "^chore\\(release\\)",    skip = true },
-    { message = "^chore\\(deps\\)",       skip = true },
+
+    # Dependency updates (the nightly job commits these): keep them, so a release that
+    # is only a dependency refresh still says what it is instead of being empty.
+    { message = "^chore\\(deps\\)",       group = "📦 Dependencies" },
 
     # Meaningful categories
     { message = "^feat",                  group = "✨ Features"       },
@@ -46,6 +49,9 @@ commit_parsers = [
     { message = "^test",                  group = "🧪 Testing"        },
     { message = "^build",                 group = "📦 Build"          },
     { message = "^ci",                    group = "🔄 CI"             },
+    { message = "^release",               group = "🔄 CI"             },
+    # Commits prefixed with the front-end they touch ("gui: …", "tui(charts): …")
+    { message = "^(gui|tui|web|cli|core)(\\(.+\\))?!?:", group = "🖥️ Front-ends" },
     { message = "^style",                 group = "💄 Style"          },
     { message = "^chore",                 group = "🔧 Chores"         },
 ]
