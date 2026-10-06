@@ -187,6 +187,48 @@ def "test bump_version: double bump produces correct version" [] {
     assert equal $dep_ver "0.3.0"
 }
 
+# ── Ordering guarantees (the script itself) ─────────────────────────────────
+
+# Position of `needle` in the body of `def main` of bump_version.nu.
+def main_pos [needle: string]: nothing -> int {
+    let src = (open ($env.FILE_PWD | path join ".." "bump_version.nu") --raw)
+    let body = ($src | split row "def main [" | last)
+    ($body | str index-of $needle)
+}
+
+def "test bump_version: the quality gate runs before anything is edited" [] {
+    let gate = (main_pos "run_checks")
+    let first_edit = (main_pos "update_workspace_version $new_version")
+    assert ($gate >= 0)
+    assert ($first_edit > $gate) "the gate must come before the first edit"
+}
+
+def "test bump_version: commit and tag are the very last steps" [] {
+    let commit = (main_pos '"commit"')
+    let tag = (main_pos '"tag" "-a"')
+    let lock = (main_pos '"cargo" "update"')
+    let changelog = (main_pos "git-cliff")
+    assert ($lock < $commit)
+    assert ($changelog < $commit)
+    assert ($commit < $tag)
+}
+
+def "test bump_version: every post-edit step is inside a rollback" [] {
+    let edit = (main_pos "update_workspace_version $new_version")
+    let try_at = (main_pos "try {")
+    let catch_at = (main_pos "roll_back $start $tag")
+    assert ($try_at >= 0 and $try_at < $edit) "edits happen inside try"
+    assert ($catch_at > ((main_pos '"tag" "-a"'))) "rollback follows the last step"
+}
+
+def "test bump_version: refuses a dirty tree and an existing tag up front" [] {
+    let dirty = (main_pos "status --porcelain")
+    let tag_check = (main_pos "tag --list")
+    let gate = (main_pos "run_checks")
+    assert ($dirty >= 0 and $dirty < $gate)
+    assert ($tag_check >= 0 and $tag_check < $gate)
+}
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def main [] { run-tests }

@@ -13,9 +13,18 @@
 #   2. Updates `workspace.package.version` in the root Cargo.toml.
 #   3. Updates the `tokenburn-core` dependency version wherever it appears.
 #   4. Updates the version badge in README.md (if present).
-#   5. Runs `cargo fmt`, `cargo clippy`, and `cargo test`.
-#   6. Generates / updates the CHANGELOG via git-cliff (if installed).
-#   7. Creates a Git commit and an annotated tag.
+#   5. Generates / updates the CHANGELOG via git-cliff (if installed).
+#   6. Creates a Git commit and an annotated tag.
+#
+# Order matters: the quality gate (fmt, clippy, tests) runs FIRST, on the tree as
+# it is, and nothing is edited, committed or tagged until it is green. If any later
+# step fails, everything the script touched is rolled back, so a failed bump never
+# leaves a half-bumped version behind.
+#
+# Flags:
+#   --yes          non-interactive (CI)
+#   --skip-checks  the caller already ran the gate (`just bump` runs check-release;
+#                  the nightly workflows verify on every platform before releasing)
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -73,9 +82,34 @@ def update_readme_badge [version: string] {
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+# Files this script edits (and therefore commits and, on failure, restores).
+const TOUCHED = ["Cargo.toml" "Cargo.lock" "README.md" "CHANGELOG.md"]
+
+# The quality gate. Runs on the unmodified tree; any failure aborts the bump
+# before a single file has been changed.
+def run_checks [] {
+    print ""
+    print $"(ansi cyan)── quality gate: nothing is bumped until it is green ──────────(ansi reset)"
+    run-external "cargo" "fmt" "--all" "--" "--check"
+    print $"(ansi green)✓(ansi reset) cargo fmt --check passed."
+    run-external "cargo" "clippy" "--workspace" "--all-targets" "--all-features" "--" "-D" "warnings" "-A" "deprecated"
+    print $"(ansi green)✓(ansi reset) cargo clippy passed."
+    run-external "cargo" "test" "--workspace"
+    print $"(ansi green)✓(ansi reset) cargo test passed."
+}
+
+# Undo everything the bump did: drop the commit and tag if they were made, restore the files.
+def roll_back [start: string, tag: string] {
+    print $"(ansi red)✗ Bump failed — rolling back to ($start | str substring 0..7).(ansi reset)"
+    do --ignore-errors { run-external "git" "tag" "-d" $tag | ignore }
+    run-external "git" "reset" "--hard" $start
+    print $"(ansi yellow)Nothing was committed or tagged; the version is unchanged.(ansi reset)"
+}
+
 def main [
     new_version: string,  # New version in X.Y.Z format
     --yes (-y),           # Skip confirmation prompt (non-interactive)
+    --skip-checks,        # The caller already ran the quality gate
 ] {
     print ""
     print $"(ansi cyan)══════════════════════════════════════════════════════════════(ansi reset)"
@@ -85,6 +119,7 @@ def main [
 
     # 0. Read current version
     let current_version = (open Cargo.toml | get workspace.package.version)
+    let tag = $"v($new_version)"
     print $"  Current version : (ansi yellow)($current_version)(ansi reset)"
     print $"  New version     : (ansi green)($new_version)(ansi reset)"
     print ""
@@ -94,60 +129,61 @@ def main [
         exit 0
     }
 
-    # 1. Validate
+    # 1. Validate — everything that can be known up front, before any work.
     validate_version $new_version
     print $"(ansi green)✓(ansi reset) Version string validated."
 
-    # 2. Update workspace version
-    update_workspace_version $new_version
+    if (^git tag --list $tag | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) tag ($tag) already exists."
+        exit 1
+    }
+    # The script commits only the files it edits, but a rollback resets the tree,
+    # so it must start clean or it would throw away someone's work.
+    if (^git status --porcelain | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) the working tree is dirty — commit or stash first."
+        exit 1
+    }
+    let start = (^git rev-parse HEAD | str trim)
 
-    # 3. Update tokenburn-core dependency version
-    update_core_dep_version $new_version
-
-    # 4. Update README badge
-    update_readme_badge $new_version
-
-    # 5. cargo fmt
-    print ""
-    print $"(ansi cyan)── cargo fmt ───────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "fmt" "--all"
-    print $"(ansi green)✓(ansi reset) cargo fmt completed."
-
-    # 6. cargo clippy
-    print ""
-    print $"(ansi cyan)── cargo clippy ────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "clippy" "--workspace" "--" "-D" "warnings"
-    print $"(ansi green)✓(ansi reset) cargo clippy passed."
-
-    # 7. cargo test
-    print ""
-    print $"(ansi cyan)── cargo test ──────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "test" "--workspace"
-    print $"(ansi green)✓(ansi reset) cargo test passed."
-
-    # 8. Update Cargo.lock to reflect new workspace version
-    print ""
-    print $"(ansi cyan)── cargo update ────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "update" "-p" "tokenburn-core" "-p" "tokenburn" "-p" "tokenburn-gui" "-p" "tokenburn-web" "-p" "tokenburn-tui"
-    print $"(ansi green)✓(ansi reset) Cargo.lock updated."
-
-    # 9. Changelog (git-cliff)
-    print ""
-    print $"(ansi cyan)── changelog ───────────────────────────────────────────────(ansi reset)"
-    if (which git-cliff | is-not-empty) {
-        run-external "git-cliff" "--output" "CHANGELOG.md" "--tag" $"v($new_version)"
-        print $"(ansi green)✓(ansi reset) CHANGELOG.md updated via git-cliff."
+    # 2. Quality gate FIRST. Red => exit before anything is touched.
+    if $skip_checks {
+        print $"(ansi yellow)⚠(ansi reset) --skip-checks: assuming the caller already ran the gate."
     } else {
-        print $"(ansi yellow)⚠(ansi reset) git-cliff not found — skipping changelog generation."
+        run_checks
     }
 
-    # 10. Git commit & tag
-    print ""
-    print $"(ansi cyan)── git commit & tag ────────────────────────────────────────(ansi reset)"
-    run-external "git" "add" "-A"
-    run-external "git" "commit" "-m" $"chore: bump version to ($new_version)"
-    run-external "git" "tag" "-a" $"v($new_version)" "-m" $"Release v($new_version)"
-    print $"(ansi green)✓(ansi reset) Committed and tagged v($new_version)."
+    # 3. Only now edit, commit and tag; any failure rolls it all back.
+    try {
+        update_workspace_version $new_version
+        update_core_dep_version $new_version
+        update_readme_badge $new_version
+
+        # Cargo.lock must carry the new member versions.
+        print ""
+        print $"(ansi cyan)── Cargo.lock ──────────────────────────────────────────────(ansi reset)"
+        run-external "cargo" "update" "-p" "tokenburn-core" "-p" "tokenburn" "-p" "tokenburn-gui" "-p" "tokenburn-web" "-p" "tokenburn-tui"
+        run-external "cargo" "metadata" "--locked" "--format-version" "1" | ignore
+        print $"(ansi green)✓(ansi reset) Cargo.lock updated and consistent."
+
+        print ""
+        print $"(ansi cyan)── changelog ───────────────────────────────────────────────(ansi reset)"
+        if (which git-cliff | is-not-empty) {
+            run-external "git-cliff" "--output" "CHANGELOG.md" "--tag" $tag
+            print $"(ansi green)✓(ansi reset) CHANGELOG.md updated via git-cliff."
+        } else {
+            print $"(ansi yellow)⚠(ansi reset) git-cliff not found — skipping changelog generation."
+        }
+
+        print ""
+        print $"(ansi cyan)── git commit & tag ────────────────────────────────────────(ansi reset)"
+        run-external "git" "add" ...$TOUCHED
+        run-external "git" "commit" "-m" $"chore: bump version to ($new_version)"
+        run-external "git" "tag" "-a" $tag "-m" $"Release ($tag)"
+        print $"(ansi green)✓(ansi reset) Committed and tagged ($tag)."
+    } catch {|err|
+        roll_back $start $tag
+        error make --unspanned { msg: $"bump to ($new_version) failed and was rolled back: ($err.msg)" }
+    }
 
     print ""
     print $"(ansi green)══════════════════════════════════════════════════════════════(ansi reset)"

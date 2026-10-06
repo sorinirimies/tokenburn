@@ -353,9 +353,10 @@ _check-version-changed version: _check-nu
 
 # Bump the workspace version, regenerate Cargo.lock + CHANGELOG.md, commit and tag.
 
-# Validation runs first (cheap), quality gate runs second (expensive).
+# Order: validation (cheap) → quality gate (expensive) → ONLY THEN edit, commit and tag.
+# A red gate leaves the tree untouched; a failure after the edits is rolled back.
 bump version: (validate-tag version) (_check-version-changed version) check-release _check-git-cliff
-    nu scripts/bump_version.nu --yes {{ version }}
+    nu scripts/bump_version.nu --yes --skip-checks {{ version }}
 
 # ── Publish (crates.io) ───────────────────────────────────────────────────────
 

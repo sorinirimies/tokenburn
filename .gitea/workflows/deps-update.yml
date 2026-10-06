@@ -163,7 +163,7 @@ jobs:
 
       - name: Bump version, changelog, commit and tag
         if: steps.check.outputs.changed == 'true'
-        run: nu scripts/bump_version.nu --yes ${{ steps.version.outputs.next }}
+        run: nu scripts/bump_version.nu --yes --skip-checks ${{ steps.version.outputs.next }}
 
       # Fail loudly (no `|| true`): a failed push must show as a failed run.
       - name: Push release commit and tag to Gitea
