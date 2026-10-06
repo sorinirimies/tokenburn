@@ -1,4 +1,9 @@
 //! Stylesheet served at `/style.css`.
+//!
+//! Responsive on the same breakpoints as the TUI and the GUI (`LayoutClass` in
+//! `tokenburn-core`): **wide** ≥ 980 px · **medium** ≥ 700 px · **narrow** below.
+//! Medium stacks the charts and drops the cache columns; narrow also compacts the
+//! header and controls, keeps only the essential columns and enlarges the chart text.
 
 pub const CSS: &str = r#"
 :root { color-scheme: dark; --bg:#14161f; --panel:#1c1f2b; --line:#2b3042; --fg:#d8dcea; --dim:#8b92aa; --accent:#7aa2f7; --ok:#9ece6a; --warn:#e0af68; --err:#f7768e; --fg2:#e0af68; --sel:#232840; --s0:#7aa2f7; --s1:#bb9af7; --s2:#e0af68; --s3:#9ece6a; --s4:#f7768e; --s5:#7dcfff; --s6:#ff9e64; --s7:#a9b1d6; }
@@ -31,7 +36,6 @@ tr:hover td { background:var(--sel); }
 .badge.live { color:var(--ok); border-color:var(--ok); }
 .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
 .charts { display:grid; grid-template-columns:3fr 2fr; gap:16px; }
-@media (max-width:900px) { .charts { grid-template-columns:1fr; } }
 .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
 .panel h2 { margin:0 0 6px; }
 svg.chart { display:block; max-width:100%; height:auto; overflow:visible; }
@@ -95,4 +99,79 @@ svg.chart a { cursor:pointer; }
 .donut-box { width:190px; flex:none; }
 footer { color:var(--dim); font-size:12px; }
 a { color:var(--accent); }
+
+/* ── responsive ── */
+.table-wrap { overflow-x:auto; border-radius:8px; }
+.table-wrap table { min-width:100%; }
+.donut-box svg { max-width:240px; margin:0 auto; }
+html { -webkit-text-size-adjust:100%; }
+.legend.vertical { min-width:0; }
+
+/* medium: below 980 px — charts stack, cache columns drop out */
+@media (max-width:979px) {
+  .charts { grid-template-columns:1fr; }
+  .opt1 { display:none; }
+  .cards { grid-template-columns:repeat(4, minmax(0,1fr)); }
+  .donut-row { justify-content:center; }
+}
+
+/* narrow: below 700 px — compact header and controls, essential columns only */
+@media (max-width:699px) {
+  main { padding:12px 10px; gap:14px; }
+  header.top { flex-direction:column; align-items:stretch; gap:10px; }
+  header.top h1 { font-size:20px; }
+  form.filters, .filters { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px 10px; }
+  .filters label { display:flex; flex-direction:column; gap:2px; font-size:12px; color:var(--dim); min-width:0; }
+  .filters select { width:100%; min-width:0; }
+  .cards { grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .card .value { font-size:19px; }
+  .card.cost { grid-column:1 / -1; }
+  .opt2 { display:none; }
+  th, td { padding:7px 8px; }
+  .panel { padding:10px; }
+  .donut-row { flex-direction:column; align-items:stretch; gap:8px; }
+  .donut-box { width:min(220px, 70vw); margin:0 auto; }
+  .legend.vertical { flex-direction:row; flex-wrap:wrap; gap:4px 12px; }
+  .selbar { margin:0; }
+  /* The SVG is scaled to the screen, so its text must be bigger and sparser. */
+  svg.chart text.axis { font-size:22px; }
+  svg.chart text.axis.alt { display:none; }
+  svg.chart text.total { font-size:20px; }
+  .bars .col .outline { stroke-width:3; }
+  footer { word-break:break-word; }
+}
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::CSS;
+    use tokenburn_core::utils::layout::{MEDIUM_PX, WIDE_PX};
+
+    #[test]
+    fn the_media_queries_use_the_shared_breakpoints() {
+        // max-width is inclusive, so "below WIDE" is WIDE - 1.
+        assert!(CSS.contains(&format!("@media (max-width:{}px)", WIDE_PX as u32 - 1)));
+        assert!(CSS.contains(&format!("@media (max-width:{}px)", MEDIUM_PX as u32 - 1)));
+    }
+
+    #[test]
+    fn narrow_screens_hide_the_secondary_columns_and_enlarge_the_chart_text() {
+        let narrow = CSS.split("@media (max-width:699px)").nth(1).unwrap();
+        assert!(narrow.contains(".opt2 { display:none; }"));
+        assert!(narrow.contains("svg.chart text.axis { font-size:22px; }"));
+        assert!(narrow.contains("svg.chart text.axis.alt { display:none; }"));
+        let medium = CSS.split("@media (max-width:979px)").nth(1).unwrap();
+        assert!(
+            medium.contains(".opt1 { display:none; }")
+                && medium.contains(".charts { grid-template-columns:1fr; }")
+        );
+    }
+
+    #[test]
+    fn wide_screens_never_hide_anything() {
+        // The hiding rules live only inside the media queries.
+        let before_queries = CSS.split("/* medium: below 980 px").next().unwrap();
+        assert!(!before_queries.contains(".opt1 { display:none"));
+        assert!(!before_queries.contains(".opt2 { display:none"));
+    }
+}

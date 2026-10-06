@@ -3,28 +3,42 @@
 use iced::widget::{column, container, row, text};
 use iced::{Element, Length};
 use tokenburn_core::utils::fmt::compact;
+use tokenburn_core::LayoutClass;
 
 use crate::message::Message;
 use crate::state::TokenBurn;
 
-pub fn view(state: &TokenBurn) -> Element<'_, Message> {
+/// Wide: one stretching row. Otherwise the cards keep a fixed size and **wrap** onto
+/// as many rows as the window width allows.
+pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     let t = state.total();
     // "cost ≈" when the exchange rate is a built-in estimate.
     let cost_label = format!("cost{}", state.currency.approx_mark());
-    row![
-        card("turns", t.turns.to_string()),
-        card("total tokens", compact(t.total_tokens)),
-        card("input", compact(t.input)),
-        card("output", compact(t.output)),
-        card("cache read", compact(t.cache_read)),
-        card("cache write", compact(t.cache_write)),
-        card(cost_label, state.currency.format(t.cost_usd)),
-    ]
-    .spacing(10)
-    .into()
+    let width = if layout.is_wide() {
+        Length::Fill
+    } else if layout.is_narrow() {
+        Length::Fixed(112.0)
+    } else {
+        Length::Fixed(150.0)
+    };
+    let cards = [
+        card("turns".to_string(), t.turns.to_string(), width),
+        card("total tokens".to_string(), compact(t.total_tokens), width),
+        card("input".to_string(), compact(t.input), width),
+        card("output".to_string(), compact(t.output), width),
+        card("cache read".to_string(), compact(t.cache_read), width),
+        card("cache write".to_string(), compact(t.cache_write), width),
+        card(cost_label, state.currency.format(t.cost_usd), width),
+    ];
+    let cards = row(cards).spacing(10);
+    if layout.is_wide() {
+        cards.into()
+    } else {
+        cards.wrap().into()
+    }
 }
 
-fn card<'a>(label: impl text::IntoFragment<'a>, value: String) -> Element<'a, Message> {
+fn card<'a>(label: String, value: String, width: Length) -> Element<'a, Message> {
     container(
         column![
             text(label).size(12).style(text::secondary),
@@ -33,7 +47,7 @@ fn card<'a>(label: impl text::IntoFragment<'a>, value: String) -> Element<'a, Me
         .spacing(2),
     )
     .padding(10)
-    .width(Length::Fill)
+    .width(width)
     .style(container::bordered_box)
     .into()
 }

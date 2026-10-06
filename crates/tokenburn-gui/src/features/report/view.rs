@@ -7,37 +7,82 @@ use iced::widget::{
 use iced::{Element, Length};
 use tokenburn_core::utils::fmt::thousands;
 
-use tokenburn_core::Metric;
+use tokenburn_core::{LayoutClass, Metric};
 
 use crate::features::theme::chart_colors;
 use crate::message::Message;
 use crate::state::TokenBurn;
 use crate::widgets::charts::{donut, stacked_bars};
 
-const NUMERIC: [&str; 6] = [
-    "turns",
-    "input",
-    "output",
-    "cache_read",
-    "cache_write",
-    "total",
-];
+/// A numeric column of the table.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Col {
+    Turns,
+    Input,
+    Output,
+    CacheRead,
+    CacheWrite,
+    Total,
+}
 
-pub fn view(state: &TokenBurn) -> Element<'_, Message> {
+impl Col {
+    fn title(self) -> &'static str {
+        match self {
+            Col::Turns => "turns",
+            Col::Input => "input",
+            Col::Output => "output",
+            Col::CacheRead => "cache_read",
+            Col::CacheWrite => "cache_write",
+            Col::Total => "total",
+        }
+    }
+
+    fn value(self, s: &tokenburn_core::Summary) -> u64 {
+        match self {
+            Col::Turns => s.turns,
+            Col::Input => s.input,
+            Col::Output => s.output,
+            Col::CacheRead => s.cache_read,
+            Col::CacheWrite => s.cache_write,
+            Col::Total => s.total_tokens,
+        }
+    }
+}
+
+/// The numeric columns shown at `layout`: all of them when wide, no cache columns
+/// when medium, only the total when narrow (plus the always-present cost).
+fn columns(layout: LayoutClass) -> &'static [Col] {
+    match layout {
+        LayoutClass::Wide => &[
+            Col::Turns,
+            Col::Input,
+            Col::Output,
+            Col::CacheRead,
+            Col::CacheWrite,
+            Col::Total,
+        ],
+        LayoutClass::Medium => &[Col::Turns, Col::Input, Col::Output, Col::Total],
+        LayoutClass::Narrow => &[Col::Total],
+    }
+}
+
+pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     if state.report.is_empty() {
-        return container(
-            text(if state.is_loading {
-                "Loading…".to_string()
-            } else {
-                format!(
-                    "No tokenburn results found for tool={}, window={}.",
-                    state.query.tool, state.query.window
-                )
-            })
-            .style(text::secondary),
-        )
-        .center(Length::Fill)
-        .into();
+        let message = text(if state.is_loading {
+            "Loading…".to_string()
+        } else {
+            format!(
+                "No tokenburn results found for tool={}, window={}.",
+                state.query.tool, state.query.window
+            )
+        })
+        .style(text::secondary);
+        // The page scrolls when not wide, and a scrollable's content cannot fill it.
+        return if layout.is_wide() {
+            container(message).center(Length::Fill).into()
+        } else {
+            container(message).padding(30).center_x(Length::Fill).into()
+        };
     }
 
     let bucketed = state.report.iter().any(|r| r.bucket.is_some());
@@ -55,12 +100,13 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
         header = header.push(cell_left("bucket", 3));
     }
     header = header.push(cell_left("tool", 2));
-    for h in NUMERIC {
-        header = header.push(cell_right(h.to_string(), 3));
+    for col in columns(layout) {
+        header = header.push(cell_right(col.title().to_string(), 3));
     }
-    header = header
-        .push(cell_right("cost".to_string(), 3))
-        .push(text("share").width(Length::FillPortion(4)));
+    header = header.push(cell_right("cost".to_string(), 3));
+    if !layout.is_narrow() {
+        header = header.push(text("share").width(Length::FillPortion(4)));
+    }
     let header = container(header.padding([6, 10])).style(container::rounded_box);
 
     let mut body = column![].spacing(2);
@@ -77,15 +123,8 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
         } else {
             tool
         });
-        for n in [
-            s.turns,
-            s.input,
-            s.output,
-            s.cache_read,
-            s.cache_write,
-            s.total_tokens,
-        ] {
-            line = line.push(cell_right(thousands(n), 3));
+        for col in columns(layout) {
+            line = line.push(cell_right(thousands(col.value(s)), 3));
         }
         line = line.push(
             text(state.currency.format(s.cost_usd))
@@ -93,22 +132,37 @@ pub fn view(state: &TokenBurn) -> Element<'_, Message> {
                 .width(Length::FillPortion(3))
                 .style(text::success),
         );
-        line = line.push(
-            container(if is_total {
-                Element::from(text(""))
-            } else {
-                progress_bar(0.0..=max_tokens, s.total_tokens as f32)
-                    .girth(10)
-                    .into()
-            })
-            .width(Length::FillPortion(4)),
-        );
+        if !layout.is_narrow() {
+            line = line.push(
+                container(if is_total {
+                    Element::from(text(""))
+                } else {
+                    progress_bar(0.0..=max_tokens, s.total_tokens as f32)
+                        .girth(10)
+                        .into()
+                })
+                .width(Length::FillPortion(4)),
+            );
+        }
         body = body.push(container(line).padding([4, 10]));
     }
 
-    column![charts(state), header, scrollable(body).height(Length::Fill)]
+    if layout.is_wide() {
+        // The charts stay put; only the table scrolls.
+        column![
+            charts(state, layout),
+            header,
+            scrollable(body).height(Length::Fill)
+        ]
         .spacing(10)
         .into()
+    } else {
+        // Stacked charts are tall: the caller scrolls the whole page (cards, charts and
+        // table together) instead of squeezing the table.
+        column![charts(state, layout), header, body]
+            .spacing(10)
+            .into()
+    }
 }
 
 fn cell_left<'a>(s: &str, portion: u16) -> iced::widget::Text<'a> {
@@ -122,7 +176,8 @@ fn cell_right<'a>(s: String, portion: u16) -> iced::widget::Text<'a> {
 }
 
 /// Stacked bars over time (left) and the share donut (right).
-fn charts(state: &TokenBurn) -> Element<'_, Message> {
+fn charts(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
+    let chart_height = if layout.is_narrow() { 170.0 } else { 200.0 };
     let colors = chart_colors(state.theme_index);
     let metric = state.chart_metric;
     let title = format!(
@@ -149,11 +204,15 @@ fn charts(state: &TokenBurn) -> Element<'_, Message> {
             colors,
             state.selection.bucket.as_deref(),
             (state.anim, state.sel_anim),
-            200.0
+            chart_height
         ),
     ]
     .spacing(4)
-    .width(Length::FillPortion(3));
+    .width(if layout.is_wide() {
+        Length::FillPortion(3)
+    } else {
+        Length::Fill
+    });
 
     let share = column![
         row![text(format!("Share by project · {}", state.pie.metric))
@@ -167,13 +226,23 @@ fn charts(state: &TokenBurn) -> Element<'_, Message> {
             colors,
             state.selection.project.as_deref(),
             (state.anim, state.sel_anim),
-            200.0
+            chart_height
         ),
     ]
     .spacing(4)
-    .width(Length::FillPortion(2));
+    .width(if layout.is_wide() {
+        Length::FillPortion(2)
+    } else {
+        Length::Fill
+    });
 
-    let mut panel = column![row![bars, share].spacing(16)].spacing(8);
+    // Side by side when there is room, stacked otherwise.
+    let both: Element<'_, Message> = if layout.is_wide() {
+        row![bars, share].spacing(16).into()
+    } else {
+        column![bars, share].spacing(8).into()
+    };
+    let mut panel = column![both].spacing(8);
     if !state.selection.is_empty() {
         let mut chips = row![text("Showing").size(12).style(text::secondary)]
             .spacing(8)

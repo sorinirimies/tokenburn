@@ -7,6 +7,7 @@ use ratatui::Frame;
 use tui_spinner::{FluxFrames, FluxSpinner};
 
 use crate::app::App;
+use tokenburn_core::LayoutClass;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let bar = Style::default().fg(app.theme.bg).bg(app.theme.accent);
@@ -31,7 +32,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         );
     }
 
-    let hints = "q quit · / filter · f tools · T theme · C currency · t tool · w window · ←/→ view · p projects · o options";
+    let class = LayoutClass::from_cols(area.width);
+    // Narrow terminals only have room for the keys that matter.
+    let hints = if class.is_narrow() {
+        "q quit · / filter · T theme · C cur · o options"
+    } else {
+        "q quit · / filter · f tools · T theme · C currency · t tool · w window · ←/→ view · p projects · o options"
+    };
     if app.filter_editing {
         // The text box: show the cursor and what the keys do.
         let line = format!(
@@ -43,6 +50,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     }
     let text = if let Some(w) = app.warnings.first() {
         format!("⚠ {w}   │   {hints}")
+    } else if class.is_narrow() {
+        // No room for the status message next to the hints.
+        hints.to_string()
     } else if let Some(s) = &app.status_message {
         format!("{s}   │   {hints}")
     } else {

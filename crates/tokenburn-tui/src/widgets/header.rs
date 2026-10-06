@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use tokenburn_core::utils::fmt::compact;
+use tokenburn_core::LayoutClass;
 
 use crate::app::App;
 use crate::features::theme::UiTheme;
@@ -14,47 +15,74 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let t = app.total();
     let q = app.query;
     let th = app.theme;
+    // Wide: everything. Medium: no cache totals. Narrow: only what you must see, the
+    // theme and currency are one keypress away.
+    let class = LayoutClass::from_cols(area.width);
 
-    let title = Line::from(vec![
+    // Narrow: a terse title and short chip labels so the line fits ~55 columns, and
+    // below ~50 the window chip goes too.
+    let narrow = class.is_narrow();
+    let mut title_spans = vec![
         Span::styled(
-            " 🔥 TokenBurn ",
+            if narrow {
+                " TokenBurn "
+            } else {
+                " 🔥 TokenBurn "
+            },
             Style::default().fg(th.warning).add_modifier(Modifier::BOLD),
         ),
         Span::raw(" "),
         chip(th, "tool", q.tool.as_str()),
         chip(th, "view", q.bucket.label()),
-        chip(th, "window", q.window.label()),
-        chip(th, "theme", tokenburn_core::THEME_NAMES[app.theme_index]),
-        chip(
+    ];
+    if !narrow {
+        title_spans.push(chip(th, "window", q.window.label()));
+    } else if area.width >= 52 {
+        title_spans.push(chip(th, "win", q.window.label()));
+    }
+    if !class.is_narrow() {
+        title_spans.push(chip(
             th,
-            "cur",
-            &format!("{}{}", app.currency.code, app.currency.approx_mark()),
-        ),
-        filter_chips(app),
-        Span::styled(
-            if app.is_loading { " loading…" } else { "" },
-            Style::default().fg(th.muted),
-        ),
-    ]);
+            "theme",
+            tokenburn_core::THEME_NAMES[app.theme_index],
+        ));
+    }
+    // The currency is part of what the cost means, so it stays on every width.
+    title_spans.push(chip(
+        th,
+        "cur",
+        &format!("{}{}", app.currency.code, app.currency.approx_mark()),
+    ));
+    title_spans.push(filter_chips(app));
+    title_spans.push(Span::styled(
+        if app.is_loading { " loading…" } else { "" },
+        Style::default().fg(th.muted),
+    ));
+    let title = Line::from(title_spans);
 
-    let totals = Line::from(vec![
+    let mut totals_spans = vec![
         stat(th, "turns", t.turns.to_string()),
         stat(th, "total", compact(t.total_tokens)),
-        stat(th, "in", compact(t.input)),
-        stat(th, "out", compact(t.output)),
-        stat(
+    ];
+    if !class.is_narrow() {
+        totals_spans.push(stat(th, "in", compact(t.input)));
+        totals_spans.push(stat(th, "out", compact(t.output)));
+    }
+    if class.is_wide() {
+        totals_spans.push(stat(
             th,
             "cache r/w",
             format!("{}/{}", compact(t.cache_read), compact(t.cache_write)),
-        ),
-        Span::styled(
-            format!(" {} ", app.currency.format(t.cost_usd)),
-            Style::default()
-                .fg(th.bg)
-                .bg(th.success)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]);
+        ));
+    }
+    totals_spans.push(Span::styled(
+        format!(" {} ", app.currency.format(t.cost_usd)),
+        Style::default()
+            .fg(th.bg)
+            .bg(th.success)
+            .add_modifier(Modifier::BOLD),
+    ));
+    let totals = Line::from(totals_spans);
 
     let block = Block::default()
         .borders(Borders::ALL)

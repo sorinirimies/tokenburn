@@ -1,18 +1,28 @@
 //! The Elm `view` function.
 
-use iced::widget::{column, container, text};
+use iced::widget::{column, container, responsive, scrollable, text};
 use iced::{Element, Length};
 
 use crate::features::{projects, report};
 use crate::message::Message;
 use crate::state::{TokenBurn, View};
 use crate::widgets::{header, summary_cards};
+use tokenburn_core::LayoutClass;
 
 impl TokenBurn {
+    /// The whole window. Responsive: it re-lays itself out from the real window width
+    /// (see [`LayoutClass`]): wide, medium (stacked charts, no cache columns) or
+    /// narrow (wrapped controls, only the essential columns).
     pub fn view(&self) -> Element<'_, Message> {
+        responsive(move |size| self.view_for(LayoutClass::from_px(size.width))).into()
+    }
+
+    /// The window at a given layout class. Separate from [`Self::view`] so tests can
+    /// build every layout directly.
+    pub fn view_for(&self, layout: LayoutClass) -> Element<'_, Message> {
         let body = match self.view {
-            View::Report => report::view::view(self),
-            View::Projects => projects::view::view(self),
+            View::Report => report::view::view(self, layout),
+            View::Projects => projects::view::view(self, layout),
         };
 
         let status: Element<'_, Message> = if let Some(e) = &self.error_message {
@@ -26,8 +36,21 @@ impl TokenBurn {
                 .into()
         };
 
-        container(column![header::view(self), summary_cards::view(self), body, status].spacing(12))
-            .padding(16)
+        let spacing = if layout.is_narrow() { 8 } else { 12 };
+        let padding = if layout.is_narrow() { 10 } else { 16 };
+        let cards = summary_cards::view(self, layout);
+        // Wide: the cards stay put and only the table scrolls. Otherwise the cards
+        // would eat most of a short window, so the whole page scrolls (the header
+        // and the status line stay).
+        let content: Element<'_, Message> = if layout.is_wide() {
+            column![cards, body].spacing(spacing).into()
+        } else {
+            scrollable(column![cards, body].spacing(spacing))
+                .height(Length::Fill)
+                .into()
+        };
+        container(column![header::view(self, layout), content, status].spacing(spacing))
+            .padding(padding)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
@@ -37,7 +60,7 @@ impl TokenBurn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokenburn_core::{Collected, Row, Tool};
+    use tokenburn_core::{Collected, LayoutClass, Row, Tool};
 
     fn row(tool: Tool, project: &str, ts: &str, tokens: u64) -> Row {
         Row {
@@ -51,6 +74,15 @@ mod tests {
             cache_write: 1,
             cost: if tool == Tool::Pi { 0.5 } else { 0.0 },
         }
+    }
+
+    /// Build the window at every layout class (the closure inside `view()` only runs
+    /// with a real window width, so tests call `view_for` directly).
+    fn build_all(app: &TokenBurn) {
+        for layout in [LayoutClass::Wide, LayoutClass::Medium, LayoutClass::Narrow] {
+            let _ = app.view_for(layout);
+        }
+        let _ = app.view(); // the responsive wrapper itself
     }
 
     fn loaded() -> TokenBurn {
@@ -71,30 +103,30 @@ mod tests {
 
     #[test]
     fn the_report_view_builds_with_and_without_data() {
-        let _ = TokenBurn::new().view();
-        let _ = loaded().view();
+        build_all(&TokenBurn::new());
+        build_all(&loaded());
     }
 
     #[test]
     fn the_projects_view_builds() {
         let mut app = loaded();
         app.view = View::Projects;
-        let _ = app.view();
+        build_all(&app);
         let mut empty = TokenBurn::new();
         empty.view = View::Projects;
-        let _ = empty.view();
+        build_all(&empty);
     }
 
     #[test]
     fn every_status_line_variant_builds() {
         let mut app = loaded();
         app.is_loading = true;
-        let _ = app.view();
+        build_all(&app);
         app.is_loading = false;
         app.warnings = vec!["codex: unreadable".into()];
-        let _ = app.view();
+        build_all(&app);
         app.error_message = Some("boom".into());
-        let _ = app.view();
+        build_all(&app);
     }
 
     #[test]
@@ -104,7 +136,7 @@ mod tests {
             app.chart_metric = metric;
             for theme in 0..tokenburn_core::THEME_COUNT {
                 app.set_theme(theme);
-                let _ = app.view();
+                build_all(&app);
             }
         }
     }
@@ -116,7 +148,7 @@ mod tests {
         app.tick = u64::MAX;
         let _ = app.update(Message::AnimationTick);
         assert_eq!(app.tick, 0);
-        let _ = app.view();
+        build_all(&app);
     }
 
     #[test]
@@ -156,7 +188,7 @@ mod tests {
             .report
             .iter()
             .all(|r| r.bucket.as_deref() == Some(label.as_str()) || r.bucket.is_none()));
-        let _ = app.view(); // the "Showing …" chips build
+        build_all(&app); // the "Showing …" chips build
         let _ = app.update(Message::BucketClicked(label));
         assert!(app.selection.is_empty());
         assert_eq!(app.total(), all);
@@ -169,7 +201,7 @@ mod tests {
         let _ = app.update(Message::SliceClicked(key.clone()));
         assert_eq!(app.selection.project.as_deref(), Some(key.as_str()));
         assert!(app.total().turns < 3);
-        let _ = app.view();
+        build_all(&app);
         let _ = app.update(Message::ClearSelection);
         assert!(app.selection.is_empty());
         assert_eq!(app.total().turns, 3);
@@ -269,10 +301,10 @@ mod tests {
             app.set_currency(index);
             for metric in tokenburn_core::Metric::ALL {
                 app.chart_metric = metric;
-                let _ = app.view();
+                build_all(&app);
             }
             app.view = View::Projects;
-            let _ = app.view();
+            build_all(&app);
             app.view = View::Report;
         }
     }
@@ -284,5 +316,37 @@ mod tests {
         app.set_currency(tokenburn_core::features::currency::index_of("EUR"));
         assert_eq!(app.currency.per_usd, 0.5);
         assert!(!app.currency.is_approximate());
+    }
+
+    #[test]
+    fn every_layout_builds_with_data_without_data_and_with_a_selection() {
+        let mut app = loaded();
+        let key = app.pie.slices[0].key.clone().unwrap();
+        for view in [View::Report, View::Projects] {
+            for selected in [false, true] {
+                app.view = view;
+                if selected {
+                    let _ = app.update(Message::SliceClicked(key.clone()));
+                } else {
+                    app.clear_selection();
+                }
+                build_all(&app);
+            }
+        }
+        // Loading, an error and a warning, at every width.
+        app.is_loading = true;
+        build_all(&app);
+        app.error_message = Some("boom".into());
+        build_all(&app);
+        // A brand-new window with nothing loaded.
+        build_all(&TokenBurn::new());
+    }
+
+    #[test]
+    fn the_layout_follows_the_shared_breakpoints() {
+        use tokenburn_core::utils::layout::{MEDIUM_PX, WIDE_PX};
+        assert_eq!(LayoutClass::from_px(WIDE_PX), LayoutClass::Wide);
+        assert_eq!(LayoutClass::from_px(WIDE_PX - 1.0), LayoutClass::Medium);
+        assert_eq!(LayoutClass::from_px(MEDIUM_PX - 1.0), LayoutClass::Narrow);
     }
 }

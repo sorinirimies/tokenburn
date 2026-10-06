@@ -96,6 +96,9 @@ pub struct XLabel {
     pub x: String,
     pub y: String,
     pub text: String,
+    /// Every other label: narrow screens hide these (and use a bigger font) so the
+    /// rest stay readable when the chart is scaled down.
+    pub alt: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -196,8 +199,9 @@ pub fn bars(
 
     // X labels, thinned so they never overlap.
     let every = ((72.0 / slot).ceil() as usize).max(1);
-    for i in (0..n).step_by(every) {
+    for (k, i) in (0..n).step_by(every).enumerate() {
         out.x_labels.push(XLabel {
+            alt: k % 2 == 1,
             x: f(LEFT + slot * (i as f32 + 0.5)),
             y: f(TOP + plot_h + 16.0),
             text: short_label(&series.labels[i]),

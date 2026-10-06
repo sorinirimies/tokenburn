@@ -6,6 +6,36 @@ use ratatui::Frame;
 use crate::app::{App, View};
 use crate::features::{chart, filter, options, pie, projects, report, theme};
 use crate::widgets::{header, status_bar};
+use tokenburn_core::LayoutClass;
+
+/// Smallest terminal the UI draws in; below it a "too small" notice is shown.
+pub const MIN_WIDTH: u16 = 40;
+pub const MIN_HEIGHT: u16 = 10;
+
+/// Rows given to the charts under the table on a terminal `height` rows tall: the
+/// full 13 when there is room, a compact 9, none on short terminals (the table
+/// matters more than the picture).
+pub fn chart_height(height: u16) -> u16 {
+    match height {
+        28.. => 13,
+        22..=27 => 9,
+        _ => 0,
+    }
+}
+
+fn render_too_small(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
+    let msg = format!(
+        "TokenBurn needs at least {MIN_WIDTH}×{MIN_HEIGHT}\nnow {}×{}",
+        area.width, area.height
+    );
+    frame.render_widget(
+        ratatui::widgets::Paragraph::new(msg)
+            .alignment(ratatui::layout::Alignment::Center)
+            .wrap(ratatui::widgets::Wrap { trim: true })
+            .style(ratatui::style::Style::default().fg(app.theme.warning)),
+        area,
+    );
+}
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     // Paint the whole screen first so the theme background shows everywhere.
@@ -18,6 +48,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         frame.area(),
     );
 
+    let area = frame.area();
+    if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
+        render_too_small(app, frame, area);
+        return;
+    }
+    let class = LayoutClass::from_cols(area.width);
+
     let [head, body, foot] = Layout::vertical([
         Constraint::Length(4),
         Constraint::Min(5),
@@ -29,11 +66,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     match app.view {
         View::Report => {
-            let show_chart = app.options.show_chart;
-            let show_pie = app.options.show_pie;
+            // What fits: the charts need height (they vanish on short terminals and
+            // shrink on small ones) and the pie needs width (it vanishes when narrow).
+            let chart_rows = chart_height(area.height);
+            let show_chart = app.options.show_chart && chart_rows > 0;
+            let show_pie = app.options.show_pie && chart_rows > 0 && !class.is_narrow();
             if show_chart || show_pie {
                 let [table_area, bottom] =
-                    Layout::vertical([Constraint::Min(5), Constraint::Length(13)]).areas(body);
+                    Layout::vertical([Constraint::Min(5), Constraint::Length(chart_rows)])
+                        .areas(body);
                 report::view::render(app, frame, table_area);
                 match (show_chart, show_pie) {
                     (true, true) => {
@@ -304,5 +345,198 @@ mod tests {
         let mut app = app_with_rows();
         let out = draw(&mut app);
         assert!(out.contains("C currency"), "{out}");
+    }
+
+    fn draw_at(app: &mut App, w: u16, h: u16) -> String {
+        let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+        term.draw(|f| render(app, f)).unwrap();
+        term.backend().to_string()
+    }
+
+    fn day_app() -> App {
+        let mut app = app_with_rows();
+        app.query.bucket = tokenburn_core::Bucket::Day;
+        app.query.window = tokenburn_core::Window::All;
+        app.rebuild();
+        app
+    }
+
+    #[test]
+    fn wide_terminals_show_every_column_and_both_charts() {
+        let mut app = day_app();
+        let out = draw_at(&mut app, 160, 40);
+        for col in [
+            "turns",
+            "input",
+            "output",
+            "cache_read",
+            "cache_write",
+            "total",
+            "cost",
+        ] {
+            assert!(out.contains(col), "{col} missing:\n{out}");
+        }
+        assert!(
+            out.contains("cache r/w"),
+            "the header shows the cache totals"
+        );
+        assert!(out.contains("theme:") && out.contains("cur:"));
+        assert!(out.contains("Share by project") && out.contains("Total tokens"));
+    }
+
+    #[test]
+    fn medium_terminals_drop_the_cache_columns_but_keep_the_charts() {
+        let mut app = day_app();
+        let out = draw_at(&mut app, 90, 30);
+        assert!(out.contains("input") && out.contains("output") && out.contains("total"));
+        assert!(
+            !out.contains("cache_read") && !out.contains("cache_write"),
+            "{out}"
+        );
+        assert!(
+            !out.contains("cache r/w"),
+            "no cache totals in the header either"
+        );
+        assert!(out.contains("Share by project") && out.contains("Total tokens"));
+    }
+
+    #[test]
+    fn narrow_terminals_keep_only_the_essentials() {
+        let mut app = day_app();
+        let out = draw_at(&mut app, 60, 30);
+        assert!(out.contains("total") && out.contains("cost") && out.contains("tool"));
+        // (The header keeps "turns" in its totals; look at the table's own header row.)
+        let table_head = out.lines().find(|l| l.contains("bucket")).unwrap();
+        for gone in ["turns", "input", "output", "cache_"] {
+            assert!(
+                !table_head.contains(gone),
+                "{gone} should be hidden when narrow:\n{out}"
+            );
+        }
+        assert!(!out.contains("input") && !out.contains("cache_"));
+        assert!(!out.contains("theme:"), "the theme chip makes room");
+        assert!(
+            out.contains("cur:USD"),
+            "the currency stays: it says what the cost means"
+        );
+        assert!(!out.contains("Share by project"), "no pie when narrow");
+        assert!(out.contains("Total tokens"), "the bar chart stays");
+        assert!(out.contains("C cur"), "short hints");
+        assert!(
+            !out.contains("auto-refresh"),
+            "no room for the status message"
+        );
+    }
+
+    #[test]
+    fn the_classic_80_by_24_is_usable() {
+        let mut app = day_app();
+        let out = draw_at(&mut app, 80, 24);
+        assert!(out.contains("TokenBurn") && out.contains("total") && out.contains("cost"));
+        assert!(out.contains("2026-05-01"), "the table has rows:\n{out}");
+    }
+
+    #[test]
+    fn short_terminals_trade_the_charts_for_table_rows() {
+        let mut app = day_app();
+        assert_eq!(chart_height(40), 13);
+        assert_eq!(chart_height(28), 13);
+        assert_eq!(chart_height(24), 9);
+        assert_eq!(chart_height(21), 0);
+        let out = draw_at(&mut app, 120, 18);
+        assert!(!out.contains("Total tokens") && !out.contains("Share by project"));
+        assert!(out.contains("2026-05-01"));
+    }
+
+    #[test]
+    fn a_terminal_that_is_too_small_says_so_instead_of_garbling() {
+        let mut app = day_app();
+        let out = draw_at(&mut app, 30, 8);
+        assert!(out.contains("needs at least 40"), "{out}");
+        assert!(out.contains("30×8"));
+        // And it recovers when the window grows again.
+        assert!(draw_at(&mut app, 100, 30).contains("TokenBurn"));
+    }
+
+    #[test]
+    fn no_size_panics_with_or_without_popups_open() {
+        let mut app = day_app();
+        for popup in 0..6 {
+            app.options.open = popup == 1;
+            app.theme_picker_open = popup == 2;
+            app.currency_picker_open = popup == 3;
+            app.tool_filter_open = popup == 4;
+            app.filter_editing = popup == 5;
+            for (w, h) in [
+                (1, 1),
+                (10, 5),
+                (39, 9),
+                (40, 10),
+                (41, 11),
+                (69, 20),
+                (70, 24),
+                (79, 24),
+                (109, 30),
+                (110, 30),
+                (200, 60),
+                (300, 100),
+                (60, 200),
+            ] {
+                let _ = draw_at(&mut app, w, h);
+            }
+        }
+        // The other view and an empty state, too.
+        app.options.open = false;
+        app.toggle_view();
+        for (w, h) in [(40, 10), (65, 20), (150, 50)] {
+            let _ = draw_at(&mut app, w, h);
+        }
+        let mut empty = App::new();
+        for (w, h) in [(40, 10), (65, 20), (150, 50)] {
+            let _ = draw_at(&mut empty, w, h);
+        }
+    }
+
+    #[test]
+    fn the_terminal_classes_match_the_shared_breakpoints() {
+        assert_eq!(LayoutClass::from_cols(160), LayoutClass::Wide);
+        assert_eq!(LayoutClass::from_cols(90), LayoutClass::Medium);
+        assert_eq!(LayoutClass::from_cols(60), LayoutClass::Narrow);
+        const { assert!(MIN_WIDTH < tokenburn_core::utils::layout::MEDIUM_COLS) };
+    }
+
+    #[test]
+    fn the_projects_view_drops_the_turns_column_when_narrow() {
+        let mut app = day_app();
+        app.toggle_view();
+        let wide = draw_at(&mut app, 120, 30);
+        assert!(wide.contains("turns"));
+        let narrow = draw_at(&mut app, 60, 30);
+        let head = narrow.lines().find(|l| l.contains("tool:project")).unwrap();
+        assert!(
+            !head.contains("turns") && head.contains("total") && head.contains("cost"),
+            "{narrow}"
+        );
+    }
+
+    #[test]
+    fn the_narrow_header_fits_even_on_a_very_narrow_terminal() {
+        let mut app = day_app();
+        // ~55 columns: tool, view, window and currency all fit on the title line.
+        let out = draw_at(&mut app, 55, 24);
+        let title = out.lines().find(|l| l.contains("TokenBurn")).unwrap();
+        for part in ["tool:all", "view:daily", "win:all", "cur:USD"] {
+            assert!(
+                title.contains(part),
+                "{part} cut off at 55 columns: {title}"
+            );
+        }
+        // At 45 columns the window chip makes room; the currency still shows.
+        let tiny = draw_at(&mut app, 45, 24);
+        let title = tiny.lines().find(|l| l.contains("TokenBurn")).unwrap();
+        assert!(
+            title.contains("cur:USD") && !title.contains("win:"),
+            "{title}"
+        );
     }
 }

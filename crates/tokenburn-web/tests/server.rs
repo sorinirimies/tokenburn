@@ -232,3 +232,24 @@ async fn there_is_no_manual_refresh_control() {
     let html = get(addr, &format!("/?{ALL_DAILY}")).await.body;
     assert!(!html.contains(">Refresh<"));
 }
+
+#[tokio::test]
+async fn tables_scroll_sideways_and_secondary_columns_are_tagged_for_the_media_queries() {
+    let addr = start().await;
+    let html = get(addr, &format!("/?{ALL_DAILY}")).await.body;
+    assert!(
+        html.contains("class=\"table-wrap\""),
+        "tables are wrapped so they never overflow the page"
+    );
+    // Cache columns drop out on medium screens, the rest on narrow ones.
+    assert!(html.contains("<th class=\"opt1\">cache read</th>"));
+    assert!(html.contains("<th class=\"opt2\">input</th>"));
+    // The essentials are never tagged.
+    assert!(html.contains("<th>total</th>") && html.contains("<th>cost</th>"));
+    assert!(
+        html.contains("name=\"viewport\""),
+        "the viewport meta makes the media queries work on phones"
+    );
+    // Every other x label is marked so narrow screens can thin them out.
+    assert!(html.contains("class=\"axis alt\"") || html.matches("class=\"axis\"").count() > 0);
+}

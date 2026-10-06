@@ -36,6 +36,7 @@ pub use features::theme::{
     find_theme, theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES,
 };
 pub use features::usage::{Row, Summary, Tool};
+pub use utils::layout::LayoutClass;
 
 use chrono::{DateTime, Utc};
 

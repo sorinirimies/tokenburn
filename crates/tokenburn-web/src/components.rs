@@ -103,19 +103,19 @@ pub async fn report_table(report: &[ReportRow], currency: Currency) -> Result<im
         .unwrap_or(0);
 
     Ok(view! {
-        <table>
+        <div class="table-wrap"><table>
             <thead>
                 <tr>
                     if bucketed { <th>"bucket"</th> }
                     <th class="left">"tool"</th>
-                    <th>"turns"</th>
-                    <th>"input"</th>
-                    <th>"output"</th>
-                    <th>"cache read"</th>
-                    <th>"cache write"</th>
+                    <th class="opt2">"turns"</th>
+                    <th class="opt2">"input"</th>
+                    <th class="opt2">"output"</th>
+                    <th class="opt1">"cache read"</th>
+                    <th class="opt1">"cache write"</th>
                     <th>"total"</th>
                     <th>"cost"</th>
-                    <th class="left">"share"</th>
+                    <th class="left opt2">"share"</th>
                 </tr>
             </thead>
             <tbody>
@@ -123,14 +123,14 @@ pub async fn report_table(report: &[ReportRow], currency: Currency) -> Result<im
                     <tr class=(if r.tool == "TOTAL" { "total" } else { "" })>
                         if bucketed { <td>(r.bucket.clone().unwrap_or_default())</td> }
                         <td class="left">(r.tool.clone())</td>
-                        <td>(thousands(r.summary.turns))</td>
-                        <td>(thousands(r.summary.input))</td>
-                        <td>(thousands(r.summary.output))</td>
-                        <td>(thousands(r.summary.cache_read))</td>
-                        <td>(thousands(r.summary.cache_write))</td>
+                        <td class="opt2">(thousands(r.summary.turns))</td>
+                        <td class="opt2">(thousands(r.summary.input))</td>
+                        <td class="opt2">(thousands(r.summary.output))</td>
+                        <td class="opt1">(thousands(r.summary.cache_read))</td>
+                        <td class="opt1">(thousands(r.summary.cache_write))</td>
                         <td>(thousands(r.summary.total_tokens))</td>
                         <td class="cost">(currency.format(r.summary.cost_usd))</td>
-                        <td class="left">
+                        <td class="left opt2">
                             if r.tool != "TOTAL" {
                                 <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent(r.summary.total_tokens, max), theme::series_var(&r.tool)))></span></span>
                             }
@@ -138,7 +138,7 @@ pub async fn report_table(report: &[ReportRow], currency: Currency) -> Result<im
                     </tr>
                 }
             </tbody>
-        </table>
+        </table></div>
     })
 }
 
@@ -155,30 +155,30 @@ pub async fn projects_table(
         .unwrap_or(0);
 
     Ok(view! {
-        <table>
+        <div class="table-wrap"><table>
             <thead>
                 <tr>
                     <th class="left">"tool:project/model"</th>
-                    <th>"turns"</th>
+                    <th class="opt2">"turns"</th>
                     <th>"total tokens"</th>
                     <th>"cost"</th>
-                    <th class="left">"share"</th>
+                    <th class="left opt2">"share"</th>
                 </tr>
             </thead>
             <tbody>
                 for (name, s) in projects {
                     <tr>
                         <td class="left">(name.clone())</td>
-                        <td>(thousands(s.turns))</td>
+                        <td class="opt2">(thousands(s.turns))</td>
                         <td>(thousands(s.total_tokens))</td>
                         <td class="cost">(currency.format(s.cost_usd))</td>
-                        <td class="left">
+                        <td class="left opt2">
                             <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent((s.cost_usd * 10_000.0) as u64, max), theme::series_var(name.split(':').next().unwrap_or(""))))></span></span>
                         </td>
                     </tr>
                 }
             </tbody>
-        </table>
+        </table></div>
     })
 }
 
@@ -428,7 +428,7 @@ pub async fn bars_chart(
                 }
             }
             for l in &bars.x_labels {
-                <text class="axis" x=(l.x.clone()) y=(l.y.clone()) text-anchor="middle">(l.text.clone())</text>
+                <text class=(if l.alt { "axis alt" } else { "axis" }) x=(l.x.clone()) y=(l.y.clone()) text-anchor="middle">(l.text.clone())</text>
             }
         </svg>
     })

@@ -127,6 +127,24 @@ Per-platform locations and the full list of overrides are in [Platform support](
 
 Changing the tool, view or window drops the selection.
 
+**Responsive.** All three front-ends adapt to the space they get, on the same three breakpoints — **wide** (≥ 980 px, ≥ 110 terminal columns), **medium** (≥ 700 px, ≥ 70 columns) and **narrow** — so a phone-sized browser, a half-screen window and an 80×24 terminal are all comfortable:
+
+| | Wide | Medium | Narrow |
+|---|---|---|---|
+| **Layout** | everything: all columns, charts side by side | the cache columns drop out, charts stack | compact header and controls (they wrap), only the essential columns, whole page scrolls |
+| **Web** | <img src="examples/vhs/generated/web-wide.png" width="360"> | <img src="examples/vhs/generated/web-medium.png" width="230"> | <img src="examples/vhs/generated/web-narrow.png" width="130"> |
+| **GUI** | <img src="examples/vhs/generated/gui-wide.png" width="360"> | <img src="examples/vhs/generated/gui-medium.png" width="230"> | <img src="examples/vhs/generated/gui-narrow.png" width="130"> |
+
+The terminal UI follows the terminal size live (it re-lays itself out as you resize):
+
+| Medium (~95 columns) | Narrow (~65 columns) |
+|---|---|
+| <img src="examples/vhs/generated/medium.gif" width="440"> | <img src="examples/vhs/generated/narrow.gif" width="300"> |
+
+- **TUI:** the cache columns go at < 110 columns; below 70 only `total` and `cost` stay, the pie and the theme chip make room (the currency stays), and the hints shrink. Charts shrink on short terminals and vanish below 22 rows so the table keeps the space; under 40×10 you get a "terminal too small" notice instead of a garbled screen.
+- **GUI:** try it with `TOKENBURN_GUI_SIZE=400x820 tokenburn-gui` (the window can be as small as 320×420).
+- **Web:** plain CSS media queries on the same breakpoints; tables scroll sideways instead of overflowing, and the chart text gets larger and sparser when it is scaled down.
+
 **43 themes**, dark and light — Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, Kanagawa, Rosé Pine, Everforest and more — shared by every front-end, including one colour per tool in the charts. Pick one with `--theme "Tokyo Night"` (`--list-themes` lists them), or in the UI; the choice is remembered in `settings.json` (`~/.config/tokenburn/`, `~/Library/Application Support/tokenburn/`, `%APPDATA%\tokenburn\`; override with `TOKENBURN_CONFIG_DIR`), so all front-ends start with the same theme.
 
 ![Theme picker](examples/vhs/generated/themes.gif)
@@ -259,7 +277,7 @@ The GIFs above live in [`examples/vhs/generated/`](examples/vhs/generated) and a
 ```sh
 just vhs-tui         # TUI + CLI tapes (examples/vhs/*.tape) — needs vhs, ttyd, ffmpeg
 just screenshots     # GUI (macOS) + web screenshots and GIFs — needs ffmpeg, node, a Chromium browser
-just vhs-tape filter # one tape
+just vhs-tape filter # one tape (narrow / medium: the responsive terminal demos)
 ```
 
 ## License
