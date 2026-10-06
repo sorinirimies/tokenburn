@@ -56,19 +56,36 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      # Record what ships BEFORE updating, to compare with afterwards (see "Check for changes").
+      - name: Snapshot what ships (before)
+        run: |
+          T="${RUNNER_TEMP:-/tmp}"
+          cargo tree --workspace --all-features --edges normal,build --target all --prefix none --format '{p}' | sed 's/ (\/.*//' | sort -u > "$T/shipped-before.txt"
+          wc -l < "$T/shipped-before.txt"
+
       - name: Run cargo update
         run: cargo update
 
+      # Only a change to something that SHIPS counts. `cargo update` also moves
+      # dev/test-only crates (and nothing a user ever runs); releasing for those would
+      # publish identical binaries under a new version. "Ships" = the normal + build
+      # dependency graph of every workspace member, all features, all targets.
       - name: Check for changes
         id: check
         run: |
+          T="${RUNNER_TEMP:-/tmp}"
+          cargo tree --workspace --all-features --edges normal,build --target all --prefix none --format '{p}' | sed 's/ (\/.*//' | sort -u > "$T/shipped-after.txt"
           if git diff --quiet -- Cargo.lock; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No dependency changes detected."
+          elif diff -q "$T/shipped-before.txt" "$T/shipped-after.txt" >/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.lock changed, but only in dev/test-only dependencies: nothing that ships. Not releasing."
+            git diff -U0 -- Cargo.lock | grep -E '^[-+](name|version) ' || true
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Dependency changes detected:"
-            git diff -U0 -- Cargo.lock | grep -E '^[-+](name|version) ' || true
+            echo "Dependency changes that ship:"
+            diff "$T/shipped-before.txt" "$T/shipped-after.txt" | grep -E '^[<>]' || true
           fi
 
       - name: Check formatting
