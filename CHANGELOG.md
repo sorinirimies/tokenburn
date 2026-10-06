@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.1.6](https://github.com/sorinirimies/tokenburn/compare/v0.1.5...v0.1.6) — 2026-10-06
+
+### 📚 Documentation
+
+- Prebuilt downloads are on GitHub only (Gitea is a private mirror) ([`0358907`](https://github.com/sorinirimies/tokenburn/commit/0358907142167321d70144f8ba8a394ace59aab2))
+
 ## [0.1.5](https://github.com/sorinirimies/tokenburn/compare/v0.1.4...v0.1.5) — 2026-10-06
 
 ### ✨ Features
