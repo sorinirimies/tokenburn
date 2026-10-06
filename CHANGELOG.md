@@ -4,6 +4,18 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.1.5](https://github.com/sorinirimies/tokenburn/compare/v0.1.4...v0.1.5) — 2026-10-06
+
+### ✨ Features
+
+- Responsive TUI, GUI and web on shared wide/medium/narrow breakpoints ([`22345d9`](https://github.com/sorinirimies/tokenburn/commit/22345d9e3ecadb136d3e901d43708544ca0d233f))
+- Currency selector in the CLI, TUI, GUI and web (41 currencies incl. RON, RUB; costs in cents; user-set rates in settings.json) ([`eb972ca`](https://github.com/sorinirimies/tokenburn/commit/eb972ca7dc7ffd21d9283cbb80f7649325894203))
+- Show costs with one decimal; share all number formatting in core::utils::fmt ([`7e4af5f`](https://github.com/sorinirimies/tokenburn/commit/7e4af5f49ebc9d25490af689c0af4e5b0b9d72a7))
+
+### 📚 Documentation
+
+- Say cross-platform up front; drop the platform support section ([`f3fc678`](https://github.com/sorinirimies/tokenburn/commit/f3fc678b7fcf3cce4d78e65f01ed74b64add288b))
+
 ## [0.1.4](https://github.com/sorinirimies/tokenburn/compare/v0.1.3...v0.1.4) — 2026-10-06
 
 ### 📚 Documentation
