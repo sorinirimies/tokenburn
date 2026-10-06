@@ -161,7 +161,7 @@ TokenBurn never goes online, so the exchange rates are **fixed estimates** (mark
 
 ## Install
 
-### Prebuilt (GitHub / Gitea releases)
+### Prebuilt (GitHub releases)
 
 | Platform | Artifacts |
 |----------|-----------|
