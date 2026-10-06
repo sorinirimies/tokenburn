@@ -10,6 +10,7 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
+use tokenburn_core::utils::fmt::percent;
 use tokenburn_core::{
     Metric, Pie, Selection, TimeSeries, Tool, axis_label, nice_max, short_label, slice_angles,
 };
@@ -267,7 +268,7 @@ pub fn donut(pie: &Pie, selected: Option<&str>) -> Donut {
         let s = &pie.slices[i];
         let mid = (a + b) / 2.0 - FRAC_PI_2;
         let is_sel = s.key.is_some() && s.key.as_deref() == selected;
-        let pct = s.value / total * 100.0;
+        let pct = percent(s.value / total);
         out.slices.push(SliceGeom {
             index: i,
             label: s.label.clone(),
@@ -275,7 +276,7 @@ pub fn donut(pie: &Pie, selected: Option<&str>) -> Donut {
             path: ring_path(100.0, 100.0, R_OUT, R_IN, a, b),
             var: format!("var(--s{})", i % 8),
             title: format!(
-                "{}\n{} ({pct:.0}%)\n{}",
+                "{}\n{} ({pct})\n{}",
                 s.label,
                 axis_label(pie.metric, s.value),
                 match (&s.key, is_sel) {
@@ -284,7 +285,7 @@ pub fn donut(pie: &Pie, selected: Option<&str>) -> Donut {
                     _ => "click to select",
                 }
             ),
-            pct: format!("{pct:.0}%"),
+            pct,
             selected: is_sel,
             dx: f(POP * mid.cos()),
             dy: f(POP * mid.sin()),
@@ -448,7 +449,7 @@ mod tests {
         };
         let d = donut(&pie, None);
         assert_eq!(d.slices.len(), 2);
-        assert_eq!(d.total_label, "$40.00");
+        assert_eq!(d.total_label, "$40.0");
         assert_eq!(d.slices[0].pct, "75%");
         assert_eq!(d.slices[0].var, "var(--s0)");
         assert_eq!(d.slices[1].var, "var(--s1)");

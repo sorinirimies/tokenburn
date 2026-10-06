@@ -27,9 +27,62 @@ pub fn compact(n: u64) -> String {
     }
 }
 
-/// `1.5` → `"$1.5000"`.
+/// `1.5` → `"$1.5"`: one decimal is plenty for what these numbers are used for
+/// (the JSON output keeps the full precision).
 pub fn usd(v: f64) -> String {
-    format!("${v:.4}")
+    format!("${v:.1}")
+}
+
+/// A cost on a chart axis or donut: `$250`, `$12.5`, and two decimals below a dollar
+/// (ticks like `$0.25` would all collapse to `$0.3` with one).
+pub fn usd_axis(v: f64) -> String {
+    if v >= 100.0 {
+        format!("${v:.0}")
+    } else if v >= 1.0 {
+        usd(v)
+    } else {
+        format!("${v:.2}")
+    }
+}
+
+/// A share as a whole percentage: `0.486` of the total → `"49%"`.
+pub fn percent(fraction: f64) -> String {
+    format!("{:.0}%", fraction * 100.0)
+}
+
+/// Tokens for an axis: `20M`, `2.5M`, `15k`, `800` — no trailing zeros.
+pub fn axis_tokens(v: f64) -> String {
+    let (scaled, unit) = match v {
+        v if v >= 1e9 => (v / 1e9, "B"),
+        v if v >= 1e6 => (v / 1e6, "M"),
+        v if v >= 1e3 => (v / 1e3, "k"),
+        v => (v, ""),
+    };
+    let s = format!("{scaled:.1}");
+    format!("{}{unit}", s.strip_suffix(".0").unwrap_or(&s))
+}
+
+/// A short x-axis label: drop the year (`2026-05-10` → `05-10`, `2026-05-10 13:00` → `13:00`).
+pub fn short_label(label: &str) -> String {
+    match label.len() {
+        16 => label[11..].to_string(),
+        10 => label[5..].to_string(),
+        _ => label.to_string(),
+    }
+}
+
+/// `pi:Users-me-Projects-tokenburn` → `pi:tokenburn` (last path-ish segment).
+pub fn short_name(full: &str) -> String {
+    match full.split_once(':') {
+        Some((tool, rest)) => {
+            let last = rest
+                .rsplit(['-', '/', '\\'])
+                .find(|s| !s.is_empty())
+                .unwrap_or(rest);
+            format!("{tool}:{last}")
+        }
+        None => full.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -54,6 +107,50 @@ mod tests {
 
     #[test]
     fn usd_four_decimals() {
-        assert_eq!(usd(1.5), "$1.5000");
+        assert_eq!(usd(1.5), "$1.5");
+        assert_eq!(usd(0.0), "$0.0");
+        assert_eq!(usd(12.34), "$12.3");
+        assert_eq!(usd(165.9051), "$165.9");
+        assert_eq!(usd(1234.56), "$1234.6");
+    }
+
+    #[test]
+    fn axis_costs_get_more_decimals_only_when_they_need_them() {
+        assert_eq!(usd_axis(250.0), "$250");
+        assert_eq!(usd_axis(12.5), "$12.5");
+        assert_eq!(usd_axis(0.25), "$0.25");
+        assert_eq!(usd_axis(0.0), "$0.00");
+    }
+
+    #[test]
+    fn percentages_are_whole_numbers() {
+        assert_eq!(percent(0.486), "49%");
+        assert_eq!(percent(1.0), "100%");
+        assert_eq!(percent(0.0), "0%");
+        assert_eq!(percent(0.004), "0%");
+    }
+
+    #[test]
+    fn axis_tokens_have_no_trailing_zeros() {
+        assert_eq!(axis_tokens(20_000_000.0), "20M");
+        assert_eq!(axis_tokens(2_500_000.0), "2.5M");
+        assert_eq!(axis_tokens(15_000.0), "15k");
+        assert_eq!(axis_tokens(800.0), "800");
+        assert_eq!(axis_tokens(0.0), "0");
+        assert_eq!(axis_tokens(3_000_000_000.0), "3B");
+    }
+
+    #[test]
+    fn x_labels_drop_the_year() {
+        assert_eq!(short_label("2026-05-10"), "05-10");
+        assert_eq!(short_label("2026-05-10 13:00"), "13:00");
+        assert_eq!(short_label("2026-05"), "2026-05");
+    }
+
+    #[test]
+    fn short_names_keep_the_tool_and_the_last_path_segment() {
+        assert_eq!(short_name("pi:Users-me-Projects-tokenburn"), "pi:tokenburn");
+        assert_eq!(short_name("zed:claude-sonnet"), "zed:sonnet");
+        assert_eq!(short_name("plain"), "plain");
     }
 }

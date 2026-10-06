@@ -15,6 +15,7 @@ use iced::{alignment, Color, Element, Length, Pixels, Point, Rectangle, Renderer
 use std::f32::consts::{FRAC_PI_2, TAU};
 use tokenburn_core::{Metric, Pie, TimeSeries, Tool};
 
+use tokenburn_core::utils::fmt::percent;
 use tokenburn_core::{axis_label, bucket_at, nice_max, short_label, slice_angles};
 
 use crate::message::Message;
@@ -522,9 +523,8 @@ impl canvas::Program<Message> for Donut {
                 Size::new(10.0, 10.0),
                 fade(c.series[i % 8], alpha),
             );
-            let pct = s.value / total * 100.0;
             frame.fill_text(Text {
-                content: format!("{}  {pct:.0}%", s.label),
+                content: format!("{}  {}", s.label, percent(s.value / total)),
                 position: Point::new(lx + 16.0, y + 2.0),
                 color: fade(c.text, alpha),
                 size: Pixels(12.0),

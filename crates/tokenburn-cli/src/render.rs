@@ -110,7 +110,7 @@ mod tests {
         let t = table(&[rr(None, "pi", 1234), rr(None, "TOTAL", 1234)]);
         assert!(t.starts_with("tool"));
         assert!(t.contains("1,234"));
-        assert!(t.contains("$1.5000"));
+        assert!(t.contains("$1.5"));
         assert!(!t.contains("bucket"));
     }
 

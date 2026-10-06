@@ -8,6 +8,8 @@ use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Timelike}
 
 use super::types::{Bucket, Query, Window};
 use crate::features::usage::{Row, Summary, Tool};
+use crate::utils::fmt::usd_axis;
+pub use crate::utils::fmt::{axis_tokens, short_label, short_name};
 
 /// What a chart measures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -227,33 +229,11 @@ pub fn nice_max(max: f64) -> f64 {
     nice * base
 }
 
-/// Axis label for a value: `1.5M` tokens or `$12.50`.
+/// Axis label for a value: `1.5M` tokens or `$12.5`.
 pub fn axis_label(metric: Metric, v: f64) -> String {
     match metric {
         Metric::Tokens => axis_tokens(v),
-        Metric::Cost if v >= 100.0 => format!("${v:.0}"),
-        Metric::Cost => format!("${v:.2}"),
-    }
-}
-
-/// Tokens for an axis: `20M`, `2.5M`, `15k`, `800` — no trailing zeros.
-pub fn axis_tokens(v: f64) -> String {
-    let (scaled, unit) = match v {
-        v if v >= 1e9 => (v / 1e9, "B"),
-        v if v >= 1e6 => (v / 1e6, "M"),
-        v if v >= 1e3 => (v / 1e3, "k"),
-        v => (v, ""),
-    };
-    let s = format!("{scaled:.1}");
-    format!("{}{unit}", s.strip_suffix(".0").unwrap_or(&s))
-}
-
-/// A short x-axis label: drop the year (`2026-05-10` → `05-10`, `2026-05-10 13:00` → `13:00`).
-pub fn short_label(label: &str) -> String {
-    match label.len() {
-        16 => label[11..].to_string(),
-        10 => label[5..].to_string(),
-        _ => label.to_string(),
+        Metric::Cost => usd_axis(v),
     }
 }
 
@@ -356,20 +336,6 @@ pub fn pie(projects: &[(String, Summary)], top_n: usize) -> Pie {
         });
     }
     Pie { metric, slices }
-}
-
-/// `pi:Users-me-Projects-tokenburn` → `pi:tokenburn` (last path-ish segment).
-pub fn short_name(full: &str) -> String {
-    match full.split_once(':') {
-        Some((tool, rest)) => {
-            let last = rest
-                .rsplit(['-', '/', '\\'])
-                .find(|s| !s.is_empty())
-                .unwrap_or(rest);
-            format!("{tool}:{last}")
-        }
-        None => full.to_string(),
-    }
 }
 
 /// `ts` as UTC from an RFC 3339 string.
@@ -545,14 +511,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_pie_and_short_names() {
-        assert!(pie(&[], 6).slices.is_empty());
-        assert_eq!(short_name("pi:Users-me-Projects-tokenburn"), "pi:tokenburn");
-        assert_eq!(short_name("zed:claude-sonnet"), "zed:sonnet");
-        assert_eq!(short_name("plain"), "plain");
-    }
-
-    #[test]
     fn nice_max_rounds_up_to_one_two_two_and_a_half_five_ten() {
         assert_eq!(nice_max(0.0), 1.0);
         assert_eq!(nice_max(f64::NAN), 1.0);
@@ -571,25 +529,9 @@ mod tests {
     #[test]
     fn axis_labels_use_compact_numbers_and_dollars() {
         assert_eq!(axis_label(Metric::Tokens, 1_500_000.0), "1.5M");
-        assert_eq!(axis_label(Metric::Cost, 12.5), "$12.50");
+        assert_eq!(axis_label(Metric::Cost, 12.5), "$12.5");
+        assert_eq!(axis_label(Metric::Cost, 0.25), "$0.25");
         assert_eq!(axis_label(Metric::Cost, 250.0), "$250");
-    }
-
-    #[test]
-    fn axis_tokens_have_no_trailing_zeros() {
-        assert_eq!(axis_tokens(20_000_000.0), "20M");
-        assert_eq!(axis_tokens(2_500_000.0), "2.5M");
-        assert_eq!(axis_tokens(15_000.0), "15k");
-        assert_eq!(axis_tokens(800.0), "800");
-        assert_eq!(axis_tokens(0.0), "0");
-        assert_eq!(axis_tokens(3_000_000_000.0), "3B");
-    }
-
-    #[test]
-    fn x_labels_drop_the_year() {
-        assert_eq!(short_label("2026-05-10"), "05-10");
-        assert_eq!(short_label("2026-05-10 13:00"), "13:00");
-        assert_eq!(short_label("2026-05"), "2026-05");
     }
 
     #[test]
@@ -618,5 +560,10 @@ mod tests {
         );
         assert!(slice_angles(&[]).is_empty());
         assert!(slice_angles(&[0.0, 0.0]).is_empty());
+    }
+
+    #[test]
+    fn an_empty_pie_has_no_slices() {
+        assert!(pie(&[], 6).slices.is_empty());
     }
 }

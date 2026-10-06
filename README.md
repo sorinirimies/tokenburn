@@ -97,7 +97,7 @@ tokenburn --json           # machine-readable
 | `opencode` | OpenCode | `~/.local/share/opencode/opencode.db` (`$OPENCODE_DATA_DIR`) | ✅ |
 | `amp` | Amp | `~/.local/share/amp/threads/*.json` (`$AMP_DATA_DIR`) | – |
 
-`all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.0000` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
+`all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.0` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
 
 > The Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp readers follow the formats documented by [ccusage](https://github.com/ryoppippi/ccusage) and are covered by fixture tests; pi and Zed were also checked against real logs. If one misreads your data, open an issue with a (redacted) log line.
 
