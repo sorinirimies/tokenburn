@@ -4,13 +4,17 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## [Unreleased]
+## [0.1.4](https://github.com/sorinirimies/tokenburn/compare/v0.1.3...v0.1.4) — 2026-10-06
 
 ### 📚 Documentation
 
 - Changelog covers front-end and release commits and dependency updates; commit conventions ([`13e071e`](https://github.com/sorinirimies/tokenburn/commit/13e071ec7d0fc9818f5c63dc404cca41a8aa728d))
 - Install badges for the TUI, GUI and web crates ([`830e909`](https://github.com/sorinirimies/tokenburn/commit/830e909c46767e8354dc914e8ae7855ef4faef40))
 - Rewrite the README around the TUI, GUI and web front-ends; drop the performance section ([`07cb429`](https://github.com/sorinirimies/tokenburn/commit/07cb4293480800869062ced4c866a7dc848d6b8f))
+
+### 🔄 CI and release
+
+- **release:** Install the aarch64 libc headers on Gitea (apt skipped them under --no-install-recommends) ([`b20e460`](https://github.com/sorinirimies/tokenburn/commit/b20e460fc963763025a37265b0645cd311eae930))
 
 ## [0.1.3](https://github.com/sorinirimies/tokenburn/releases/tag/v0.1.3) — 2026-10-06
 
