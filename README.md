@@ -8,6 +8,8 @@
 [![docs.rs](https://docs.rs/tokenburn-core/badge.svg)](https://docs.rs/tokenburn-core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+<img src="examples/vhs/generated/dashboard.gif" alt="TokenBurn TUI: report, stacked token chart and share-by-project pie" width="900">
+
 </div>
 
 ---
@@ -50,7 +52,42 @@ Every front-end refreshes itself — no key to press:
 | GUI | every **10 s** | the footer shows the last update time; ticks never pile up while a load is running |
 | Web | every **5 s** over a WebSocket (live mode), every 10 s via meta-refresh (static mode) | the footer shows `● live` and the update time |
 
-A refresh re-reads only what changed recently (a month of logs takes ~0.2 s), so leaving a dashboard open is cheap.
+![auto-update: a new turn is logged and the numbers change by themselves](examples/vhs/generated/live-refresh.gif)
+
+A refresh re-parses only the files that changed (see [Performance](#performance)), so leaving a dashboard open is cheap.
+
+## Charts
+
+Every front-end draws the same two charts from the same data (`tokenburn-core::chart`):
+
+- **Tokens / cost over time** — one stacked bar per hour, day or month (follows the bucket you picked), one colour per tool, gap-filled so quiet days show as gaps, not as a squashed axis. Switch the y-axis between tokens and cost.
+- **Share by project** — a donut of the biggest projects (the tail folds into "other"), with the total in the middle.
+
+| Front-end | How it is drawn |
+|-----------|-----------------|
+| TUI | Ratatui bar chart + [`tui-piechart`](https://crates.io/crates/tui-piechart); toggle each panel in `o` |
+| GUI | Iced canvas — hover a bar for a tooltip; the tokens/cost pick list sits above the chart |
+| Web | server-rendered inline SVG (no JavaScript charting library); hover for native tooltips; `?metric=cost` or the *chart* select |
+
+Chart colours come from the active theme, so all 43 themes restyle them.
+
+| GUI | Web |
+|-----|-----|
+| ![GUI](examples/vhs/generated/gui.gif) | ![Web](examples/vhs/generated/web.gif) |
+
+## Performance
+
+TokenBurn is meant to sit open all day, so it avoids re-doing work. Measured on an Apple-silicon Mac, 2,600 turns across 8 tools (`just bench`):
+
+| | Time | Memory |
+|---|---|---|
+| This month, warm refresh | ~20 ms | ~19 MB |
+| All history, first read (cold) | ~480 ms | ~160–290 MB peak |
+| All history, every refresh after that | ~20 ms | — |
+| TUI idle (auto-refresh on) | < 1 % of a core | ~60 MB |
+| Web server with no browser open | 0 % | ~25 MB |
+
+How: every log file is parsed once and cached by `(length, mtime)`, so a refresh re-parses only the files that changed; Zed's compressed threads are cached per thread; the TUI redraws only when something changed and otherwise sleeps in `poll`; the web server does no work without a connected page.
 
 ## Filtering (TUI)
 
@@ -187,8 +224,29 @@ just run-web          # web dashboard
 
 ```sh
 just check-all   # fmt + clippy + tests + nu script tests
+just coverage    # line coverage report (cargo-llvm-cov)
+just bench       # refresh timing and memory: just bench month 20
 just --list      # every task
 ```
+
+### Demo GIFs
+
+The recordings in [`examples/vhs/generated/`](examples/vhs/generated) are stored with **Git LFS** (`git lfs install` once, then a normal clone fetches them). They are generated from synthetic data (`examples/vhs/fixture.sh`) — never from your real logs:
+
+```sh
+just vhs-tui        # TUI + CLI tapes (examples/vhs/*.tape) — needs vhs, ttyd, ffmpeg
+just screenshots    # GUI (macOS) + web screenshots and GIFs — needs ffmpeg, node, a Chromium browser
+just vhs-tape filter
+```
+
+| Tape | Shows |
+|------|-------|
+| `dashboard` | report, charts, bucket / tool cycling, projects view |
+| `filter` | `/` free-text filter, `-exclude`, `f` tool checkboxes |
+| `themes` | theme picker and `[` / `]` cycling |
+| `options` | panel toggles and the auto-refresh interval |
+| `live-refresh` | the numbers updating by themselves |
+| `cli` | table, buckets, `--json` |
 
 ## Architecture
 

@@ -174,68 +174,56 @@ check-release: check-all build-release
 
 # ── VHS Demo GIFs ─────────────────────────────────────────────────────────────
 
-GUI_VHS := "crates/tokenburn-gui/examples/vhs"
-TUI_VHS := "crates/tokenburn-tui/examples/vhs"
-GUI_VHS_GENERATED := "crates/tokenburn-gui/examples/vhs/generated"
-TUI_VHS_GENERATED := "crates/tokenburn-tui/examples/vhs/generated"
+VHS := "examples/vhs"
+VHS_GENERATED := "examples/vhs/generated"
 
-# Generate all VHS demo GIFs (GUI + TUI)
-vhs-all: vhs-gui vhs-tui
+# Record every terminal demo GIF (TUI + CLI), then the GUI/web screenshots + GIFs
+vhs-all: vhs-tui screenshots
 
-# Generate only the GUI demo GIFs
-vhs-gui: _check-vhs
-    #!/usr/bin/env sh
-    set -e
-    mkdir -p {{ GUI_VHS_GENERATED }}
-    echo "╔════════════════════════════════════════════╗"
-    echo "║   GUI Tapes (Iced desktop)                ║"
-    echo "╚════════════════════════════════════════════╝"
-    for tape in {{ GUI_VHS }}/*.tape; do
-        [ -f "$tape" ] || continue
-        echo "▶  $tape"
-        vhs "$tape" || echo "❌ Failed: $tape"
-    done
-    echo "✅ GUI demos done → {{ GUI_VHS_GENERATED }}/"
-
-# Generate only the TUI demo GIFs
+# Record the terminal demos (TUI + CLI) with VHS, on the synthetic fixture data
 vhs-tui: _check-vhs
     #!/usr/bin/env sh
     set -e
-    mkdir -p {{ TUI_VHS_GENERATED }}
+    mkdir -p {{ VHS_GENERATED }}
     echo "╔════════════════════════════════════════════╗"
-    echo "║   TUI Tapes (Ratatui terminal)            ║"
+    echo "║   Tapes (TUI + CLI, VHS)                  ║"
     echo "╚════════════════════════════════════════════╝"
-    for tape in {{ TUI_VHS }}/*.tape; do
+    for tape in {{ VHS }}/*.tape; do
         [ -f "$tape" ] || continue
         echo "▶  $tape"
         vhs "$tape" || echo "❌ Failed: $tape"
     done
-    echo "✅ TUI demos done → {{ TUI_VHS_GENERATED }}/"
+    echo "✅ Demos done → {{ VHS_GENERATED }}/"
 
-# Render a single tape by name (e.g. just vhs-tape tui-demo)
+# Render a single tape by name (e.g. just vhs-tape filter)
 vhs-tape name: _check-vhs
     #!/usr/bin/env sh
-    if [ -f "{{ GUI_VHS }}/{{ name }}.tape" ]; then
-        echo "▶  {{ GUI_VHS }}/{{ name }}.tape"
-        vhs "{{ GUI_VHS }}/{{ name }}.tape" && echo "✅ Done."
-    elif [ -f "{{ TUI_VHS }}/{{ name }}.tape" ]; then
-        echo "▶  {{ TUI_VHS }}/{{ name }}.tape"
-        vhs "{{ TUI_VHS }}/{{ name }}.tape" && echo "✅ Done."
+    if [ -f "{{ VHS }}/{{ name }}.tape" ]; then
+        vhs "{{ VHS }}/{{ name }}.tape" && echo "✅ Done."
     else
         echo "❌ Tape not found: {{ name }}.tape"
-        echo ""
         just vhs-list
         exit 1
     fi
 
-# List all available VHS tapes
+# List all VHS tapes
 vhs-list:
-    #!/usr/bin/env sh
-    echo "GUI tapes  →  {{ GUI_VHS }}/"
-    ls {{ GUI_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
-    echo ""
-    echo "TUI tapes  →  {{ TUI_VHS }}/"
-    ls {{ TUI_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
+    @ls {{ VHS }}/*.tape | sed 's|.*/||; s|\.tape||' | sed 's/^/  /'
+
+# GUI + web screenshots and GIFs (VHS can't record a window or a browser; GUI half is macOS-only)
+screenshots: _check-topcoat
+    cargo build -p tokenburn-gui -p tokenburn-web
+    topcoat asset bundle --package tokenburn-web --out target/debug/assets
+    bash examples/capture/all.sh
+
+# Timing and memory of a refresh: just bench [month|all|today] [runs]
+bench window="all" runs="10":
+    cargo run --release -p tokenburn-core --example bench -- {{ window }} {{ runs }}
+
+# Line coverage (needs cargo-llvm-cov); writes target/llvm-cov/html
+coverage:
+    cargo llvm-cov --workspace --html
+    @echo "→ target/llvm-cov/html/index.html"
 
 # ── Packaging ─────────────────────────────────────────────────────────────────
 # Release artifacts are normally built by CI (GitHub / Gitea release workflows).
