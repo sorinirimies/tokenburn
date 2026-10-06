@@ -14,7 +14,6 @@ Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://
 | `o` | options popup |
 | `T` | theme picker (43 themes, live preview) |
 | `[` `]` | previous / next theme |
-| `r` | refresh |
 | `q`, `Esc` | quit |
 
 ## Built with

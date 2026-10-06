@@ -39,7 +39,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         // Esc first clears an active filter; only a second Esc quits.
         KeyCode::Esc if !app.filter.is_empty() => app.clear_filter(),
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
-        KeyCode::Char('r') | KeyCode::F(5) => app.reload(),
         KeyCode::Char('t') => app.cycle_tool(),
         KeyCode::Char('w') => app.cycle_window(),
         KeyCode::Char('p') => app.toggle_view(),
@@ -57,6 +56,17 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
 mod tests {
     use super::*;
     use crossterm::event::KeyEvent;
+
+    #[test]
+    fn there_is_no_manual_refresh_key() {
+        // Everything updates by itself: `r` and F5 must not start a load.
+        let mut app = App::new();
+        for code in [KeyCode::Char('r'), KeyCode::F(5)] {
+            handle_key(&mut app, KeyEvent::from(code));
+            assert!(!app.is_loading, "{code:?} must not trigger a reload");
+            assert!(!app.should_quit);
+        }
+    }
 
     #[test]
     fn o_opens_options_and_swallows_keys_until_closed() {

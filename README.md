@@ -207,7 +207,6 @@ It binds to localhost by default — token/cost data is private, so don't expose
 | `o` | options popup — checkboxes and sliders: auto-refresh + interval, bar chart, pie chart (braille), pie slices |
 | `T`, `[`, `]` | theme picker / previous / next theme |
 | `↑/↓`, `j/k`, `g/G` | scroll |
-| `r` | refresh |
 | `q`, `Esc` | quit |
 
 ## Building from source
