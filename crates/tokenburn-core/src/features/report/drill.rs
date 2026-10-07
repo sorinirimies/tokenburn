@@ -8,6 +8,8 @@
 //! The chart you clicked in keeps showing everything (so you can pick another
 //! bar or slice) with the selection highlighted.
 
+use std::borrow::Cow;
+
 use super::chart::{bucket_label_of, chart_bucket, pie, time_series, Pie, TimeSeries};
 use super::ops::{build_report, by_project};
 use super::types::{Query, ReportRow};
@@ -113,21 +115,41 @@ pub fn drill(rows: &[Row], query: &Query, selection: &Selection) -> Drill {
         sel.project = None;
     }
 
-    let in_project: Vec<Row> = rows
-        .iter()
-        .filter(|r| sel.row_in_project(r))
-        .cloned()
-        .collect();
-    let in_bucket: Vec<Row> = rows
-        .iter()
-        .filter(|r| sel.row_in_bucket(r, query))
-        .cloned()
-        .collect();
-    let both: Vec<Row> = in_project
-        .iter()
-        .filter(|r| sel.row_in_bucket(r, query))
-        .cloned()
-        .collect();
+    // Rows are only copied when a selection actually narrows them. With nothing
+    // selected (the normal case, on every refresh) all three views *borrow* the loaded
+    // rows: copying a few hundred thousand of them every few seconds was pure waste.
+    let in_project: Cow<[Row]> = if sel.project.is_none() {
+        Cow::Borrowed(rows)
+    } else {
+        Cow::Owned(
+            rows.iter()
+                .filter(|r| sel.row_in_project(r))
+                .cloned()
+                .collect(),
+        )
+    };
+    let in_bucket: Cow<[Row]> = if sel.bucket.is_none() {
+        Cow::Borrowed(rows)
+    } else {
+        Cow::Owned(
+            rows.iter()
+                .filter(|r| sel.row_in_bucket(r, query))
+                .cloned()
+                .collect(),
+        )
+    };
+    let both: Cow<[Row]> = match (sel.project.is_some(), sel.bucket.is_some()) {
+        (false, false) => Cow::Borrowed(rows),
+        (true, false) => Cow::Borrowed(&in_project),
+        (false, true) => Cow::Borrowed(&in_bucket),
+        (true, true) => Cow::Owned(
+            in_project
+                .iter()
+                .filter(|r| sel.row_in_bucket(r, query))
+                .cloned()
+                .collect(),
+        ),
+    };
 
     // Bars keep the full x-axis even when a project narrows the values.
     let series = if sel.project.is_some() {
@@ -138,7 +160,7 @@ pub fn drill(rows: &[Row], query: &Query, selection: &Selection) -> Drill {
     let projects = by_project(&both);
     Drill {
         report: build_report(&both, query),
-        total: Summary::of(&both),
+        total: Summary::of(both.iter()),
         series,
         pie: pie(&by_project(&in_bucket), 8),
         projects,

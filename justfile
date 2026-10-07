@@ -220,6 +220,13 @@ screenshots: _check-topcoat
 bench window="all" runs="10":
     cargo run --release -p tokenburn-core --example bench -- {{ window }} {{ runs }}
 
+# Memory soak tests: repeat the refresh path of the core, TUI and GUI state and print the
+# resident memory; a leak shows as a steady climb (just soak 200)
+soak rounds="100":
+    cargo run --release -p tokenburn-core --example soak -- {{ rounds }} all
+    cargo run --release -p tokenburn-tui --example soak -- {{ rounds }}
+    cargo run --release -p tokenburn-gui --example soak -- {{ rounds }}
+
 # Line coverage (needs cargo-llvm-cov); writes target/llvm-cov/html
 coverage:
     cargo llvm-cov --workspace --html

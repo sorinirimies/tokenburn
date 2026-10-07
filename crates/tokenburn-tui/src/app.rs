@@ -8,6 +8,7 @@ use crate::features::options::Options;
 use crate::features::theme::UiTheme;
 use chrono::Local;
 use ratatui::widgets::TableState;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use tokenburn_core::features::currency::{index_of, resolve};
 use tokenburn_core::{
@@ -50,7 +51,12 @@ pub struct App {
     /// Everything the last load returned (the filter works on this).
     pub all_rows: Vec<Row>,
     /// Rows that pass the filter — what the header, report, chart and pie show.
-    pub rows: Vec<Row>,
+    /// How many of `all_rows` pass the filter. (The filtered rows themselves are not kept:
+    /// a second copy of every row would double the memory, and nothing needs them once
+    /// the report, the projects and `total` are built.)
+    pub rows_len: usize,
+    /// Totals over the rows that pass the filter.
+    total: Summary,
     /// Free-text + per-tool filter, applied instantly to `all_rows`.
     pub filter: RowFilter,
     /// The `/` text box has the keyboard.
@@ -96,7 +102,8 @@ impl App {
             currency_picker_open: false,
             last_reload: None,
             all_rows: Vec::new(),
-            rows: Vec::new(),
+            rows_len: 0,
+            total: Summary::default(),
             filter: RowFilter::default(),
             filter_editing: false,
             tool_filter_open: false,
@@ -192,9 +199,16 @@ impl App {
         for r in &self.all_rows {
             self.tool_counts[r.tool.series_index()] += 1;
         }
-        self.rows = self.filter.apply(&self.all_rows);
-        self.report = build_report(&self.rows, &self.query);
-        self.projects = by_project(&self.rows);
+        // With no filter every row passes, so borrow instead of copying them all.
+        let filtered: Cow<[Row]> = if self.filter.is_empty() {
+            Cow::Borrowed(&self.all_rows)
+        } else {
+            Cow::Owned(self.filter.apply(&self.all_rows))
+        };
+        self.rows_len = filtered.len();
+        self.total = Summary::of(filtered.iter());
+        self.report = build_report(&filtered, &self.query);
+        self.projects = by_project(&filtered);
         self.status_message = Some(self.status_text());
         self.clamp_selection();
     }
@@ -208,7 +222,7 @@ impl App {
         let count = if self.filter.is_empty() {
             format!("{} rows", self.all_rows.len())
         } else {
-            format!("{} of {} rows", self.rows.len(), self.all_rows.len())
+            format!("{} of {} rows", self.rows_len, self.all_rows.len())
         };
         let auto = if self.options.auto_refresh {
             format!(
@@ -348,9 +362,9 @@ impl App {
         self.clamp_selection();
     }
 
-    /// Grand total over every loaded row.
+    /// Grand total over the rows that pass the filter.
     pub fn total(&self) -> Summary {
-        Summary::of(&self.rows)
+        self.total
     }
 }
 
@@ -430,7 +444,7 @@ mod tests {
             })
             .unwrap();
         app.poll_background();
-        assert_eq!(app.rows.len(), 2);
+        assert_eq!(app.rows_len, 2);
         assert!(app.last_refresh.is_some());
 
         // A later refresh brings a new row: everything derived follows.
@@ -444,7 +458,7 @@ mod tests {
             })
             .unwrap();
         app.poll_background();
-        assert_eq!(app.rows.len(), 3);
+        assert_eq!(app.rows_len, 3);
         assert_eq!(app.projects.len(), 3);
         assert_eq!(app.total().turns, 3);
     }
@@ -464,9 +478,9 @@ mod tests {
             .unwrap();
         app.poll_background();
         assert_eq!(app.all_rows.len(), 3);
-        assert_eq!(app.rows.len(), 3, "all three contain an 'a'");
+        assert_eq!(app.rows_len, 3, "all three contain an 'a'");
         app.set_filter_text("alp".into());
-        assert_eq!(app.rows.len(), 1);
+        assert_eq!(app.rows_len, 1);
         // Another auto-refresh must not reset the filter.
         app.bg_tx
             .send(BackgroundResult::Loaded {
@@ -478,7 +492,7 @@ mod tests {
             })
             .unwrap();
         app.poll_background();
-        assert_eq!(app.rows.len(), 2);
+        assert_eq!(app.rows_len, 2);
         assert_eq!(app.filter.text, "alp");
     }
 

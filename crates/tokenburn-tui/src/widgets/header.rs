@@ -115,7 +115,7 @@ fn filter_chips(app: &App) -> Span<'static> {
             tokenburn_core::Tool::ALL.len()
         ));
     }
-    parts.push(format!("{}/{} rows", app.rows.len(), app.all_rows.len()));
+    parts.push(format!("{}/{} rows", app.rows_len, app.all_rows.len()));
     Span::styled(
         format!(" ⌕ {} ", parts.join("  ")),
         Style::default()

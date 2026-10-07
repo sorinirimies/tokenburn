@@ -166,20 +166,42 @@ struct ThreadUsage {
     output_tokens: Option<f64>,
 }
 
+/// Compressed blobs larger than this are decompressed as a stream instead of in one
+/// go. A long conversation can be tens of megabytes compressed and many times that as
+/// JSON, and holding all of it at once was the biggest memory peak of a cold start;
+/// the stream keeps it to a few megabytes. Streaming is slower, which is fine for the
+/// few huge threads (and a thread is only ever decoded again once it changes).
+const STREAM_ABOVE: usize = 4 * 1024 * 1024;
+
 /// Decode one thread blob into a [`Row`].
 ///
-/// The blob is decompressed in one go and parsed *typed* (`from_slice`, which is
-/// markedly faster than `from_reader`): only the two fields above are kept, the
-/// conversation is skipped without allocating, and one thread at a time is ever
-/// in memory.
+/// Small blobs are decompressed in one go and parsed *typed* (`from_slice`, which is
+/// markedly faster than `from_reader`): only the two fields above are kept and the
+/// conversation is skipped without allocating. Huge ones are streamed (see
+/// [`STREAM_ABOVE`]). One thread at a time is ever in memory.
 pub(crate) fn decode_thread(
     id: String,
     ts: DateTime<Utc>,
     data_type: Option<&str>,
     data: &[u8],
 ) -> Option<Row> {
+    decode_thread_with(id, ts, data_type, data, STREAM_ABOVE)
+}
+
+fn decode_thread_with(
+    id: String,
+    ts: DateTime<Utc>,
+    data_type: Option<&str>,
+    data: &[u8],
+    stream_above: usize,
+) -> Option<Row> {
     let thread: Thread = if data_type == Some("zstd") {
-        serde_json::from_slice(&zstd::decode_all(data).ok()?).ok()?
+        if data.len() > stream_above {
+            let decoder = zstd::Decoder::new(data).ok()?;
+            serde_json::from_reader(std::io::BufReader::with_capacity(64 * 1024, decoder)).ok()?
+        } else {
+            serde_json::from_slice(&zstd::decode_all(data).ok()?).ok()?
+        }
     } else {
         serde_json::from_slice(data).ok()?
     };
@@ -322,5 +344,38 @@ mod tests {
         let rows = collect_zed_from(&db, start).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "t1");
+    }
+
+    #[test]
+    fn huge_blobs_are_streamed_and_decode_to_exactly_the_same_row() {
+        // A thread whose conversation is large (incompressible-ish text), compressed.
+        let mut filler = String::new();
+        let mut x: u64 = 0x2545_f491_4f6c_dd1d;
+        for _ in 0..800_000 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            filler.push_str(&format!("{x:016x}"));
+        }
+        let json = format!(
+            r#"{{"model":{{"model":"claude-big"}},"messages":["{filler}"],"cumulative_token_usage":{{"input_tokens":1234,"output_tokens":56}}}}"#
+        );
+        let blob = zstd::encode_all(json.as_bytes(), 1).unwrap();
+        assert!(
+            blob.len() > STREAM_ABOVE,
+            "the fixture must exceed the streaming threshold ({} bytes)",
+            blob.len()
+        );
+
+        let ts: DateTime<Utc> = "2026-05-01T10:00:00Z".parse().unwrap();
+        let streamed = decode_thread("t".into(), ts, Some("zstd"), &blob).unwrap();
+        // Force the one-shot path on the same bytes: the results must agree.
+        let whole = decode_thread_with("t".into(), ts, Some("zstd"), &blob, usize::MAX).unwrap();
+        assert_eq!((streamed.input, streamed.output), (1234, 56));
+        assert_eq!(streamed.project, "claude-big");
+        assert_eq!(
+            (streamed.input, streamed.output, &streamed.project),
+            (whole.input, whole.output, &whole.project)
+        );
     }
 }

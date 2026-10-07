@@ -108,14 +108,14 @@ mod tests {
     #[test]
     fn typing_filters_rows_live_and_updates_the_totals() {
         let mut a = app();
-        assert_eq!(a.rows.len(), 3);
+        assert_eq!(a.rows_len, 3);
         a.filter_editing = true;
         type_text(&mut a, "alp");
-        assert_eq!(a.rows.len(), 2);
+        assert_eq!(a.rows_len, 2);
         assert_eq!(a.total().turns, 2, "the header totals follow the filter");
         assert_eq!(a.projects.len(), 2, "projects / pie follow the filter");
         type_text(&mut a, "ha -claude");
-        assert_eq!(a.rows.len(), 1);
+        assert_eq!(a.rows_len, 1);
     }
 
     #[test]
@@ -134,7 +134,7 @@ mod tests {
             KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
         );
         assert_eq!(a.filter.text, "");
-        assert_eq!(a.rows.len(), 3);
+        assert_eq!(a.rows_len, 3);
     }
 
     #[test]
@@ -144,12 +144,12 @@ mod tests {
         type_text(&mut a, "beta");
         handle_text_key(&mut a, KeyEvent::from(KeyCode::Enter));
         assert!(!a.filter_editing);
-        assert_eq!(a.rows.len(), 1, "Enter keeps it");
+        assert_eq!(a.rows_len, 1, "Enter keeps it");
 
         a.filter_editing = true;
         handle_text_key(&mut a, KeyEvent::from(KeyCode::Esc));
         assert!(!a.filter_editing);
-        assert_eq!(a.rows.len(), 3, "Esc clears it");
+        assert_eq!(a.rows_len, 3, "Esc clears it");
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod tests {
         // cursor 0 = pi (Tool::ALL[0])
         handle_tool_key(&mut a, KeyEvent::from(KeyCode::Char(' ')));
         assert!(!a.filter.allows(Tool::Pi));
-        assert_eq!(a.rows.len(), 1, "only the Claude row remains");
+        assert_eq!(a.rows_len, 1, "only the Claude row remains");
         handle_tool_key(&mut a, KeyEvent::from(KeyCode::Char(' ')));
         assert!(
             a.filter.is_empty(),
@@ -181,12 +181,12 @@ mod tests {
     fn tool_popup_all_none_and_clear() {
         let mut a = app();
         handle_tool_key(&mut a, KeyEvent::from(KeyCode::Char('n')));
-        assert_eq!(a.rows.len(), 0);
+        assert_eq!(a.rows_len, 0);
         handle_tool_key(&mut a, KeyEvent::from(KeyCode::Char('a')));
-        assert_eq!(a.rows.len(), 3);
+        assert_eq!(a.rows_len, 3);
         type_text(&mut a, "beta");
         handle_tool_key(&mut a, KeyEvent::from(KeyCode::Char('x')));
-        assert_eq!(a.rows.len(), 3, "x clears text and tool filters");
+        assert_eq!(a.rows_len, 3, "x clears text and tool filters");
     }
 
     #[test]
