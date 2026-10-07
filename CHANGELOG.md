@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.1.8](https://github.com/sorinirimies/tokenburn/compare/v0.1.7...v0.1.8) — 2026-10-07
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-10-07 ([`9fcec07`](https://github.com/sorinirimies/tokenburn/commit/9fcec07125e212e136c333989fc45d6c13002aa4))
+
 ## [0.1.7](https://github.com/sorinirimies/tokenburn/compare/v0.1.6...v0.1.7) — 2026-10-06
 
 ### 🔄 CI and release
