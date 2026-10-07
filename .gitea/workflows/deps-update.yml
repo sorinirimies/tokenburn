@@ -19,6 +19,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # This runner sits behind a flaky network (static.rust-lang.org timed out and failed a run):
+  # let rustup and cargo retry downloads instead of giving up after the default 3.
+  RUSTUP_MAX_RETRIES: "10"
+  CARGO_NET_RETRY: "10"
 
 # Never cancel mid-run: a half-finished push/tag would leave main inconsistent.
 concurrency:
@@ -50,7 +54,7 @@ jobs:
 
       - name: Install Rust stable
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --component rustfmt --component clippy
+          curl --proto '=https' --tlsv1.2 -sSf --retry 5 --retry-all-errors --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --component rustfmt --component clippy
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Cache Cargo dependencies
