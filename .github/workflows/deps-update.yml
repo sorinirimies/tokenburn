@@ -53,6 +53,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install nushell
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "0.111.0"
+
       # Record what ships BEFORE updating, to compare with afterwards (see "Check for changes").
       - name: Snapshot what ships (before)
         run: |
@@ -63,10 +68,12 @@ jobs:
       - name: Run cargo update
         run: cargo update
 
-      # Only a change to something that SHIPS counts. `cargo update` also moves
-      # dev/test-only crates (and nothing a user ever runs); releasing for those would
-      # publish identical binaries under a new version. "Ships" = the normal + build
-      # dependency graph of every workspace member, all features, all targets.
+      # Only a REAL upgrade counts, and it must ship. `cargo update` can also change the
+      # lockfile for reasons that are not worth a release: crates only tests use, a
+      # downgrade (a yanked release, a resolver surprise), checksum-only edits. So the
+      # packages of the normal + build dependency graph (all features, all targets) are
+      # compared before and after, and a release needs at least one package at a HIGHER
+      # version and none at a lower one (scripts/ci/lock_changes.nu has the rules).
       - name: Check for changes
         id: check
         run: |
@@ -75,14 +82,9 @@ jobs:
           if git diff --quiet -- Cargo.lock; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No dependency changes detected."
-          elif diff -q "$T/shipped-before.txt" "$T/shipped-after.txt" >/dev/null; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Cargo.lock changed, but only in dev/test-only dependencies: nothing that ships. Not releasing."
-            git diff -U0 -- Cargo.lock | grep -E '^[-+](name|version) ' || true
           else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Dependency changes that ship:"
-            diff "$T/shipped-before.txt" "$T/shipped-after.txt" | grep -E '^[<>]' || true
+            echo "Cargo.lock changed; checking that something that ships was really upgraded:"
+            nu scripts/ci/lock_changes.nu "$T/shipped-before.txt" "$T/shipped-after.txt" --output "$GITHUB_OUTPUT"
           fi
 
       - name: Upload updated Cargo.lock
