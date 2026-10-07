@@ -4,6 +4,17 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.1.9](https://github.com/sorinirimies/tokenburn/compare/v0.1.8...v0.1.9) — 2026-10-07
+
+### ⚡ Performance
+
+- Lower memory — borrow rows instead of copying them (drill, TUI), stream huge Zed threads; add soak tests ([`7fee2a2`](https://github.com/sorinirimies/tokenburn/commit/7fee2a220747fc0732d55c2d543336cdd1923289))
+
+### 🔄 CI and release
+
+- **gitea:** Retry rustup and cargo downloads (a network timeout failed a run) ([`4fb3b20`](https://github.com/sorinirimies/tokenburn/commit/4fb3b206296e76ff19499321290d688f88f46c10))
+- Release only for real upgrades; never for downgrades, checksum-only or dev-only changes ([`f7f0516`](https://github.com/sorinirimies/tokenburn/commit/f7f0516e0c8e2f5b5bf9c77e5e64a09ef2d5178e))
+
 ## [0.1.8](https://github.com/sorinirimies/tokenburn/compare/v0.1.7...v0.1.8) — 2026-10-07
 
 ### 📦 Dependencies
