@@ -6,6 +6,26 @@ use crate::features::report::commands;
 use crate::message::Message;
 use crate::state::TokenBurn;
 
+/// One-time, platform-specific setup that needs the window to exist.
+///
+/// macOS: add the standard Window menu (Minimize, Zoom, Move & Resize / tiling), which
+/// winit's default menu bar lacks — see [`crate::macos`]. Nothing to do elsewhere.
+#[cfg(target_os = "macos")]
+fn platform_setup() -> Task<Message> {
+    iced::window::oldest()
+        .and_then(|id| {
+            iced::window::run(id, |_window| {
+                crate::macos::install_window_menu();
+            })
+        })
+        .discard()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn platform_setup() -> Task<Message> {
+    Task::none()
+}
+
 impl TokenBurn {
     /// Start a background reload for the current query.
     pub fn reload(&mut self) -> Task<Message> {
@@ -36,7 +56,14 @@ impl TokenBurn {
                     Ok(collected) => self.apply(collected),
                     Err(e) => self.error_message = Some(e),
                 }
-                Task::none()
+                // The window exists by the time the first data arrives: now is when
+                // the platform-specific setup can run (once).
+                if self.platform_ready {
+                    Task::none()
+                } else {
+                    self.platform_ready = true;
+                    platform_setup()
+                }
             }
             Message::ToolSelected(tool) => {
                 self.query.tool = tool;
@@ -190,5 +217,28 @@ mod theme_tests {
         assert_eq!(app.theme_index, 5);
         app.set_theme(usize::MAX);
         assert_eq!(app.theme_index, tokenburn_core::THEME_COUNT - 1, "clamped");
+    }
+
+    #[test]
+    fn platform_setup_is_requested_once_after_the_first_data() {
+        let mut app = TokenBurn::new();
+        assert!(!app.platform_ready);
+        let q = app.query;
+        let _ = app.update(Message::Loaded(q, Ok(tokenburn_core::Collected::default())));
+        assert!(
+            app.platform_ready,
+            "the first load triggers the one-time setup"
+        );
+        // Later refreshes must not ask again (the menu would be added twice).
+        app.platform_ready = true;
+        let _ = app.update(Message::Loaded(q, Ok(tokenburn_core::Collected::default())));
+        assert!(app.platform_ready);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_window_menu_refuses_to_run_off_the_main_thread_instead_of_crashing() {
+        // Test threads are never the main thread, and AppKit must only be touched there.
+        assert!(!crate::macos::install_window_menu());
     }
 }

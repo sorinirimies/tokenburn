@@ -63,6 +63,8 @@ pub struct TokenBurn {
     pub currency: Currency,
     /// The user's own exchange rates from settings.json (code → units per dollar).
     pub rates: BTreeMap<String, f64>,
+    /// One-time platform setup (the macOS Window menu) has been requested.
+    pub platform_ready: bool,
     /// Write settings (theme) to disk. `false` in tests and `TokenBurn::new()`.
     pub persist: bool,
     pub rows: Vec<Row>,
@@ -115,6 +117,7 @@ impl TokenBurn {
             theme_index: 0,
             currency: Currency::USD,
             rates: BTreeMap::new(),
+            platform_ready: false,
             persist: false,
             rows: Vec::new(),
             report: Vec::new(),
