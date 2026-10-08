@@ -8,13 +8,12 @@ mod macros;
 
 pub mod args;
 pub mod features;
-#[cfg(target_os = "macos")]
-pub mod macos;
 pub mod message;
 pub mod state;
 pub mod update;
 pub mod view;
 pub mod widgets;
+pub mod window;
 
 pub use args::Args;
 pub use message::Message;

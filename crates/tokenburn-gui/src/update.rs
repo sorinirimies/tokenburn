@@ -6,26 +6,6 @@ use crate::features::report::commands;
 use crate::message::Message;
 use crate::state::TokenBurn;
 
-/// One-time, platform-specific setup that needs the window to exist.
-///
-/// macOS: add the standard Window menu (Minimize, Zoom, Move & Resize / tiling), which
-/// winit's default menu bar lacks — see [`crate::macos`]. Nothing to do elsewhere.
-#[cfg(target_os = "macos")]
-fn platform_setup() -> Task<Message> {
-    iced::window::oldest()
-        .and_then(|id| {
-            iced::window::run(id, |_window| {
-                crate::macos::install_window_menu();
-            })
-        })
-        .discard()
-}
-
-#[cfg(not(target_os = "macos"))]
-fn platform_setup() -> Task<Message> {
-    Task::none()
-}
-
 impl TokenBurn {
     /// Start a background reload for the current query.
     pub fn reload(&mut self) -> Task<Message> {
@@ -62,7 +42,7 @@ impl TokenBurn {
                     Task::none()
                 } else {
                     self.platform_ready = true;
-                    platform_setup()
+                    crate::window::setup()
                 }
             }
             Message::ToolSelected(tool) => {
@@ -239,6 +219,6 @@ mod theme_tests {
     #[test]
     fn the_window_menu_refuses_to_run_off_the_main_thread_instead_of_crashing() {
         // Test threads are never the main thread, and AppKit must only be touched there.
-        assert!(!crate::macos::install_window_menu());
+        assert!(!crate::window::macos::install_window_menu());
     }
 }

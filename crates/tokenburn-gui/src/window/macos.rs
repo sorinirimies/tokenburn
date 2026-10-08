@@ -7,8 +7,8 @@
 //! Registering the menu with `setWindowsMenu:` is also what makes macOS add its own
 //! "Move & Resize" / "Tile Window" items.
 //!
-//! Must run on the main thread once the application exists; `install_window_menu` is
-//! called from an iced `window::run` callback, which is exactly that.
+//! Must run on the main thread once the application exists; [`super::setup`] calls it from
+//! an iced `window::run` callback, which is exactly that.
 
 use objc2::sel;
 use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
