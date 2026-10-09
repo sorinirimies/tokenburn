@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.2.1](https://github.com/sorinirimies/tokenburn/compare/v0.2.0...v0.2.1) — 2026-10-09
+
+### 🐛 Bug fixes
+
+- **gui:** Unresolved rustdoc link to macos ([`fcd841f`](https://github.com/sorinirimies/tokenburn/commit/fcd841f45dcd6833e569cc05edaef67039bc099e))
+
 ## [0.2.0](https://github.com/sorinirimies/tokenburn/compare/v0.1.9...v0.2.0) — 2026-10-09
 
 ### 🐛 Bug fixes
