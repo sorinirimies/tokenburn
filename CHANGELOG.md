@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.2.0](https://github.com/sorinirimies/tokenburn/compare/v0.1.9...v0.2.0) — 2026-10-09
+
+### 🐛 Bug fixes
+
+- **gui:** Add the macOS Window menu so Zoom, Move & Resize and the tiling shortcuts work ([`4f66056`](https://github.com/sorinirimies/tokenburn/commit/4f660565ed5aca8b7d7f09cdab708bbbaef06c67))
+
+### ♻️ Refactor
+
+- **gui:** Move the macOS window menu into a window module (window::setup) ([`f83ab3b`](https://github.com/sorinirimies/tokenburn/commit/f83ab3b8c94c52d9a67ebb226115002ae39babb4))
+
 ## [0.1.9](https://github.com/sorinirimies/tokenburn/compare/v0.1.8...v0.1.9) — 2026-10-07
 
 ### ⚡ Performance
