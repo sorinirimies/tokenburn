@@ -616,3 +616,7 @@ release-retrigger version:
 # Run the nightly dependency update workflow on GitHub on demand.
 deps-update-now:
     gh workflow run deps-update.yml
+
+# Security: dependency vulnerability scan (needs `cargo install cargo-audit`)
+audit:
+    cargo audit
