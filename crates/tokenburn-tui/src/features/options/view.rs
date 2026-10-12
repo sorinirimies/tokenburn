@@ -8,28 +8,53 @@ use ratatui::Frame;
 use tui_checkbox::Checkbox;
 use tui_slider::{Slider, SliderOrientation};
 
-use super::OptionRow;
+use super::{OptionRow, Tab};
 use crate::app::App;
 use crate::features::theme::UiTheme;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let th = app.theme;
-    let popup = centered(area, 56, 12);
+    let popup = centered(area, 70, 16);
     frame.render_widget(Clear, popup);
 
     let block = Block::default()
-        .title(Line::from(vec![
-            Span::styled("⚙ ", Style::default().fg(th.accent)),
-            Span::styled(
-                "Options",
-                Style::default().fg(th.accent).add_modifier(Modifier::BOLD),
-            ),
-        ]))
+        .title(Line::from(vec![Span::styled(
+            format!(" 🔥 {} ", tokenburn_core::appinfo::title()),
+            Style::default().fg(th.accent).add_modifier(Modifier::BOLD),
+        )]))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(th.accent))
         .style(Style::default().bg(th.surface).fg(th.text));
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
+
+    // Tab strip: Settings | About.
+    let [tabs, inner] = Layout::vertical([Constraint::Length(2), Constraint::Min(1)]).areas(inner);
+    let tab = |label: &str, active: bool| {
+        Span::styled(
+            format!(" {label} "),
+            if active {
+                Style::default()
+                    .fg(th.bg)
+                    .bg(th.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(th.muted)
+            },
+        )
+    };
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            tab("⚙ Settings (o)", app.options.tab == Tab::Settings),
+            Span::raw(" "),
+            tab("ℹ About (i)", app.options.tab == Tab::About),
+        ])),
+        tabs,
+    );
+    if app.options.tab == Tab::About {
+        render_about(app, frame, inner);
+        return;
+    }
 
     // Checkboxes take one line, sliders two (label + value / bar), then the hint.
     let mut constraints: Vec<Constraint> = OptionRow::ALL
@@ -48,6 +73,34 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             .style(Style::default().fg(th.muted)),
         rows[OptionRow::ALL.len()],
     );
+}
+
+fn render_about(app: &App, frame: &mut Frame, area: Rect) {
+    let th = app.theme;
+    let mut lines = vec![
+        Line::from(Span::styled(
+            tokenburn_core::appinfo::TAGLINE,
+            Style::default().fg(th.text),
+        )),
+        Line::raw(""),
+    ];
+    for (label, value) in tokenburn_core::appinfo::about_rows() {
+        let style = if tokenburn_core::appinfo::is_link(&value) {
+            Style::default().fg(th.accent)
+        } else {
+            Style::default().fg(th.text)
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{label:<14}"), Style::default().fg(th.muted)),
+            Span::styled(value, style),
+        ]));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "Tab/o settings · i/Esc close",
+        Style::default().fg(th.muted),
+    )));
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn render_row(app: &App, row: OptionRow, frame: &mut Frame, area: Rect) {

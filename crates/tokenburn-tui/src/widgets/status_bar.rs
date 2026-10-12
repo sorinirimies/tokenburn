@@ -35,9 +35,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let class = LayoutClass::from_cols(area.width);
     // Narrow terminals only have room for the keys that matter.
     let hints = if class.is_narrow() {
-        "q quit · / filter · T theme · C cur · o options"
+        "q quit · / filter · T theme · C cur · o settings · i about"
     } else {
-        "q quit · / filter · f tools · T theme · C currency · t tool · w window · ←/→ view · p projects · o options"
+        "q quit · / filter · f tools · T theme · C currency · t tool · w window · ←/→ view · p projects · o settings · i about"
     };
     if app.filter_editing {
         // The text box: show the cursor and what the keys do.

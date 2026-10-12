@@ -12,6 +12,14 @@ body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,
 main { max-width:1200px; margin:0 auto; padding:24px; display:flex; flex-direction:column; gap:20px; }
 header.top { display:flex; flex-wrap:wrap; align-items:center; gap:16px; justify-content:space-between; }
 h1 { margin:0; font-size:22px; color:var(--accent); }
+.brand { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; }
+.ver { color:var(--dim); font-weight:400; font-size:12px; margin-left:4px; }
+.dim { color:var(--dim); }
+.tabs { display:flex; gap:6px; }
+.tabs .tab { padding:4px 12px; border:1px solid var(--line); border-radius:8px; text-decoration:none; color:var(--dim); background:var(--panel); }
+.tabs .tab.active { border-color:var(--accent); color:var(--fg); background:var(--sel); }
+table.kv { width:auto; }
+table.kv th { text-align:left; color:var(--dim); font-weight:400; padding:5px 18px 5px 10px; white-space:nowrap; }
 h2 { margin:0 0 8px; font-size:14px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; }
 form.filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
 select, button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font:inherit; }

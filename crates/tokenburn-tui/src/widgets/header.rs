@@ -31,7 +31,15 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             },
             Style::default().fg(th.warning).add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" "),
+        // The version yields to the chips on very narrow terminals.
+        Span::styled(
+            if area.width >= 64 {
+                format!("{} ", tokenburn_core::appinfo::version_label())
+            } else {
+                " ".to_string()
+            },
+            Style::default().fg(th.muted),
+        ),
         chip(th, "tool", q.tool.as_str()),
         chip(th, "view", q.bucket.label()),
     ];
@@ -40,13 +48,6 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     } else if area.width >= 52 {
         title_spans.push(chip(th, "win", q.window.label()));
     }
-    if !class.is_narrow() {
-        title_spans.push(chip(
-            th,
-            "theme",
-            tokenburn_core::THEME_NAMES[app.theme_index],
-        ));
-    }
     // The currency is part of what the cost means, so it stays on every width.
     title_spans.push(chip(
         th,
@@ -54,6 +55,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         &format!("{}{}", app.currency.code, app.currency.approx_mark()),
     ));
     title_spans.push(filter_chips(app));
+    // The theme is always the last chip.
+    if !class.is_narrow() {
+        title_spans.push(chip(
+            th,
+            "theme",
+            tokenburn_core::THEME_NAMES[app.theme_index],
+        ));
+    }
     title_spans.push(Span::styled(
         if app.is_loading { " loading…" } else { "" },
         Style::default().fg(th.muted),

@@ -16,6 +16,23 @@ use crate::params::WINDOW_CHOICES;
 use crate::theme;
 use tokenburn_core::Selection;
 
+/// Title with the version, plus the Dashboard / Settings / About tabs.
+#[component]
+pub async fn brand(active: String) -> Result<impl View> {
+    let pick = |name: &str| if active == name { "tab active" } else { "tab" };
+    let (c_dash, c_set, c_about) = (pick("dashboard"), pick("settings"), pick("about"));
+    Ok(view! {
+        <div class="brand">
+            <h1><a href="/" style="color:inherit">"🔥 TokenBurn"</a> <small class="ver">(tokenburn_core::appinfo::version_label())</small></h1>
+            <nav class="tabs" aria-label="Pages">
+                <a class=(c_dash) href="/">"Dashboard"</a>
+                <a class=(c_set) href="/settings">"⚙ Settings"</a>
+                <a class=(c_about) href="/about">"ℹ About"</a>
+            </nav>
+        </div>
+    })
+}
+
 /// Row of headline totals.
 #[component]
 pub async fn summary_cards(total: Summary, currency: Currency) -> Result<impl View> {

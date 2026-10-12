@@ -10,7 +10,7 @@ use topcoat::{
 
 use crate::{
     app::is_interactive,
-    components::{dashboard_body, filters, live_filters, theme_style},
+    components::{brand, dashboard_body, filters, live_filters, theme_style},
     data::{REFRESH_EVERY, load},
     params::{UsageParams, parse, parse_metric, parse_selection, pick_currency},
     theme,
@@ -20,7 +20,12 @@ use tokenburn_core::settings;
 
 /// HTML shell shared by every page.
 #[component]
-pub async fn document(interactive: bool, theme: usize, child: Child<'_>) -> Result<impl View> {
+pub async fn document(
+    interactive: bool,
+    theme: usize,
+    title: String,
+    child: Child<'_>,
+) -> Result<impl View> {
     Ok(view! {
         <!DOCTYPE html>
         <html lang="en">
@@ -31,7 +36,7 @@ pub async fn document(interactive: bool, theme: usize, child: Child<'_>) -> Resu
                     // Static fallback: no runtime, so reload every 10 s (the live mode pushes updates).
                     <meta http-equiv="refresh" content="10">
                 }
-                <title>"TokenBurn — AI token usage"</title>
+                <title>(title)</title>
                 <link rel="stylesheet" href="/style.css">
                 // The theme's CSS variables override the stylesheet's defaults.
                 theme_style(index: theme)
@@ -104,17 +109,84 @@ async fn home(cx: &Cx) -> Result<impl View> {
     let window = params.window.clone().unwrap_or_else(|| "auto".into());
 
     Ok(view! {
-        document(interactive: interactive, theme: theme_index,
+        document(interactive: interactive, theme: theme_index, title: format!("{} — AI token usage", tokenburn_core::appinfo::title()),
             if let Some(d) = &snapshot {
                 <header class="top">
-                    <h1>"🔥 TokenBurn"</h1>
+                    brand(active: "dashboard".to_string())
                     filters(query: d.query, theme: theme_index, metric: metric, currency: currency)
                 </header>
                 dashboard_body(d: d, live: false, metric: metric, base: &base, click_bucket: None, click_project: None)
             } else {
-                <header class="top"><h1>"🔥 TokenBurn"</h1></header>
+                <header class="top">brand(active: "dashboard".to_string())</header>
                 live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::names()[theme_index].to_string(), metric: metric.label().to_string(), currency: currency.code.to_string(), sel_bucket: selection.bucket.clone().unwrap_or_default(), sel_project: selection.project.clone().unwrap_or_default())
             }
+        )
+    })
+}
+
+/// The saved theme and currency, shared by the pages that are not the dashboard.
+fn saved_theme_and_currency() -> (usize, tokenburn_core::Currency) {
+    (settings::theme_index(), settings::currency())
+}
+
+#[page("/about")]
+async fn about_page(cx: &Cx) -> Result<impl View> {
+    let _ = cx;
+    let (theme_index, _) = saved_theme_and_currency();
+    let rows = tokenburn_core::appinfo::about_rows();
+    Ok(view! {
+        document(interactive: false, theme: theme_index, title: format!("About — {}", tokenburn_core::appinfo::title()),
+            <header class="top">brand(active: "about".to_string())</header>
+            <section>
+                <h2>(tokenburn_core::appinfo::title())</h2>
+                <p class="dim">(tokenburn_core::appinfo::TAGLINE)</p>
+                <table class="kv"><tbody>
+                    for (k, v) in rows {
+                        <tr>
+                            <th>(k)</th>
+                            <td>
+                                if tokenburn_core::appinfo::is_link(&v) {
+                                    <a href=(v.clone()) target="_blank" rel="noopener">(v.clone())</a>
+                                } else {
+                                    (v.clone())
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody></table>
+            </section>
+        )
+    })
+}
+
+#[page("/settings")]
+async fn settings_page(cx: &Cx) -> Result<impl View> {
+    let _ = cx;
+    let (theme_index, currency) = saved_theme_and_currency();
+    Ok(view! {
+        document(interactive: false, theme: theme_index, title: format!("Settings — {}", tokenburn_core::appinfo::title()),
+            <header class="top">brand(active: "settings".to_string())</header>
+            <section>
+                <h2>"Settings"</h2>
+                <p class="dim">"Saved to " (tokenburn_core::appinfo::settings_file()) " and shared with the TUI and GUI."</p>
+                <form class="filters" method="get" action="/">
+                    <label>"currency "
+                        <select name="currency">
+                            for cur in tokenburn_core::CURRENCIES {
+                                <option value=(cur.code) selected=(cur.code == currency.code)>(format!("{} · {}", cur.code, cur.name))</option>
+                            }
+                        </select>
+                    </label>
+                    <label>"theme "
+                        <select name="theme">
+                            for (i, n) in theme::names().iter().enumerate() {
+                                <option value=(*n) selected=(i == theme_index)>(*n)</option>
+                            }
+                        </select>
+                    </label>
+                    <button type="submit">"Save"</button>
+                </form>
+            </section>
         )
     })
 }

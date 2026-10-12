@@ -18,7 +18,14 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         ""
     };
 
-    let title = text("🔥 TokenBurn").size(22).style(text::primary);
+    let title = row![
+        text("🔥 TokenBurn").size(22).style(text::primary),
+        text(tokenburn_core::appinfo::version_label())
+            .size(13)
+            .style(text::secondary),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::End);
     let pickers = [
         pick_list(&View::ALL[..], Some(state.view), Message::ViewSelected).into(),
         pick_list(
@@ -40,18 +47,18 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         )
         .into(),
         pick_list(
-            ThemeChoice::all(),
-            Some(ThemeChoice::at(state.theme_index)),
-            Message::ThemeSelected,
-        )
-        .placeholder("Theme")
-        .into(),
-        pick_list(
             CurrencyChoice::all(),
             Some(CurrencyChoice::of(state.currency.code)),
             Message::CurrencySelected,
         )
         .placeholder("Currency")
+        .into(),
+        pick_list(
+            ThemeChoice::all(),
+            Some(ThemeChoice::at(state.theme_index)),
+            Message::ThemeSelected,
+        )
+        .placeholder("Theme")
         .into(),
     ];
 

@@ -1,11 +1,21 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
+use super::Tab;
 use crate::app::App;
 
 /// Keys while the options popup is open. Always consumes the key.
 pub fn handle_key(app: &mut App, key: KeyEvent) {
     let o = &mut app.options;
+    if o.tab == Tab::About {
+        match key.code {
+            KeyCode::Char('i') | KeyCode::Esc | KeyCode::Char('q') => o.open = false,
+            KeyCode::Char('o') | KeyCode::Tab | KeyCode::BackTab => o.tab = Tab::Settings,
+            _ => {}
+        }
+        return;
+    }
     match key.code {
+        KeyCode::Char('i') => o.tab = Tab::About,
         KeyCode::Esc | KeyCode::Char('o') | KeyCode::Char('q') => o.open = false,
         KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => o.move_cursor(1),
         KeyCode::Up | KeyCode::Char('k') | KeyCode::BackTab => o.move_cursor(-1),

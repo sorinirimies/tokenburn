@@ -21,6 +21,7 @@
 //! println!("{} rows", report.len());
 //! ```
 
+pub mod appinfo;
 pub mod features;
 pub mod utils;
 

@@ -253,3 +253,17 @@ async fn tables_scroll_sideways_and_secondary_columns_are_tagged_for_the_media_q
     // Every other x label is marked so narrow screens can thin them out.
     assert!(html.contains("class=\"axis alt\"") || html.matches("class=\"axis\"").count() > 0);
 }
+
+#[tokio::test]
+async fn title_shows_the_version_and_about_and_settings_pages_exist() {
+    let addr = start().await;
+    let v = tokenburn_core::appinfo::version_label();
+    let home = get(addr, "/?tool=all&bucket=daily&window=all").await;
+    assert!(home.body.contains(&v), "version missing on the dashboard");
+    let about = get(addr, "/about").await;
+    assert_eq!(about.status, 200);
+    assert!(about.body.contains("Developer") && about.body.contains(&v));
+    let settings = get(addr, "/settings").await;
+    assert_eq!(settings.status, 200);
+    assert!(settings.body.contains("name=\"theme\""));
+}

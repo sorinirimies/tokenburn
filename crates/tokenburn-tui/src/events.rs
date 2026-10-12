@@ -34,7 +34,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
     }
 
     match key.code {
-        KeyCode::Char('o') => app.options.open = true,
+        KeyCode::Char('o') => app
+            .options
+            .open_tab(crate::features::options::Tab::Settings),
+        KeyCode::Char('i') => app.options.open_tab(crate::features::options::Tab::About),
         KeyCode::Char('T') => app.theme_picker_open = true,
         KeyCode::Char('C') => app.currency_picker_open = true,
         KeyCode::Char(']') => app.cycle_theme(1),

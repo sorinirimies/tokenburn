@@ -3,7 +3,7 @@
 use iced::widget::{column, container, responsive, scrollable, text};
 use iced::{Element, Length};
 
-use crate::features::{projects, report};
+use crate::features::{about, projects, report};
 use crate::message::Message;
 use crate::state::{TokenBurn, View};
 use crate::widgets::{header, summary_cards};
@@ -23,6 +23,8 @@ impl TokenBurn {
         let body = match self.view {
             View::Report => report::view::view(self, layout),
             View::Projects => projects::view::view(self, layout),
+            View::Settings => about::view::settings(self),
+            View::About => about::view::about(self),
         };
 
         let status: Element<'_, Message> = if let Some(e) = &self.error_message {
@@ -42,7 +44,9 @@ impl TokenBurn {
         // Wide: the cards stay put and only the table scrolls. Otherwise the cards
         // would eat most of a short window, so the whole page scrolls (the header
         // and the status line stay).
-        let content: Element<'_, Message> = if layout.is_wide() {
+        let content: Element<'_, Message> = if !self.view.is_data() {
+            body
+        } else if layout.is_wide() {
             column![cards, body].spacing(spacing).into()
         } else {
             scrollable(column![cards, body].spacing(spacing))
@@ -322,7 +326,7 @@ mod tests {
     fn every_layout_builds_with_data_without_data_and_with_a_selection() {
         let mut app = loaded();
         let key = app.pie.slices[0].key.clone().unwrap();
-        for view in [View::Report, View::Projects] {
+        for view in View::ALL {
             for selected in [false, true] {
                 app.view = view;
                 if selected {

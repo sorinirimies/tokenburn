@@ -39,10 +39,17 @@ pub enum View {
     #[default]
     Report,
     Projects,
+    Settings,
+    About,
 }
 
 impl View {
-    pub const ALL: [View; 2] = [View::Report, View::Projects];
+    pub const ALL: [View; 4] = [View::Report, View::Projects, View::Settings, View::About];
+
+    /// Whether the view shows usage data (so the totals cards belong above it).
+    pub fn is_data(self) -> bool {
+        matches!(self, View::Report | View::Projects)
+    }
 }
 
 impl fmt::Display for View {
@@ -50,6 +57,8 @@ impl fmt::Display for View {
         f.write_str(match self {
             View::Report => "Report",
             View::Projects => "Projects",
+            View::Settings => "Settings",
+            View::About => "About",
         })
     }
 }

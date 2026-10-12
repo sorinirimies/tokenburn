@@ -33,11 +33,21 @@ impl OptionRow {
     }
 }
 
+/// Tabs of the popup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tab {
+    #[default]
+    Settings,
+    About,
+}
+
 /// User-adjustable TUI settings.
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Popup visible?
     pub open: bool,
+    /// Which tab of the popup is showing.
+    pub tab: Tab,
     pub cursor: OptionRow,
     /// Re-read the logs every [`Options::refresh_interval`].
     pub auto_refresh: bool,
@@ -55,6 +65,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             open: false,
+            tab: Tab::Settings,
             cursor: OptionRow::AutoRefresh,
             auto_refresh: true,
             show_chart: true,
@@ -67,6 +78,16 @@ impl Default for Options {
 }
 
 impl Options {
+    /// Open the popup on `tab`; if it is already showing that tab, close it.
+    pub fn open_tab(&mut self, tab: Tab) {
+        if self.open && self.tab == tab {
+            self.open = false;
+        } else {
+            self.open = true;
+            self.tab = tab;
+        }
+    }
+
     pub fn refresh_interval(&self) -> Duration {
         Duration::from_secs(self.refresh_secs.value().round().max(1.0) as u64)
     }

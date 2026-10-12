@@ -179,12 +179,25 @@ mod tests {
         app.options.open = true;
         let out = draw(&mut app);
         for needle in [
-            "Options",
+            "Settings",
+            "About",
             "Auto-refresh",
             "Refresh every",
             "Pie slices",
             "☑",
         ] {
+            assert!(out.contains(needle), "missing {needle:?} in:\n{out}");
+        }
+    }
+
+    #[test]
+    fn title_shows_the_version_and_about_tab_renders() {
+        let mut app = app_with_rows();
+        let v = tokenburn_core::appinfo::version_label();
+        assert!(draw(&mut app).contains(&v));
+        app.options.open_tab(crate::features::options::Tab::About);
+        let out = draw(&mut app);
+        for needle in ["Developer", "GitHub", "License"] {
             assert!(out.contains(needle), "missing {needle:?} in:\n{out}");
         }
     }
