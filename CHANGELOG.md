@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.2.2](https://github.com/sorinirimies/tokenburn/compare/v0.2.1...v0.2.2) — 2026-10-12
+
+### ✨ Features
+
+- Version label in titles, About and Settings tabs, theme selector last ([`078ac56`](https://github.com/sorinirimies/tokenburn/commit/078ac56e4224536f450d75ec60bd6f86bee8f700))
+
+### 🔄 CI and release
+
+- **security:** Add cargo-audit workflow and just audit recipe ([`07dae40`](https://github.com/sorinirimies/tokenburn/commit/07dae400eb86018b0126bb8504a3692c814dae8b))
+
 ## [0.2.1](https://github.com/sorinirimies/tokenburn/compare/v0.2.0...v0.2.1) — 2026-10-09
 
 ### 🐛 Bug fixes
