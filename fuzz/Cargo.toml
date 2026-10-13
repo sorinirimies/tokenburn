@@ -1,0 +1,40 @@
+[package]
+name = "tokenburn-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+tokenburn-core = { path = "../crates/tokenburn-core" }
+
+# Not part of the main workspace (needs nightly).
+[workspace]
+
+[[bin]]
+name = "text_utils"
+path = "fuzz_targets/text_utils.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parse_ts"
+path = "fuzz_targets/parse_ts.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "currency"
+path = "fuzz_targets/currency.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "settings_json"
+path = "fuzz_targets/settings_json.rs"
+test = false
+doc = false

@@ -52,11 +52,12 @@ pub fn axis_tokens(v: f64) -> String {
 
 /// A short x-axis label: drop the year (`2026-05-10` → `05-10`, `2026-05-10 13:00` → `13:00`).
 pub fn short_label(label: &str) -> String {
-    match label.len() {
-        16 => label[11..].to_string(),
-        10 => label[5..].to_string(),
-        _ => label.to_string(),
-    }
+    let tail = match label.len() {
+        16 => label.get(11..),
+        10 => label.get(5..),
+        _ => None,
+    };
+    tail.unwrap_or(label).to_string()
 }
 
 /// `pi:Users-me-Projects-tokenburn` → `pi:tokenburn` (last path-ish segment).
@@ -76,6 +77,12 @@ pub fn short_name(full: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_label_multibyte_is_safe() {
+        assert_eq!(short_label("abcd\u{51b}xyz1"), "abcd\u{51b}xyz1");
+        assert_eq!(short_label("2026-05-10"), "05-10");
+    }
 
     #[test]
     fn thousands_groups() {
