@@ -15,6 +15,8 @@ A terminal UI, a desktop GUI and a web dashboard (plus a CLI for scripts), all i
 [![TUI installs](https://img.shields.io/crates/d/tokenburn-tui?label=tokenburn-tui%20installs&logo=rust&color=orange)](https://crates.io/crates/tokenburn-tui)
 [![GUI installs](https://img.shields.io/crates/d/tokenburn-gui?label=tokenburn-gui%20installs&logo=rust&color=orange)](https://crates.io/crates/tokenburn-gui)
 [![Web installs](https://img.shields.io/crates/d/tokenburn-web?label=tokenburn-web%20installs&logo=rust&color=orange)](https://crates.io/crates/tokenburn-web)
+[![Audit](https://github.com/sorinirimies/tokenburn/actions/workflows/security.yml/badge.svg)](https://github.com/sorinirimies/tokenburn/actions/workflows/security.yml)
+[![Fuzz](https://github.com/sorinirimies/tokenburn/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/tokenburn/actions/workflows/fuzz.yml)
 
 <img src="examples/vhs/generated/dashboard.gif" alt="TokenBurn terminal UI" width="900">
 
