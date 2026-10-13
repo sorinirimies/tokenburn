@@ -4,40 +4,32 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## [0.2.2](https://github.com/sorinirimies/tokenburn/compare/v0.2.1...v0.2.2) — 2026-10-12
+## [0.2.3](https://github.com/sorinirimies/tokenburn/compare/v0.1.8...v0.2.3) — 2026-10-13
 
 ### ✨ Features
 
 - Version label in titles, About and Settings tabs, theme selector last ([`078ac56`](https://github.com/sorinirimies/tokenburn/commit/078ac56e4224536f450d75ec60bd6f86bee8f700))
 
-### 🔄 CI and release
-
-- **security:** Add cargo-audit workflow and just audit recipe ([`07dae40`](https://github.com/sorinirimies/tokenburn/commit/07dae400eb86018b0126bb8504a3692c814dae8b))
-
-## [0.2.1](https://github.com/sorinirimies/tokenburn/compare/v0.2.0...v0.2.1) — 2026-10-09
-
 ### 🐛 Bug fixes
 
 - **gui:** Unresolved rustdoc link to macos ([`fcd841f`](https://github.com/sorinirimies/tokenburn/commit/fcd841f45dcd6833e569cc05edaef67039bc099e))
-
-## [0.2.0](https://github.com/sorinirimies/tokenburn/compare/v0.1.9...v0.2.0) — 2026-10-09
-
-### 🐛 Bug fixes
-
 - **gui:** Add the macOS Window menu so Zoom, Move & Resize and the tiling shortcuts work ([`4f66056`](https://github.com/sorinirimies/tokenburn/commit/4f660565ed5aca8b7d7f09cdab708bbbaef06c67))
-
-### ♻️ Refactor
-
-- **gui:** Move the macOS window menu into a window module (window::setup) ([`f83ab3b`](https://github.com/sorinirimies/tokenburn/commit/f83ab3b8c94c52d9a67ebb226115002ae39babb4))
-
-## [0.1.9](https://github.com/sorinirimies/tokenburn/compare/v0.1.8...v0.1.9) — 2026-10-07
 
 ### ⚡ Performance
 
 - Lower memory — borrow rows instead of copying them (drill, TUI), stream huge Zed threads; add soak tests ([`7fee2a2`](https://github.com/sorinirimies/tokenburn/commit/7fee2a220747fc0732d55c2d543336cdd1923289))
 
+### ♻️ Refactor
+
+- **gui:** Move the macOS window menu into a window module (window::setup) ([`f83ab3b`](https://github.com/sorinirimies/tokenburn/commit/f83ab3b8c94c52d9a67ebb226115002ae39babb4))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-10-13 ([`26a68cc`](https://github.com/sorinirimies/tokenburn/commit/26a68cc0117d076d58eceee606962386da8ff898))
+
 ### 🔄 CI and release
 
+- **security:** Add cargo-audit workflow and just audit recipe ([`07dae40`](https://github.com/sorinirimies/tokenburn/commit/07dae400eb86018b0126bb8504a3692c814dae8b))
 - **gitea:** Retry rustup and cargo downloads (a network timeout failed a run) ([`4fb3b20`](https://github.com/sorinirimies/tokenburn/commit/4fb3b206296e76ff19499321290d688f88f46c10))
 - Release only for real upgrades; never for downgrades, checksum-only or dev-only changes ([`f7f0516`](https://github.com/sorinirimies/tokenburn/commit/f7f0516e0c8e2f5b5bf9c77e5e64a09ef2d5178e))
 
