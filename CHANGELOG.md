@@ -4,6 +4,18 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.2.4](https://github.com/sorinirimies/tokenburn/compare/v0.2.3...v0.2.4) — 2026-10-14
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-10-14 ([`7af4caa`](https://github.com/sorinirimies/tokenburn/commit/7af4caae79615c7d0f3d34d7a0db7ed711cc5620))
+
+### 🔄 CI and release
+
+- Split fuzz into own workflow; add audit & fuzz badges to README ([`972b2e9`](https://github.com/sorinirimies/tokenburn/commit/972b2e9ccce12e1191df27f9003e58686da09734))
+- Add cargo-fuzz targets + fuzz smoke job; fix audit/fuzz findings ([`d858477`](https://github.com/sorinirimies/tokenburn/commit/d85847748ac2b1618d0fc33d485e2e48329e9225))
+- Download rustup script before running ([`f1474bb`](https://github.com/sorinirimies/tokenburn/commit/f1474bbe90adc052875f772704eec77760510d19))
+
 ## [0.2.3](https://github.com/sorinirimies/tokenburn/compare/v0.1.8...v0.2.3) — 2026-10-13
 
 ### ✨ Features
