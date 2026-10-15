@@ -4,6 +4,22 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.2.5](https://github.com/sorinirimies/tokenburn/compare/v0.2.4...v0.2.5) — 2026-10-15
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-10-15 ([`f32006e`](https://github.com/sorinirimies/tokenburn/commit/f32006e9da9229ce2c1b4aaadab7b36afa7f567c))
+
+### 🔄 CI and release
+
+- Prebuilt Nushell, cargo-deny + cargo-audit security workflow ([`f76633a`](https://github.com/sorinirimies/tokenburn/commit/f76633a843b59cbcb4b2989013bb8ed695677e0c))
+- Prebuilt Nushell, cargo-deny + cargo-audit security workflow ([`fafcd35`](https://github.com/sorinirimies/tokenburn/commit/fafcd356fefac3525e5486b57859530c2c568825))
+
+### 🔧 Chores
+
+- **justfile:** Push/pull current branch instead of hardcoded main ([`ca8fca9`](https://github.com/sorinirimies/tokenburn/commit/ca8fca922eb3da06d5ee290cca6b2f919e4a2581))
+- **justfile:** Skip unconfigured remotes in *-all recipes ([`cd1b706`](https://github.com/sorinirimies/tokenburn/commit/cd1b706cae06f3436d530e404cc116e285023f42))
+
 ## [0.2.4](https://github.com/sorinirimies/tokenburn/compare/v0.2.3...v0.2.4) — 2026-10-14
 
 ### 📦 Dependencies
