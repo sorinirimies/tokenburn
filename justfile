@@ -446,7 +446,7 @@ update-deps:
     @echo "✅ All checks passed — committing dependency updates…"
     git add Cargo.lock
     git diff --cached --quiet || git commit -m "chore: update dependencies"
-    git push origin main
+    git push origin "$(git branch --show-current)"
     @echo "✅ Dependency updates pushed to GitHub."
 
 # Show outdated dependencies (requires cargo-outdated)
@@ -469,11 +469,11 @@ REMOTES := "origin gitea-starscream"
 
 # Push the current branch to GitHub (origin)
 push:
-    git push origin main
+    git push origin "$(git branch --show-current)"
 
 # Push the current branch to Gitea Starscream
 push-gitea-starscream:
-    git push gitea-starscream main
+    git push gitea-starscream "$(git branch --show-current)"
 
 # Push the current branch to every remote (continues on failure)
 push-all:
@@ -481,7 +481,7 @@ push-all:
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
-        git push "$r" main || failed="$failed $r"
+        git push "$r" "$(git branch --show-current)" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to push to:$failed"; exit 1; fi
@@ -493,7 +493,7 @@ push-all-force:
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
-        git push --force "$r" main || failed="$failed $r"
+        git push --force "$r" "$(git branch --show-current)" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to force-push to:$failed"; exit 1; fi
@@ -501,11 +501,11 @@ push-all-force:
 
 # Pull the current branch from GitHub (origin)
 pull:
-    git pull origin main
+    git pull origin "$(git branch --show-current)"
 
 # Pull the current branch from Gitea Starscream
 pull-gitea-starscream:
-    git pull gitea-starscream main
+    git pull gitea-starscream "$(git branch --show-current)"
 
 # Pull the current branch from every remote (continues on failure)
 pull-all:
@@ -513,7 +513,7 @@ pull-all:
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
-        git pull "$r" main || failed="$failed $r"
+        git pull "$r" "$(git branch --show-current)" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to pull from:$failed"; exit 1; fi
@@ -537,7 +537,7 @@ push-tags-all:
 
 # Force-sync Gitea Starscream with GitHub (main + tags)
 sync-gitea-starscream:
-    git push gitea-starscream main --force
+    git push gitea-starscream "$(git branch --show-current)" --force
     git push gitea-starscream --tags --force
     @echo "✅ Gitea Starscream force-synced."
 
@@ -577,7 +577,7 @@ release-initial: check-release _check-git-cliff _check-nu
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
-        git push "$r" main || failed="$failed $r"
+        git push "$r" "$(git branch --show-current)" || failed="$failed $r"
         git push "$r" "$tag" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
@@ -590,7 +590,7 @@ release version: (bump version)
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
-        git push --follow-tags "$r" main || failed="$failed $r"
+        git push --follow-tags "$r" "$(git branch --show-current)" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Release v{{ version }} failed to push to:$failed"; exit 1; fi
@@ -598,12 +598,12 @@ release version: (bump version)
 
 # Bump, commit, tag, then push to GitHub only.
 release-github version: (bump version)
-    git push --follow-tags origin main
+    git push --follow-tags origin "$(git branch --show-current)"
     @echo "✅ Release v{{ version }} pushed to GitHub."
 
 # Bump, commit, tag, then push to Gitea Starscream only.
 release-gitea-starscream version: (bump version)
-    git push --follow-tags gitea-starscream main
+    git push --follow-tags gitea-starscream "$(git branch --show-current)"
     @echo "✅ Release v{{ version }} pushed to Gitea Starscream."
 
 # Push the latest commit and all tags to every remote (no bump, continues on failure).
@@ -612,7 +612,7 @@ push-release-all: check-all
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
-        git push --follow-tags "$r" main || failed="$failed $r"
+        git push --follow-tags "$r" "$(git branch --show-current)" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to push to:$failed"; exit 1; fi
