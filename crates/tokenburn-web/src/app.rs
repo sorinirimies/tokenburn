@@ -115,7 +115,12 @@ pub async fn serve(opts: ServerOptions) -> std::io::Result<()> {
             eprintln!("tokenburn-web: could not open a browser ({e}); visit {url}");
         }
     }
-    topcoat::serve(listener, router(bundle)).await
+    // Exit immediately on Ctrl+C / SIGTERM: open live-update streams would
+    // otherwise hold graceful shutdown until its timeout.
+    tokio::select! {
+        r = topcoat::serve(listener, router(bundle)) => r,
+        () = crate::lifecycle::shutdown_signal() => Ok(()),
+    }
 }
 
 /// URL to open for a bound address (`0.0.0.0` / `::` are not browsable → localhost).

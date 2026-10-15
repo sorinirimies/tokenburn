@@ -98,8 +98,8 @@ pub async fn filters(
             </label>
             <label>"theme "
                 <select name="theme" onchange="this.form.submit()">
-                    for (i, n) in theme::names().iter().enumerate() {
-                        <option value=(*n) selected=(i == theme)>(*n)</option>
+                    for n in theme::names() {
+                        <option value=(n) selected=(n == theme::name(theme))>(n)</option>
                     }
                 </select>
             </label>
@@ -258,7 +258,7 @@ pub async fn live_filters(
             <label>"theme "
                 <select :value=$(theme.get()) @change=$(|e: Event| theme.set(e.target.value))>
                     for n in theme::names() {
-                        <option value=(*n) selected=(*n == th)>(*n)</option>
+                        <option value=(n) selected=(n == th)>(n)</option>
                     }
                 </select>
             </label>

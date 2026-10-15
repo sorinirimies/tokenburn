@@ -36,4 +36,5 @@ pub mod params;
 pub mod style;
 pub mod theme;
 
+mod lifecycle;
 pub use app::{ServerOptions, router, serve};

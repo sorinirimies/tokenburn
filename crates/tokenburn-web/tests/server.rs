@@ -125,6 +125,26 @@ async fn themes_are_listed_and_a_chosen_one_is_applied_and_remembered() {
     assert!(saved.contains("Dracula"));
 }
 
+#[tokio::test]
+async fn the_system_theme_follows_the_browser_and_is_remembered() {
+    let addr = start().await;
+    let r = get(addr, "/?theme=System&window=all").await;
+    assert_eq!(r.status, 200);
+    assert!(
+        r.body.contains("prefers-color-scheme:light"),
+        "dark base plus a light media override"
+    );
+    assert!(
+        r.body.contains("<option value=\"System\""),
+        "listed in the select"
+    );
+    let saved = std::fs::read_to_string(sandbox().config.join("settings.json")).unwrap();
+    assert!(saved.contains("\"System\""), "{saved}");
+    // A later request without ?theme keeps following the system.
+    let r = get(addr, "/?window=all").await;
+    assert!(r.body.contains("prefers-color-scheme:light"));
+}
+
 /// The first `href="…sel_<kind>=…"` in `html`, HTML-unescaped.
 fn first_link(html: &str, kind: &str) -> String {
     let needle = format!("sel_{kind}=");

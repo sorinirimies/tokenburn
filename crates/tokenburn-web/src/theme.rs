@@ -4,11 +4,28 @@
 //! theme as fallback; a `<style>` block from [`css`] (re-emitted by the live shard
 //! whenever the theme select changes) overrides those variables.
 
-use tokenburn_core::{Rgb, THEME_COUNT, THEME_NAMES, Tool, find_theme, theme_by_index};
+use tokenburn_core::{
+    Rgb, SYSTEM_THEME_NAME, THEME_COUNT, THEME_NAMES, ThemeChoice, Tool, settings, theme_by_index,
+};
+
+/// Pseudo-index meaning "follow the system" (one past the last preset).
+pub const SYSTEM_INDEX: usize = THEME_COUNT;
 
 /// CSS custom properties for the theme at `index` (clamped), as one `:root{…}` rule.
+///
+/// [`SYSTEM_INDEX`] yields the dark preset plus a `prefers-color-scheme: light`
+/// override, so the browser follows the OS live (no server polling needed).
 pub fn css(index: usize) -> String {
-    let t = theme_by_index(index.min(THEME_COUNT - 1));
+    if index == SYSTEM_INDEX {
+        let dark = css_for(tokenburn_core::system_theme_index(true));
+        let light = css_for(tokenburn_core::system_theme_index(false));
+        return format!("{dark}@media (prefers-color-scheme:light){{{light}}}");
+    }
+    css_for(index.min(THEME_COUNT - 1))
+}
+
+fn css_for(index: usize) -> String {
+    let t = theme_by_index(index);
     let mut vars: Vec<(String, Rgb)> = vec![
         ("bg".into(), t.background),
         ("panel".into(), t.surface),
@@ -47,13 +64,48 @@ pub fn series_var(tool: &str) -> String {
 }
 
 /// Pick the theme: an explicit, valid `requested` name wins, otherwise `saved`.
+/// `"System"` resolves to [`SYSTEM_INDEX`].
 pub fn resolve(requested: Option<&str>, saved: usize) -> usize {
-    requested.and_then(find_theme).unwrap_or(saved)
+    match requested.and_then(ThemeChoice::parse) {
+        Some(ThemeChoice::System) => SYSTEM_INDEX,
+        Some(ThemeChoice::Preset(i)) => i,
+        None => saved,
+    }
 }
 
-/// Theme names in canonical order (for the select).
-pub fn names() -> &'static [&'static str] {
-    THEME_NAMES
+/// Theme names for the select: "System" first, then the presets in canonical order.
+pub fn names() -> Vec<&'static str> {
+    std::iter::once(SYSTEM_THEME_NAME)
+        .chain(THEME_NAMES.iter().copied())
+        .collect()
+}
+
+/// The name for a theme index ([`SYSTEM_INDEX`] → "System"; out of range is clamped).
+pub fn name(index: usize) -> &'static str {
+    if index == SYSTEM_INDEX {
+        SYSTEM_THEME_NAME
+    } else {
+        THEME_NAMES[index.min(THEME_COUNT - 1)]
+    }
+}
+
+/// The saved theme ([`SYSTEM_INDEX`] when following the system), shared with the TUI and GUI.
+pub fn saved_index() -> usize {
+    let s = settings::load();
+    if s.follow_system_theme() {
+        SYSTEM_INDEX
+    } else {
+        s.theme_index()
+    }
+}
+
+/// Remember `index` for the TUI and GUI (best effort).
+pub fn save_index(index: usize) {
+    let _ = if index == SYSTEM_INDEX {
+        settings::save_system_theme()
+    } else {
+        settings::save_theme(index)
+    };
 }
 
 /// Every theme with its colours, for `/api/themes`.
@@ -137,13 +189,55 @@ mod tests {
 
     #[test]
     fn requested_theme_wins_only_when_valid() {
-        assert_eq!(resolve(Some("nord"), 3), find_theme("Nord").unwrap());
+        assert_eq!(
+            resolve(Some("nord"), 3),
+            tokenburn_core::find_theme("Nord").unwrap()
+        );
         assert_eq!(
             resolve(Some("not a theme"), 3),
             3,
             "unknown names keep the saved theme"
         );
         assert_eq!(resolve(None, 7), 7);
+    }
+
+    #[test]
+    fn system_resolves_to_the_system_index_in_any_case() {
+        assert_eq!(resolve(Some("System"), 7), SYSTEM_INDEX);
+        assert_eq!(resolve(Some(" system "), 7), SYSTEM_INDEX);
+    }
+
+    #[test]
+    fn system_css_has_a_dark_base_and_a_light_media_override() {
+        let c = css(SYSTEM_INDEX);
+        assert!(c.starts_with(":root{color-scheme:dark;"), "{c}");
+        assert!(
+            c.contains("@media (prefers-color-scheme:light){:root{color-scheme:light;"),
+            "{c}"
+        );
+        assert!(c.ends_with("}}"), "{c}");
+        let dark = css(tokenburn_core::system_theme_index(true));
+        let light = css(tokenburn_core::system_theme_index(false));
+        assert_eq!(
+            c,
+            format!("{dark}@media (prefers-color-scheme:light){{{light}}}")
+        );
+        assert!(
+            c.chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || "#:;{}-,. ()@".contains(ch)),
+            "safe to inline in <style>: {c}"
+        );
+    }
+
+    #[test]
+    fn names_lead_with_system_and_name_inverts_the_index() {
+        let n = names();
+        assert_eq!(n.len(), THEME_COUNT + 1);
+        assert_eq!(n[0], "System");
+        assert_eq!(n[1], "Default");
+        assert_eq!(name(SYSTEM_INDEX), "System");
+        assert_eq!(name(0), "Default");
+        assert_eq!(name(usize::MAX - 1), THEME_NAMES[THEME_COUNT - 1]);
     }
 
     #[test]

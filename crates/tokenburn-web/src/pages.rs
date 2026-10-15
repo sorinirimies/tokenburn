@@ -40,6 +40,7 @@ pub async fn document(
                 <link rel="stylesheet" href="/style.css">
                 // The theme's CSS variables override the stylesheet's defaults.
                 theme_style(index: theme)
+                <script src="/lifecycle.js"></script>
                 topcoat::dev::script()
                 if interactive {
                     topcoat::runtime::script()
@@ -82,10 +83,10 @@ async fn home(cx: &Cx) -> Result<impl View> {
     let metric = parse_metric(params.metric.as_deref());
 
     // An explicit, valid `?theme=` wins and is remembered (shared with the TUI and GUI).
-    let saved = settings::theme_index();
+    let saved = theme::saved_index();
     let theme_index = theme::resolve(params.theme.as_deref(), saved);
     if theme_index != saved {
-        let _ = settings::save_theme(theme_index);
+        theme::save_index(theme_index);
     }
 
     // Likewise `?currency=`: explicit and valid wins and is remembered.
@@ -118,7 +119,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                 dashboard_body(d: d, live: false, metric: metric, base: &base, click_bucket: None, click_project: None)
             } else {
                 <header class="top">brand(active: "dashboard".to_string())</header>
-                live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::names()[theme_index].to_string(), metric: metric.label().to_string(), currency: currency.code.to_string(), sel_bucket: selection.bucket.clone().unwrap_or_default(), sel_project: selection.project.clone().unwrap_or_default())
+                live_dashboard(tool: tool, bucket: bucket, window: window, theme: theme::name(theme_index).to_string(), metric: metric.label().to_string(), currency: currency.code.to_string(), sel_bucket: selection.bucket.clone().unwrap_or_default(), sel_project: selection.project.clone().unwrap_or_default())
             }
         )
     })
@@ -126,7 +127,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
 
 /// The saved theme and currency, shared by the pages that are not the dashboard.
 fn saved_theme_and_currency() -> (usize, tokenburn_core::Currency) {
-    (settings::theme_index(), settings::currency())
+    (theme::saved_index(), settings::currency())
 }
 
 #[page("/about")]
@@ -179,8 +180,8 @@ async fn settings_page(cx: &Cx) -> Result<impl View> {
                     </label>
                     <label>"theme "
                         <select name="theme">
-                            for (i, n) in theme::names().iter().enumerate() {
-                                <option value=(*n) selected=(i == theme_index)>(*n)</option>
+                            for n in theme::names() {
+                                <option value=(n) selected=(n == theme::name(theme_index))>(n)</option>
                             }
                         </select>
                     </label>
@@ -225,10 +226,10 @@ async fn live_dashboard(
     let currency = effective_currency(Some(&currency_sig.get()));
     let selection = parse_selection(Some(&sel_bucket.get()), Some(&sel_project.get()));
     // Same for the theme; an unknown name keeps the saved one. A change is remembered.
-    let saved = settings::theme_index();
+    let saved = theme::saved_index();
     let theme_index = theme::resolve(Some(&theme.get()), saved);
     if theme_index != saved {
-        let _ = settings::save_theme(theme_index);
+        theme::save_index(theme_index);
     }
 
     Ok(view! {

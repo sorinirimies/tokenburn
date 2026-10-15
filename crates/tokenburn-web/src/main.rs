@@ -22,30 +22,38 @@ struct Args {
     #[arg(long)]
     no_open: bool,
 
-    /// Colour theme (see --list-themes); remembered for the TUI and GUI too.
+    /// Colour theme, or "System" to follow the OS light/dark setting (see --list-themes); remembered for the TUI and GUI too.
     #[arg(long, value_name = "NAME", value_parser = parse_theme)]
-    theme: Option<usize>,
+    theme: Option<tokenburn_core::ThemeChoice>,
 
     /// Print every theme name and exit.
     #[arg(long)]
     list_themes: bool,
 }
 
-fn parse_theme(s: &str) -> Result<usize, String> {
-    tokenburn_core::find_theme(s).ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
+fn parse_theme(s: &str) -> Result<tokenburn_core::ThemeChoice, String> {
+    tokenburn_core::ThemeChoice::parse(s)
+        .ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
 }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
     if args.list_themes {
+        println!("{}", tokenburn_core::SYSTEM_THEME_NAME);
         for name in tokenburn_core::THEME_NAMES {
             println!("{name}");
         }
         return Ok(());
     }
-    if let Some(i) = args.theme {
-        let _ = tokenburn_core::settings::save_theme(i);
+    match args.theme {
+        Some(tokenburn_core::ThemeChoice::System) => {
+            let _ = tokenburn_core::settings::save_system_theme();
+        }
+        Some(tokenburn_core::ThemeChoice::Preset(i)) => {
+            let _ = tokenburn_core::settings::save_theme(i);
+        }
+        None => {}
     }
     serve(ServerOptions {
         host: args.host,
