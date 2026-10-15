@@ -478,20 +478,24 @@ push-gitea-starscream:
 # Push the current branch to every remote (continues on failure)
 push-all:
     #!/usr/bin/env sh
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push "$r" main || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to push to:$failed"; exit 1; fi
     echo "✅ Pushed to: {{ REMOTES }}"
 
 # Force-push the current branch to every remote (leases are NOT used — be sure!)
 push-all-force:
     #!/usr/bin/env sh
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push --force "$r" main || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to force-push to:$failed"; exit 1; fi
     echo "✅ Force-pushed to: {{ REMOTES }}"
 
@@ -506,10 +510,12 @@ pull-gitea-starscream:
 # Pull the current branch from every remote (continues on failure)
 pull-all:
     #!/usr/bin/env sh
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git pull "$r" main || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to pull from:$failed"; exit 1; fi
     echo "✅ Pulled from: {{ REMOTES }}"
 
@@ -520,10 +526,12 @@ push-tags:
 # Push all tags to every remote (continues on failure)
 push-tags-all:
     #!/usr/bin/env sh
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push "$r" --tags || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to push tags to:$failed"; exit 1; fi
     echo "✅ Tags pushed to: {{ REMOTES }}"
 
@@ -566,21 +574,25 @@ release-initial: check-release _check-git-cliff _check-nu
     git diff --cached --quiet || git commit -m "chore: release $tag"
     git tag -a "$tag" -m "Release $tag"
     echo "🏷️  Tagged $tag — pushing to: {{ REMOTES }}"
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push "$r" main || failed="$failed $r"
         git push "$r" "$tag" || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Release $tag failed to push to:$failed"; exit 1; fi
     echo "✅ Release $tag pushed to: {{ REMOTES }} — Release workflows will start."
 
 # Bump, commit, tag, then push to every remote — triggers the Release workflows.
 release version: (bump version)
     #!/usr/bin/env sh
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push --follow-tags "$r" main || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Release v{{ version }} failed to push to:$failed"; exit 1; fi
     echo "✅ Release v{{ version }} pushed to: {{ REMOTES }}"
 
@@ -597,10 +609,12 @@ release-gitea-starscream version: (bump version)
 # Push the latest commit and all tags to every remote (no bump, continues on failure).
 push-release-all: check-all
     #!/usr/bin/env sh
-    failed=""
+    failed=""; skipped=""
     for r in {{ REMOTES }}; do
+        git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push --follow-tags "$r" main || failed="$failed $r"
     done
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Failed to push to:$failed"; exit 1; fi
     echo "✅ Latest commit + tags pushed to: {{ REMOTES }}"
 
