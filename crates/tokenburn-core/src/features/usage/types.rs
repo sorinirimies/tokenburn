@@ -27,11 +27,22 @@ pub enum Tool {
     OpenCode,
     /// Amp
     Amp,
+    /// Cline (VS Code extension / CLI)
+    Cline,
+    /// Roo Code (VS Code extension)
+    Roo,
+    /// Kilo Code (VS Code extension)
+    Kilo,
+    /// Qwen Code
+    Qwen,
 }
 
 impl Tool {
     /// Every supported tool, in display order.
-    pub const ALL: [Tool; 8] = [
+    /// Number of supported tools (sizes the per-tool arrays).
+    pub const COUNT: usize = 12;
+
+    pub const ALL: [Tool; Tool::COUNT] = [
         Tool::Pi,
         Tool::Zed,
         Tool::Claude,
@@ -40,6 +51,10 @@ impl Tool {
         Tool::Gemini,
         Tool::OpenCode,
         Tool::Amp,
+        Tool::Cline,
+        Tool::Roo,
+        Tool::Kilo,
+        Tool::Qwen,
     ];
 
     /// Short machine name (CLI flag value, JSON, query string).
@@ -53,6 +68,10 @@ impl Tool {
             Tool::Gemini => "gemini",
             Tool::OpenCode => "opencode",
             Tool::Amp => "amp",
+            Tool::Cline => "cline",
+            Tool::Roo => "roo",
+            Tool::Kilo => "kilo",
+            Tool::Qwen => "qwen",
         }
     }
 
@@ -72,6 +91,10 @@ impl Tool {
             Tool::Gemini => "Gemini CLI",
             Tool::OpenCode => "OpenCode",
             Tool::Amp => "Amp",
+            Tool::Cline => "Cline",
+            Tool::Roo => "Roo Code",
+            Tool::Kilo => "Kilo Code",
+            Tool::Qwen => "Qwen Code",
         }
     }
 }

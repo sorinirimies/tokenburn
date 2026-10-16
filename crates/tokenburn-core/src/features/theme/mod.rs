@@ -1,9 +1,14 @@
 //! Colour themes shared by every front-end.
 
 pub mod presets;
+pub mod system;
 pub mod types;
 
 pub use presets::*;
+pub use system::{
+    current_system_theme_index, detect_system_dark, is_system_name, system_theme_index,
+    ThemeChoice, SYSTEM_THEME_NAME,
+};
 pub use types::*;
 
 #[cfg(test)]
@@ -88,11 +93,12 @@ mod tests {
         for tool in crate::Tool::ALL {
             let _ = t.tool_color(tool);
         }
-        // The eight tools use eight distinct series slots.
+        // Eight series colours: the first eight tools are all distinct, later ones wrap.
         let idx: std::collections::HashSet<_> = crate::Tool::ALL
             .iter()
+            .take(8)
             .map(|t| t.series_index() % 8)
             .collect();
-        assert_eq!(idx.len(), crate::Tool::ALL.len());
+        assert_eq!(idx.len(), 8);
     }
 }

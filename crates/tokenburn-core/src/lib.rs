@@ -34,7 +34,9 @@ pub use features::report::{
 };
 pub use features::settings::{self, Settings};
 pub use features::theme::{
-    find_theme, theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES,
+    current_system_theme_index, detect_system_dark, find_theme, is_system_name, system_theme_index,
+    theme_by_index, theme_index_by_name, AppTheme, Rgb, ThemeChoice, SYSTEM_THEME_NAME,
+    THEME_COUNT, THEME_NAMES,
 };
 pub use features::usage::{Row, Summary, Tool};
 pub use utils::layout::LayoutClass;
@@ -57,10 +59,10 @@ pub struct Collected {
 /// year of Claude transcripts can take a moment). A tool that is not installed
 /// simply contributes nothing; a tool whose logs cannot be read adds a warning.
 pub fn collect(tool: ToolFilter, start: DateTime<Utc>) -> Collected {
-    use features::{amp, claude, codex, copilot, gemini, opencode, pi, zed};
+    use features::{amp, claude, cline, codex, copilot, gemini, opencode, pi, qwen, zed};
 
     type Job = fn(DateTime<Utc>) -> anyhow::Result<Vec<Row>>;
-    let jobs: [(Tool, Job); 8] = [
+    let jobs: [(Tool, Job); Tool::COUNT] = [
         (Tool::Pi, pi::collect_pi),
         (Tool::Zed, zed::collect_zed),
         (Tool::Claude, claude::collect_claude),
@@ -69,6 +71,10 @@ pub fn collect(tool: ToolFilter, start: DateTime<Utc>) -> Collected {
         (Tool::Gemini, gemini::collect_gemini),
         (Tool::OpenCode, opencode::collect_opencode),
         (Tool::Amp, amp::collect_amp),
+        (Tool::Cline, cline::collect_cline),
+        (Tool::Roo, cline::collect_roo),
+        (Tool::Kilo, cline::collect_kilo),
+        (Tool::Qwen, qwen::collect_qwen),
     ];
 
     let results: Vec<(Tool, anyhow::Result<Vec<Row>>)> = std::thread::scope(|scope| {

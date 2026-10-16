@@ -5,7 +5,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState};
 use ratatui::Frame;
-use tokenburn_core::{theme_by_index, THEME_NAMES};
+use tokenburn_core::theme_by_index;
 
 use crate::app::App;
 use crate::features::options::view::centered;
@@ -15,12 +15,16 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let popup = centered(area, 44, area.height.saturating_sub(4).clamp(8, 24));
     frame.render_widget(Clear, popup);
 
-    let items: Vec<ListItem> = THEME_NAMES
-        .iter()
-        .enumerate()
-        .map(|(i, name)| {
-            // A swatch of the theme's own accent + first series colours.
-            let preview = theme_by_index(i);
+    let items: Vec<ListItem> = (0..super::PICKER_LEN)
+        .map(|i| {
+            // A swatch of the theme's own accent + first series colours; "System"
+            // previews the preset it currently resolves to.
+            let preview = if i == 0 {
+                theme_by_index(tokenburn_core::current_system_theme_index())
+            } else {
+                theme_by_index(i - 1)
+            };
+            let active = i == app.picker_index();
             let swatch = |c: tokenburn_core::Rgb| {
                 Span::styled(
                     "■",
@@ -34,8 +38,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 swatch(preview.series[2]),
                 Span::raw(" "),
                 Span::styled(
-                    (*name).to_string(),
-                    if i == app.theme_index {
+                    super::picker_name(i).to_string(),
+                    if active {
                         Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(t.text)
@@ -53,12 +57,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(" · {}/{}  ", app.theme_index + 1, THEME_NAMES.len()),
+                format!(" · {}/{}  ", app.picker_index() + 1, super::PICKER_LEN),
                 Style::default().fg(t.muted),
             ),
         ]))
         .title_bottom(Line::from(Span::styled(
-            " ↑/↓ preview · Esc/Enter close ",
+            " ↑/↓ preview · System follows OS · Esc close ",
             Style::default().fg(t.muted),
         )))
         .borders(Borders::ALL)
@@ -74,6 +78,6 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         )
         .highlight_symbol("▶ ");
 
-    let mut state = ListState::default().with_selected(Some(app.theme_index));
+    let mut state = ListState::default().with_selected(Some(app.picker_index()));
     frame.render_stateful_widget(list, popup, &mut state);
 }

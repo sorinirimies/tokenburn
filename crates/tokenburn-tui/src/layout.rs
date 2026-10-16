@@ -238,7 +238,19 @@ mod tests {
         let out = draw(&mut app);
         assert!(out.contains("Theme"), "{out}");
         assert!(out.contains("Dracula"), "the current theme is visible");
-        assert!(out.contains("10/43"), "position indicator");
+        assert!(out.contains("11/44"), "position indicator");
+    }
+
+    #[test]
+    fn theme_picker_lists_system_first_and_marks_it_when_following() {
+        let mut app = app_with_rows();
+        app.set_follow_system();
+        app.theme_picker_open = true;
+        let out = draw(&mut app);
+        assert!(out.contains("System"), "{out}");
+        assert!(out.contains("1/44"), "System is row 1: {out}");
+        app.theme_picker_open = false;
+        assert!(draw(&mut app).contains("theme:System"));
     }
 
     #[test]
@@ -287,7 +299,7 @@ mod tests {
             "Claude Code",
             "Codex CLI",
             "Amp",
-            "7/8 shown",
+            "11/12 shown",
             "☑",
             "☐",
         ] {

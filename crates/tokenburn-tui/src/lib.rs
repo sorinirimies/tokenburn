@@ -18,13 +18,13 @@ use ratatui::Terminal;
 
 use crate::app::App;
 pub use crate::args::Args;
-use tokenburn_core::{Currency, Query};
+use tokenburn_core::{Currency, Query, ThemeChoice};
 
 /// Run the TUI until the user quits, starting from `query`.
 ///
-/// `theme` (an index into [`tokenburn_core::THEME_NAMES`]) overrides the saved theme;
+/// `theme` (a preset or "System") overrides the saved theme;
 /// `None` uses the one in the shared settings file.
-pub fn run(query: Query, theme: Option<usize>, currency: Option<Currency>) -> Result<()> {
+pub fn run(query: Query, theme: Option<ThemeChoice>, currency: Option<Currency>) -> Result<()> {
     // `ratatui::init` enables raw mode + alternate screen and installs a
     // panic hook that restores the terminal.
     let mut terminal = ratatui::init();
@@ -37,7 +37,7 @@ pub fn run(query: Query, theme: Option<usize>, currency: Option<Currency>) -> Re
 pub fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     query: Query,
-    theme: Option<usize>,
+    theme: Option<ThemeChoice>,
     currency: Option<Currency>,
 ) -> Result<()>
 where
@@ -47,11 +47,10 @@ where
     app.persist = true;
     app.query = query;
     match theme {
-        Some(i) => app.set_theme(i), // an explicit --theme is remembered
-        None => {
-            app.theme_index = tokenburn_core::settings::theme_index();
-            app.theme = crate::features::theme::UiTheme::by_index(app.theme_index);
-        }
+        // An explicit --theme is remembered.
+        Some(ThemeChoice::System) => app.set_follow_system(),
+        Some(ThemeChoice::Preset(i)) => app.set_theme(i),
+        None => app.apply_theme_choice(tokenburn_core::settings::load().theme_choice()),
     }
     // The user's own exchange rates, then the currency: an explicit --currency is
     // remembered like --theme, otherwise the saved one is used.
@@ -68,6 +67,7 @@ where
     while !app.should_quit {
         dirty |= app.poll_background();
         app.tick_auto_refresh();
+        dirty |= app.refresh_system_theme();
         if app.is_loading {
             // Animate the spinner while a load is in flight.
             app.tick_count = app.tick_count.wrapping_add(1);

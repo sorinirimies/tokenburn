@@ -41,6 +41,10 @@ pub struct App {
     /// Colours of the active theme (what every view reads).
     pub theme: UiTheme,
     pub theme_picker_open: bool,
+    /// The theme follows the OS light/dark setting ("System" in the picker).
+    pub follow_system: bool,
+    /// Last time the OS appearance was polled (while following the system).
+    pub last_system_check: Instant,
     /// Display currency (costs are logged in US dollars; this is presentation only).
     pub currency: Currency,
     /// The user's own exchange rates from settings.json (code → units per dollar).
@@ -65,7 +69,7 @@ pub struct App {
     pub tool_filter_open: bool,
     pub tool_cursor: usize,
     /// Rows per tool in `all_rows` (for the tool popup).
-    pub tool_counts: [usize; 8],
+    pub tool_counts: [usize; Tool::COUNT],
     pub report: Vec<ReportRow>,
     pub projects: Vec<(String, Summary)>,
     pub warnings: Vec<String>,
@@ -97,6 +101,8 @@ impl App {
             theme_index: 0,
             theme: UiTheme::by_index(0),
             theme_picker_open: false,
+            follow_system: false,
+            last_system_check: Instant::now(),
             currency: Currency::USD,
             rates: BTreeMap::new(),
             currency_picker_open: false,
@@ -108,7 +114,7 @@ impl App {
             filter_editing: false,
             tool_filter_open: false,
             tool_cursor: 0,
-            tool_counts: [0; 8],
+            tool_counts: [0; Tool::COUNT],
             report: Vec::new(),
             projects: Vec::new(),
             warnings: Vec::new(),
@@ -195,7 +201,7 @@ impl App {
     /// Re-apply the filter to the loaded rows and rebuild everything derived from
     /// them. Instant: no log is re-read.
     pub fn rebuild(&mut self) {
-        self.tool_counts = [0; 8];
+        self.tool_counts = [0; Tool::COUNT];
         for r in &self.all_rows {
             self.tool_counts[r.tool.series_index()] += 1;
         }
@@ -314,19 +320,69 @@ impl App {
         self.reload();
     }
 
-    /// Apply the theme at `index` (wraps / clamps) and remember it in the shared
-    /// settings so the GUI and web dashboard start with it too.
-    pub fn set_theme(&mut self, index: usize) {
+    fn apply_theme_index(&mut self, index: usize) {
         self.theme_index = index.min(tokenburn_core::THEME_COUNT - 1);
         self.theme = UiTheme::by_index(self.theme_index);
+    }
+
+    /// Apply the preset at `index` (clamps; stops following the system) and remember
+    /// it in the shared settings so the GUI and web dashboard start with it too.
+    pub fn set_theme(&mut self, index: usize) {
+        self.follow_system = false;
+        self.apply_theme_index(index);
         self.persist_theme();
     }
 
-    /// Move `delta` themes forward (negative: back), wrapping around.
+    /// Follow the OS light/dark setting and remember that.
+    pub fn set_follow_system(&mut self) {
+        self.follow_system = true;
+        self.apply_theme_index(tokenburn_core::current_system_theme_index());
+        self.persist_theme();
+    }
+
+    /// Position of the active choice in the picker (`0` = System).
+    pub fn picker_index(&self) -> usize {
+        if self.follow_system {
+            0
+        } else {
+            self.theme_index + 1
+        }
+    }
+
+    /// Select picker row `i` (`0` = System, `n + 1` = preset `n`; clamps).
+    pub fn select_picker(&mut self, i: usize) {
+        let i = i.min(crate::features::theme::PICKER_LEN - 1);
+        if i == 0 {
+            self.set_follow_system();
+        } else {
+            self.set_theme(i - 1);
+        }
+    }
+
+    /// Move `delta` rows through the picker (negative: back), wrapping around.
     pub fn cycle_theme(&mut self, delta: isize) {
-        let n = tokenburn_core::THEME_COUNT as isize;
-        let next = (self.theme_index as isize + delta).rem_euclid(n) as usize;
-        self.set_theme(next);
+        let n = crate::features::theme::PICKER_LEN as isize;
+        let next = (self.picker_index() as isize + delta).rem_euclid(n) as usize;
+        self.select_picker(next);
+    }
+
+    /// Apply a saved/explicit choice without writing it back.
+    pub fn apply_theme_choice(&mut self, choice: tokenburn_core::ThemeChoice) {
+        self.follow_system = choice == tokenburn_core::ThemeChoice::System;
+        self.apply_theme_index(choice.resolve());
+    }
+
+    /// Re-read the OS appearance (throttled to every 3 s) while following the system.
+    /// Returns `true` when the theme changed (needs a redraw).
+    pub fn refresh_system_theme(&mut self) -> bool {
+        if !self.follow_system || self.last_system_check.elapsed().as_secs() < 3 {
+            return false;
+        }
+        self.last_system_check = Instant::now();
+        let index = tokenburn_core::current_system_theme_index();
+        let changed = index != self.theme_index;
+        self.apply_theme_index(index);
+        changed
     }
 
     /// Show costs in the currency at `index` of [`CURRENCIES`] (clamped), with the
@@ -349,7 +405,11 @@ impl App {
     /// Best-effort save; tests opt out so they never touch the user's real config.
     fn persist_theme(&self) {
         if self.persist {
-            let _ = tokenburn_core::settings::save_theme(self.theme_index);
+            let _ = if self.follow_system {
+                tokenburn_core::settings::save_system_theme()
+            } else {
+                tokenburn_core::settings::save_theme(self.theme_index)
+            };
         }
     }
 

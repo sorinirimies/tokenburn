@@ -5,17 +5,18 @@ use std::sync::OnceLock;
 
 use clap::Parser;
 use iced::{Settings, Task};
-use tokenburn_core::{Currency, Query};
+use tokenburn_core::{Currency, Query, ThemeChoice};
 use tokenburn_gui::state::AUTO_REFRESH;
 use tokenburn_gui::{Args, Message, TokenBurn};
 
 /// Initial query, theme and currency from the command line (read once by `boot`).
-static INITIAL: OnceLock<(Query, Option<usize>, Option<Currency>)> = OnceLock::new();
+static INITIAL: OnceLock<(Query, Option<ThemeChoice>, Option<Currency>)> = OnceLock::new();
 
 fn main() -> iced::Result {
     // Handles --help / --version before any window is created.
     let args = Args::parse();
     if args.list_themes {
+        println!("{}", tokenburn_core::SYSTEM_THEME_NAME);
         for name in tokenburn_core::THEME_NAMES {
             println!("{name}");
         }
@@ -50,8 +51,10 @@ fn boot() -> (TokenBurn, Task<Message>) {
     let mut state = TokenBurn::with_query(query);
     state.persist = true;
     match theme {
-        Some(i) => state.set_theme(i), // an explicit --theme is remembered
-        None => state.theme_index = tokenburn_core::settings::theme_index(),
+        // An explicit --theme is remembered.
+        Some(ThemeChoice::System) => state.set_follow_system(),
+        Some(ThemeChoice::Preset(i)) => state.set_theme(i),
+        None => state.apply_theme_choice(tokenburn_core::settings::load().theme_choice()),
     }
     // The user's own exchange rates, then the currency: an explicit --currency is
     // remembered like --theme, otherwise the saved one is used.
@@ -80,7 +83,21 @@ fn subscription(state: &TokenBurn) -> iced::Subscription<Message> {
     } else {
         iced::Subscription::none()
     };
-    iced::Subscription::batch([auto_refresh, animation, frames])
+    // Poll the OS light/dark setting only while following it.
+    let system_theme = if state.follow_system {
+        iced::Subscription::run(system_theme_stream)
+    } else {
+        iced::Subscription::none()
+    };
+    iced::Subscription::batch([auto_refresh, animation, frames, system_theme])
+}
+
+/// Emits `SystemThemeTick` every 3 s (only subscribed while following the system).
+fn system_theme_stream() -> impl futures::Stream<Item = Message> {
+    futures::stream::unfold((), |()| async {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        Some((Message::SystemThemeTick, ()))
+    })
 }
 
 /// Emits `AutoRefresh` every [`AUTO_REFRESH`]. Blocking sleep is fine: Iced runs

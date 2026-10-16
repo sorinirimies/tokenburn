@@ -87,7 +87,11 @@ mod tests {
     #[test]
     fn tool_colours_are_distinct_and_unknown_tools_use_the_text_colour() {
         let t = UiTheme::by_index(0);
-        let colors: Vec<Color> = Tool::ALL.iter().map(|x| t.tool(x.as_str())).collect();
+        let colors: Vec<Color> = Tool::ALL
+            .iter()
+            .take(8) // eight series colours; later tools wrap around
+            .map(|x| t.tool(x.as_str()))
+            .collect();
         for (i, c) in colors.iter().enumerate() {
             assert!(!colors[..i].contains(c), "tool {i} shares a colour");
         }

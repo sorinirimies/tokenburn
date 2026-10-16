@@ -57,8 +57,8 @@ pub struct TimeSeries {
     pub bucket: Bucket,
     /// One label per bucket, oldest first (`2026-05-01`, `2026-05`, `2026-05-01 13:00`).
     pub labels: Vec<String>,
-    pub tokens: Vec<[u64; 8]>,
-    pub cost: Vec<[f64; 8]>,
+    pub tokens: Vec<[u64; Tool::COUNT]>,
+    pub cost: Vec<[f64; Tool::COUNT]>,
 }
 
 impl TimeSeries {
@@ -145,7 +145,7 @@ pub fn bucket_label_of(row: &Row, bucket: Bucket) -> String {
 /// empty buckets filled in so gaps in time show as gaps in the chart.
 pub fn time_series(rows: &[Row], query: &Query) -> TimeSeries {
     let bucket = chart_bucket(query);
-    let mut map: BTreeMap<String, ([u64; 8], [f64; 8])> = BTreeMap::new();
+    let mut map: BTreeMap<String, ([u64; Tool::COUNT], [f64; Tool::COUNT])> = BTreeMap::new();
     let (mut first, mut last): (Option<DateTime<Local>>, Option<DateTime<Local>>) = (None, None);
 
     for r in rows {

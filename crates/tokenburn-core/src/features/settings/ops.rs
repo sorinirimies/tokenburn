@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 
 use super::types::Settings;
 use crate::features::currency::{find, resolve, Currency};
-use crate::features::theme::{find_theme, THEME_NAMES};
+use crate::features::theme::THEME_NAMES;
 use crate::utils::files::env_path;
 
 /// `$TOKENBURN_CONFIG_DIR`, else `<config dir>/tokenburn`
@@ -49,9 +49,20 @@ pub fn save_to(path: &Path, settings: &Settings) -> Result<()> {
     Ok(())
 }
 
-/// Index of the saved theme in [`THEME_NAMES`] (0 when unset or unknown).
+/// Index of the saved theme in [`THEME_NAMES`] (0 when unset or unknown). When the
+/// saved theme is `"System"`, the preset matching the OS appearance.
 pub fn theme_index() -> usize {
-    find_theme(&load().theme).unwrap_or(0)
+    load().theme_index()
+}
+
+/// Whether the saved theme is `"System"` (follow the OS light/dark setting).
+pub fn follow_system_theme() -> bool {
+    load().follow_system_theme()
+}
+
+/// Persist the "follow system" theme choice.
+pub fn save_system_theme() -> Result<()> {
+    save_theme_name(crate::SYSTEM_THEME_NAME)
 }
 
 /// The saved display currency, with the user's own rate applied (USD when unset or unknown).
@@ -79,11 +90,15 @@ pub fn save_theme(index: usize) -> Result<()> {
     let Some(name) = THEME_NAMES.get(index) else {
         return Ok(());
     };
+    save_theme_name(name)
+}
+
+fn save_theme_name(name: &str) -> Result<()> {
     let mut s = load();
-    if s.theme == *name {
+    if s.theme == name {
         return Ok(());
     }
-    s.theme = (*name).to_string();
+    s.theme = name.to_string();
     save(&s)
 }
 
@@ -140,6 +155,30 @@ mod tests {
     }
 
     #[test]
+    fn system_theme_is_a_sentinel_in_settings() {
+        let s = Settings {
+            theme: "system".into(),
+            ..Settings::default()
+        };
+        assert!(s.follow_system_theme());
+        assert_eq!(s.theme_choice(), crate::ThemeChoice::System);
+        assert!(s.theme_index() < THEME_NAMES.len());
+        let d = Settings::default();
+        assert!(!d.follow_system_theme());
+        assert_eq!(d.theme_index(), 0);
+        let nord = Settings {
+            theme: "Nord".into(),
+            ..Settings::default()
+        };
+        assert_eq!(nord.theme_index(), crate::find_theme("Nord").unwrap());
+        let bad = Settings {
+            theme: "zzz".into(),
+            ..Settings::default()
+        };
+        assert_eq!(bad.theme_index(), 0);
+    }
+
+    #[test]
     fn unknown_and_missing_fields_are_tolerated() {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("settings.json");
@@ -164,6 +203,14 @@ mod tests {
         save_theme(5).unwrap();
         assert_eq!(theme_index(), 5);
         assert_eq!(load().theme, THEME_NAMES[5]);
+
+        // "System" is persisted by name and resolves to a Default / Default Light preset.
+        save_system_theme().unwrap();
+        assert_eq!(load().theme, "System");
+        assert!(follow_system_theme());
+        assert!(theme_index() <= 1);
+        save_theme(5).unwrap();
+        assert!(!follow_system_theme());
 
         // Same theme again, and an out-of-range index, are no-ops.
         let before = std::fs::metadata(settings_path().unwrap())

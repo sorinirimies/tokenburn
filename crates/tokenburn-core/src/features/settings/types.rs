@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    /// Theme name (see [`crate::THEME_NAMES`]).
+    /// Theme name (see [`crate::THEME_NAMES`]) or `"System"` to follow the OS light/dark setting.
     pub theme: String,
     /// Display currency code (`"USD"`, `"EUR"`, …; see [`crate::CURRENCIES`]).
     pub currency: String,
@@ -24,5 +24,22 @@ impl Default for Settings {
             currency: "USD".to_string(),
             rates: BTreeMap::new(),
         }
+    }
+}
+
+impl Settings {
+    /// The saved theme as a [`crate::ThemeChoice`] (unknown names fall back to preset 0).
+    pub fn theme_choice(&self) -> crate::ThemeChoice {
+        crate::ThemeChoice::parse(&self.theme).unwrap_or(crate::ThemeChoice::Preset(0))
+    }
+
+    /// Whether the theme follows the OS light/dark setting.
+    pub fn follow_system_theme(&self) -> bool {
+        crate::is_system_name(self.theme.trim())
+    }
+
+    /// The preset index to paint now (`System` resolves via the OS; unknown names give 0).
+    pub fn theme_index(&self) -> usize {
+        self.theme_choice().resolve()
     }
 }

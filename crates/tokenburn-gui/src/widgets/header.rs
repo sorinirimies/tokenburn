@@ -55,7 +55,10 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         .into(),
         pick_list(
             ThemeChoice::all(),
-            Some(ThemeChoice::at(state.theme_index)),
+            Some(ThemeChoice::selected(
+                state.theme_index,
+                state.follow_system,
+            )),
             Message::ThemeSelected,
         )
         .placeholder("Theme")

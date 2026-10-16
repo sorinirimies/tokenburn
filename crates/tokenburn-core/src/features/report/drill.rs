@@ -13,7 +13,7 @@ use std::borrow::Cow;
 use super::chart::{bucket_label_of, chart_bucket, pie, time_series, Pie, TimeSeries};
 use super::ops::{build_report, by_project};
 use super::types::{Query, ReportRow};
-use crate::features::usage::{Row, Summary};
+use crate::features::usage::{Row, Summary, Tool};
 
 /// What the user has clicked.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -173,8 +173,8 @@ fn restrict(full: &TimeSeries, rows: &[Row], query: &Query) -> TimeSeries {
     let mut out = TimeSeries {
         bucket: full.bucket,
         labels: full.labels.clone(),
-        tokens: vec![[0; 8]; full.labels.len()],
-        cost: vec![[0.0; 8]; full.labels.len()],
+        tokens: vec![[0; Tool::COUNT]; full.labels.len()],
+        cost: vec![[0.0; Tool::COUNT]; full.labels.len()],
     };
     let bucket = chart_bucket(query);
     for r in rows {

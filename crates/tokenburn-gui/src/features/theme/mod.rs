@@ -6,7 +6,8 @@ use iced::theme::Palette;
 use iced::{Color, Theme};
 use tokenburn_core::{theme_by_index, Rgb, THEME_NAMES};
 
-/// One entry of the theme pick list.
+/// One entry of the theme pick list. `index == THEME_COUNT` is the "System"
+/// (follow the OS light/dark setting) entry; anything below is a preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemeChoice {
     pub index: usize,
@@ -23,11 +24,38 @@ impl ThemeChoice {
         }
     }
 
-    /// Every theme, in the canonical order.
+    /// The "follow system" entry.
+    pub fn system() -> Self {
+        Self {
+            index: SYSTEM_INDEX,
+            name: tokenburn_core::SYSTEM_THEME_NAME,
+        }
+    }
+
+    /// Whether this is the "follow system" entry.
+    pub fn is_system(&self) -> bool {
+        self.index == SYSTEM_INDEX
+    }
+
+    /// The entry matching the app state: System while following, else the preset.
+    pub fn selected(index: usize, follow_system: bool) -> Self {
+        if follow_system {
+            Self::system()
+        } else {
+            Self::at(index)
+        }
+    }
+
+    /// "System" first, then every preset in the canonical order.
     pub fn all() -> Vec<ThemeChoice> {
-        (0..THEME_NAMES.len()).map(Self::at).collect()
+        std::iter::once(Self::system())
+            .chain((0..THEME_NAMES.len()).map(Self::at))
+            .collect()
     }
 }
+
+/// Index of the "System" pick-list entry (one past the last preset).
+pub const SYSTEM_INDEX: usize = tokenburn_core::THEME_COUNT;
 
 impl fmt::Display for ThemeChoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -91,9 +119,17 @@ mod tests {
     #[test]
     fn choices_cover_every_theme_once_and_clamp() {
         let all = ThemeChoice::all();
-        assert_eq!(all.len(), tokenburn_core::THEME_COUNT);
-        assert_eq!(ThemeChoice::at(9999).index, all.len() - 1);
-        assert_eq!(all[0].to_string(), "Default");
+        assert_eq!(all.len(), tokenburn_core::THEME_COUNT + 1);
+        assert_eq!(ThemeChoice::at(9999).index, all.len() - 2);
+        assert_eq!(all[0].to_string(), "System");
+        assert!(all[0].is_system() && !all[1].is_system());
+        assert_eq!(all[1].to_string(), "Default");
+    }
+
+    #[test]
+    fn selected_is_system_only_while_following() {
+        assert!(ThemeChoice::selected(5, true).is_system());
+        assert_eq!(ThemeChoice::selected(5, false), ThemeChoice::at(5));
     }
 
     #[test]

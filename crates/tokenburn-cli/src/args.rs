@@ -1,7 +1,7 @@
 use clap::Parser;
 use tokenburn_core::{Currency, Query, ToolFilter};
 
-/// Local AI token/cost usage report for AI coding agents (pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Amp), read from their session logs on disk.
+/// Local AI token/cost usage report for AI coding agents (pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Amp, Cline, Roo Code, Kilo Code, Qwen Code), read from their session logs on disk.
 ///
 /// Reads local logs only — no network calls.
 #[derive(Debug, Parser, Clone)]

@@ -60,7 +60,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         title_spans.push(chip(
             th,
             "theme",
-            tokenburn_core::THEME_NAMES[app.theme_index],
+            if app.follow_system {
+                tokenburn_core::SYSTEM_THEME_NAME
+            } else {
+                tokenburn_core::THEME_NAMES[app.theme_index]
+            },
         ));
     }
     title_spans.push(Span::styled(

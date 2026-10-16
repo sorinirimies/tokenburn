@@ -42,7 +42,9 @@ async fn hello() -> Result<()> {
 
 #[route(POST "/api/bye")]
 async fn bye() -> Result<()> {
-    let _ = OPEN.try_update(Ordering::SeqCst, Ordering::SeqCst, |n| Some(n.saturating_sub(1)));
+    let _ = OPEN.try_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+        Some(n.saturating_sub(1))
+    });
     let generation = GENERATION.load(Ordering::SeqCst);
     tokio::spawn(async move {
         tokio::time::sleep(GRACE).await;

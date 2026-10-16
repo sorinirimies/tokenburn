@@ -68,6 +68,8 @@ pub struct TokenBurn {
     pub view: View,
     /// Index into [`tokenburn_core::THEME_NAMES`].
     pub theme_index: usize,
+    /// The theme follows the OS light/dark setting ("System" in the pick list).
+    pub follow_system: bool,
     /// Display currency (costs are logged in US dollars; this is presentation only).
     pub currency: Currency,
     /// The user's own exchange rates from settings.json (code → units per dollar).
@@ -124,6 +126,7 @@ impl TokenBurn {
             query,
             view: View::default(),
             theme_index: 0,
+            follow_system: false,
             currency: Currency::USD,
             rates: BTreeMap::new(),
             platform_ready: false,
@@ -157,12 +160,44 @@ impl TokenBurn {
         theme::iced_theme(self.theme_index)
     }
 
-    /// Apply a theme and remember it in the shared settings, so the TUI and the
-    /// web dashboard start with it too.
+    /// Apply preset `index` (clamped; stops following the system) and remember it in
+    /// the shared settings, so the TUI and the web dashboard start with it too.
     pub fn set_theme(&mut self, index: usize) {
+        self.follow_system = false;
         self.theme_index = index.min(tokenburn_core::THEME_COUNT - 1);
         if self.persist {
             let _ = tokenburn_core::settings::save_theme(self.theme_index);
+        }
+    }
+
+    /// Follow the OS light/dark setting and remember that.
+    pub fn set_follow_system(&mut self) {
+        self.follow_system = true;
+        self.theme_index = tokenburn_core::current_system_theme_index();
+        if self.persist {
+            let _ = tokenburn_core::settings::save_system_theme();
+        }
+    }
+
+    /// Apply a pick-list choice (the System entry or a preset).
+    pub fn select_theme(&mut self, choice: theme::ThemeChoice) {
+        if choice.is_system() {
+            self.set_follow_system();
+        } else {
+            self.set_theme(choice.index);
+        }
+    }
+
+    /// Apply a saved/explicit choice without writing it back.
+    pub fn apply_theme_choice(&mut self, choice: tokenburn_core::ThemeChoice) {
+        self.follow_system = choice == tokenburn_core::ThemeChoice::System;
+        self.theme_index = choice.resolve().min(tokenburn_core::THEME_COUNT - 1);
+    }
+
+    /// Re-read the OS appearance while following it.
+    pub fn refresh_system_theme(&mut self) {
+        if self.follow_system {
+            self.theme_index = tokenburn_core::current_system_theme_index();
         }
     }
 

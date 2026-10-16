@@ -1,5 +1,5 @@
 use clap::Parser;
-use tokenburn_core::{Currency, Query, ToolFilter};
+use tokenburn_core::{Currency, Query, ThemeChoice, ToolFilter};
 
 /// Desktop GUI for local AI token/cost usage (pi, Zed, Claude Code, Codex, …).
 ///
@@ -27,9 +27,9 @@ pub struct Args {
     #[arg(long, short)]
     pub all: bool,
 
-    /// Colour theme (see --list-themes); remembered for the TUI and web dashboard too.
+    /// Colour theme, or "System" to follow the OS light/dark setting (see --list-themes); remembered for the TUI and web dashboard too.
     #[arg(long, value_name = "NAME", value_parser = parse_theme)]
-    pub theme: Option<usize>,
+    pub theme: Option<ThemeChoice>,
 
     /// Show costs in this currency (e.g. EUR, GBP, JPY); remembered for the other
     /// front-ends. Rates are fixed estimates: set exact ones under "rates" in settings.json.
@@ -45,8 +45,8 @@ pub struct Args {
     pub list_themes: bool,
 }
 
-fn parse_theme(s: &str) -> Result<usize, String> {
-    tokenburn_core::find_theme(s).ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
+fn parse_theme(s: &str) -> Result<ThemeChoice, String> {
+    ThemeChoice::parse(s).ok_or_else(|| format!("unknown theme '{s}' (try --list-themes)"))
 }
 
 impl Args {
@@ -75,6 +75,19 @@ mod tests {
         assert_eq!(a.currency.unwrap().code, "CHF");
         assert!(Args::parse_from(["tokenburn-gui"]).currency.is_none());
         assert!(Args::try_parse_from(["tokenburn-gui", "--currency", "zzz"]).is_err());
+    }
+
+    #[test]
+    fn theme_flag_accepts_system_and_presets_and_rejects_unknown() {
+        let a = Args::parse_from(["tokenburn-gui", "--theme", "system"]);
+        assert_eq!(a.theme, Some(ThemeChoice::System));
+        let a = Args::parse_from(["tokenburn-gui", "--theme", "nord"]);
+        assert_eq!(
+            a.theme,
+            tokenburn_core::find_theme("Nord").map(ThemeChoice::Preset)
+        );
+        assert!(Args::try_parse_from(["tokenburn-gui", "--theme", "nope"]).is_err());
+        assert_eq!(Args::parse_from(["tokenburn-gui"]).theme, None);
     }
 
     #[test]

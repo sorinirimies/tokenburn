@@ -46,11 +46,51 @@ fn css_for(index: usize) -> String {
         .iter()
         .map(|(k, c)| format!("--{k}:{};", c.hex()))
         .collect();
+    let extra = if THEME_NAMES[index] == "Cyberpunk" {
+        CYBERPUNK_CSS
+    } else {
+        ""
+    };
     format!(
-        ":root{{color-scheme:{};{body}}}",
+        ":root{{color-scheme:{};{body}}}{extra}",
         if t.is_dark { "dark" } else { "light" }
     )
 }
+
+/// Extra component styling for the Cyberpunk theme (cyberpunk.net look): yellow
+/// slab buttons with clipped corners, uppercase display type, hard-edged panels
+/// with a cut corner, neon glow and a faint scanline overlay.
+const CYBERPUNK_CSS: &str = r#"
+body{font-family:"Rajdhani","Oxanium","Bahnschrift","Arial Narrow",system-ui,sans-serif;letter-spacing:.02em;background:var(--bg) repeating-linear-gradient(0deg,transparent 0 2px,rgba(252,238,10,.025) 2px 3px);}
+h1{text-transform:uppercase;letter-spacing:.14em;font-weight:700;text-shadow:2px 0 var(--err),-2px 0 var(--s4);}
+h2{color:var(--s4);letter-spacing:.18em;font-weight:700;}
+h2::before{content:"// ";color:var(--accent);}
+.card,.panel,.empty,.warn,table,.table-wrap,.selbar .chip,.badge,.tabs .tab,select,button,.selbar .clear,.bar,.bar>span{border-radius:0;}
+.card,.panel,.empty,.warn{border:1px solid var(--line);border-left:3px solid var(--accent);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));background:linear-gradient(135deg,var(--panel),var(--bg));}
+.card .value{text-shadow:0 0 10px currentColor;}
+button,.selbar .clear{background:var(--accent);color:#000;border:0;font-weight:700;text-transform:uppercase;letter-spacing:.12em;padding:7px 18px;cursor:pointer;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));transition:background .12s,box-shadow .12s,transform .12s;}
+button:hover,.selbar .clear:hover{background:var(--s4);color:#000;box-shadow:0 0 14px var(--s4);}
+button:active,.selbar .clear:active{transform:translate(1px,1px);background:var(--err);}
+select{background:#000;color:var(--accent);border:1px solid var(--accent);text-transform:uppercase;letter-spacing:.08em;padding:6px 10px;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));}
+select:hover,select:focus{outline:none;border-color:var(--s4);color:var(--s4);box-shadow:0 0 10px rgba(0,210,235,.5);}
+.tabs .tab{background:transparent;border:1px solid var(--line);text-transform:uppercase;letter-spacing:.14em;font-weight:700;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%);}
+.tabs .tab:hover{color:var(--accent);border-color:var(--accent);}
+.tabs .tab.active{background:var(--accent);color:#000;border-color:var(--accent);}
+table{border:1px solid var(--line);border-top:2px solid var(--accent);}
+th{color:#000;background:var(--accent);text-transform:uppercase;letter-spacing:.12em;}
+tr:hover td{background:var(--sel);box-shadow:inset 3px 0 var(--accent);}
+tr.total td{color:var(--accent);}
+.badge{text-transform:uppercase;letter-spacing:.12em;}
+.badge.live{box-shadow:0 0 8px var(--ok);}
+.bar{height:6px;background:#000;border:1px solid var(--line);}
+.bar>span{box-shadow:0 0 8px var(--accent);}
+.selbar .chip{background:transparent;border-color:var(--s4);color:var(--s4);text-transform:uppercase;letter-spacing:.1em;}
+.legend .item.sel{outline-color:var(--s4);}
+.legend .sw{border-radius:0;}
+a{color:var(--s4);text-decoration-color:var(--accent);}
+a:hover{color:var(--accent);}
+::selection{background:var(--accent);color:#000;}
+"#;
 
 /// `var(--sN)` for a tool (`pi`, `claude`, …); the accent for anything else.
 pub fn series_var(tool: &str) -> String {
@@ -242,7 +282,7 @@ mod tests {
 
     #[test]
     fn series_vars_are_distinct_per_tool() {
-        let vars: Vec<String> = Tool::ALL.iter().map(|t| series_var(t.as_str())).collect();
+        let vars: Vec<String> = Tool::ALL.iter().take(8).map(|t| series_var(t.as_str())).collect();
         for (i, v) in vars.iter().enumerate() {
             assert!(!vars[..i].contains(v));
         }

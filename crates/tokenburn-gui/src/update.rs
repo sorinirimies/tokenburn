@@ -62,7 +62,11 @@ impl TokenBurn {
                 self.reload()
             }
             Message::ThemeSelected(choice) => {
-                self.set_theme(choice.index);
+                self.select_theme(choice);
+                Task::none()
+            }
+            Message::SystemThemeTick => {
+                self.refresh_system_theme();
                 Task::none()
             }
             Message::CurrencySelected(choice) => {
@@ -187,6 +191,43 @@ mod theme_tests {
             before.palette().background
         );
         assert_eq!(app.iced_theme().to_string(), tokenburn_core::THEME_NAMES[9]);
+    }
+
+    #[test]
+    fn selecting_system_follows_and_a_preset_stops_following() {
+        let mut app = TokenBurn::new();
+        let _ = app.update(Message::ThemeSelected(ThemeChoice::system()));
+        assert!(app.follow_system);
+        assert!(
+            app.theme_index <= 1,
+            "System maps to Default / Default Light"
+        );
+        let _ = app.update(Message::ThemeSelected(ThemeChoice::at(9)));
+        assert!(!app.follow_system);
+        assert_eq!(app.theme_index, 9);
+    }
+
+    #[test]
+    fn the_system_tick_only_changes_the_theme_while_following() {
+        let mut app = TokenBurn::new();
+        app.theme_index = 9;
+        let _ = app.update(Message::SystemThemeTick);
+        assert_eq!(app.theme_index, 9, "not following: untouched");
+        app.follow_system = true;
+        let _ = app.update(Message::SystemThemeTick);
+        assert_eq!(
+            app.theme_index,
+            tokenburn_core::current_system_theme_index()
+        );
+    }
+
+    #[test]
+    fn apply_theme_choice_sets_follow_without_persisting() {
+        let mut app = TokenBurn::new();
+        app.apply_theme_choice(tokenburn_core::ThemeChoice::System);
+        assert!(app.follow_system);
+        app.apply_theme_choice(tokenburn_core::ThemeChoice::Preset(7));
+        assert!(!app.follow_system && app.theme_index == 7);
     }
 
     #[test]

@@ -109,6 +109,8 @@ mod tests {
         assert_eq!(app.theme_index, 1);
         handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
         handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
+        assert!(app.follow_system, "[ from the first preset reaches System");
+        handle_key(&mut app, KeyEvent::from(KeyCode::Char('[')));
         assert_eq!(app.theme_index, tokenburn_core::THEME_COUNT - 1);
     }
 

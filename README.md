@@ -24,7 +24,7 @@ A terminal UI, a desktop GUI and a web dashboard (plus a CLI for scripts), all i
 
 ---
 
-TokenBurn reads **local logs only** — no network calls, no account, no telemetry. It understands **pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp**, shows where the tokens (and money) went, and keeps itself up to date while you work.
+TokenBurn reads **local logs only** — no network calls, no account, no telemetry. It understands **pi, Zed, Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Amp, Cline, Roo Code, Kilo Code and Qwen Code**, shows where the tokens (and money) went, and keeps itself up to date while you work.
 
 ## Choose your front-end
 
@@ -101,10 +101,14 @@ tokenburn --json           # machine-readable (always US dollars)
 | `gemini` | Google Gemini CLI | `~/.gemini/tmp/*/chats` (`$GEMINI_DATA_DIR`) | – |
 | `opencode` | OpenCode | `~/.local/share/opencode/opencode.db` (`$OPENCODE_DATA_DIR`) | ✅ |
 | `amp` | Amp | `~/.local/share/amp/threads/*.json` (`$AMP_DATA_DIR`) | – |
+| `cline` | Cline | VS Code-family `globalStorage/saoudrizwan.claude-dev/tasks/*/ui_messages.json`, `~/.cline/data` (`$CLINE_DATA_DIR`) | ✅ |
+| `roo` | Roo Code | `globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json` (`$ROO_DATA_DIR`) | ✅ |
+| `kilo` | Kilo Code | `globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json` (`$KILO_DATA_DIR`) | ✅ |
+| `qwen` | Qwen Code | `~/.qwen/tmp/*/chats` (`$QWEN_DATA_DIR`) | – |
 
-`all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.00` rather than a guess (token counts are exact). Cursor, Windsurf, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
+`all` (the default) reads every tool that is installed; one that isn't simply contributes nothing. Cost is shown only where the tool logs one — otherwise `$0.00` rather than a guess (token counts are exact). The Cline-family readers look in the `globalStorage` of VS Code, Insiders, VSCodium, Cursor, Windsurf and Positron. Cursor's own chat, Windsurf's Cascade, VS Code Copilot Chat and JetBrains AI keep no usable token log on disk, so they can't be supported.
 
-> The Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode and Amp readers follow the formats documented by [ccusage](https://github.com/ryoppippi/ccusage) and are covered by fixture tests; pi and Zed were also checked against real logs. If one misreads your data, open an issue with a (redacted) log line.
+> The Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Amp, Cline, Roo Code, Kilo Code and Qwen Code readers follow the formats documented by [ccusage](https://github.com/ryoppippi/ccusage) and are covered by fixture tests; pi and Zed were also checked against real logs (Cline, Roo, Kilo and Qwen only against fixtures so far). If one misreads your data, open an issue with a (redacted) log line.
 
 ## Shared by every front-end
 

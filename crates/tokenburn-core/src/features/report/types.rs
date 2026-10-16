@@ -21,7 +21,7 @@ impl ToolFilter {
     pub const ZED: ToolFilter = ToolFilter::Only(Tool::Zed);
 
     /// Every choice, `all` first — what pickers and the TUI `t` key cycle through.
-    pub const ALL: [ToolFilter; 9] = [
+    pub const ALL: [ToolFilter; Tool::COUNT + 1] = [
         ToolFilter::All,
         ToolFilter::Only(Tool::Pi),
         ToolFilter::Only(Tool::Zed),
@@ -31,6 +31,10 @@ impl ToolFilter {
         ToolFilter::Only(Tool::Gemini),
         ToolFilter::Only(Tool::OpenCode),
         ToolFilter::Only(Tool::Amp),
+        ToolFilter::Only(Tool::Cline),
+        ToolFilter::Only(Tool::Roo),
+        ToolFilter::Only(Tool::Kilo),
+        ToolFilter::Only(Tool::Qwen),
     ];
 
     pub fn includes(self, tool: Tool) -> bool {

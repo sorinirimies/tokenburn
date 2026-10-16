@@ -26,6 +26,8 @@ pub enum Message {
     BucketSelected(Bucket),
     WindowSelected(Window),
     ThemeSelected(ThemeChoice),
+    /// Periodic re-check of the OS appearance, only subscribed while following it.
+    SystemThemeTick,
     CurrencySelected(CurrencyChoice),
     ViewSelected(View),
     /// ~10 fps animation tick, only subscribed while loading.

@@ -37,6 +37,15 @@ static CACHE: LazyLock<FileCache<Vec<Row>>> = LazyLock::new(FileCache::default);
 
 /// Read every chat recording (`<project>/chats/*.json` and `*.jsonl`).
 pub fn collect_gemini_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
+    collect_chats_from(Tool::Gemini, root, start)
+}
+
+/// Gemini-format chat recordings (also used by forks such as Qwen Code), tagged `tool`.
+pub(crate) fn collect_chats_from(
+    tool: Tool,
+    root: &Path,
+    start: DateTime<Utc>,
+) -> Result<Vec<Row>> {
     let files = walk_ext(root, &["json", "jsonl"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
@@ -47,14 +56,14 @@ pub fn collect_gemini_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>
         let Some(sig) = Sig::of(&file, 0) else {
             continue;
         };
-        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(root, &file, start));
+        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(tool, root, &file, start));
         rows.extend(parsed.iter().cloned());
     }
     CACHE.prune_under(root, &live);
     Ok(rows)
 }
 
-fn parse_file(root: &Path, file: &Path, start: DateTime<Utc>) -> Vec<Row> {
+fn parse_file(tool: Tool, root: &Path, file: &Path, start: DateTime<Utc>) -> Vec<Row> {
     let project = project_of(root, file);
     let id = file
         .file_stem()
@@ -70,14 +79,20 @@ fn parse_file(root: &Path, file: &Path, start: DateTime<Utc>) -> Vec<Row> {
         .unwrap_or(start);
     if file.extension().is_some_and(|e| e == "json") {
         std::fs::read_to_string(file)
-            .map(|text| parse_json(&text, &project, &id, fallback))
+            .map(|text| parse_json(tool, &text, &project, &id, fallback))
             .unwrap_or_default()
     } else {
         read_lines(file)
             .map(|lines| {
                 lines
                     .filter_map(|l| {
-                        parse_message(&serde_json::from_str(&l).ok()?, &project, &id, fallback)
+                        parse_message(
+                            tool,
+                            &serde_json::from_str(&l).ok()?,
+                            &project,
+                            &id,
+                            fallback,
+                        )
                     })
                     .collect()
             })
@@ -94,7 +109,13 @@ fn project_of(root: &Path, file: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn parse_json(text: &str, project: &str, id: &str, fallback: DateTime<Utc>) -> Vec<Row> {
+fn parse_json(
+    tool: Tool,
+    text: &str,
+    project: &str,
+    id: &str,
+    fallback: DateTime<Utc>,
+) -> Vec<Row> {
     let Ok(doc) = serde_json::from_str::<Value>(text) else {
         return Vec::new();
     };
@@ -106,14 +127,20 @@ fn parse_json(text: &str, project: &str, id: &str, fallback: DateTime<Utc>) -> V
         .and_then(Value::as_array)
         .map(|msgs| {
             msgs.iter()
-                .filter_map(|m| parse_message(m, project, id, session_ts))
+                .filter_map(|m| parse_message(tool, m, project, id, session_ts))
                 .collect()
         })
         .unwrap_or_default()
 }
 
 /// One `type: "gemini"` message carrying a `tokens` object.
-fn parse_message(m: &Value, project: &str, id: &str, fallback: DateTime<Utc>) -> Option<Row> {
+fn parse_message(
+    tool: Tool,
+    m: &Value,
+    project: &str,
+    id: &str,
+    fallback: DateTime<Utc>,
+) -> Option<Row> {
     if m.get("type").and_then(Value::as_str) != Some("gemini") {
         return None;
     }
@@ -144,7 +171,7 @@ fn parse_message(m: &Value, project: &str, id: &str, fallback: DateTime<Utc>) ->
         .and_then(parse_ts)
         .unwrap_or(fallback);
     Some(Row {
-        tool: Tool::Gemini,
+        tool,
         project: m
             .get("model")
             .and_then(Value::as_str)
@@ -173,7 +200,13 @@ mod tests {
 
     #[test]
     fn splits_cached_out_of_input_and_adds_thoughts_to_output() {
-        let r = parse_json(SESSION, "proj", "s1", DateTime::<Utc>::UNIX_EPOCH);
+        let r = parse_json(
+            Tool::Gemini,
+            SESSION,
+            "proj",
+            "s1",
+            DateTime::<Utc>::UNIX_EPOCH,
+        );
         assert_eq!(
             r.len(),
             1,
@@ -187,7 +220,7 @@ mod tests {
     #[test]
     fn accepts_the_alias_key_names() {
         let m = json!({"type":"gemini","tokens":{"prompt":10,"candidates":4,"cached_tokens":2,"reasoning":1}});
-        let r = parse_message(&m, "p", "i", DateTime::<Utc>::UNIX_EPOCH).unwrap();
+        let r = parse_message(Tool::Gemini, &m, "p", "i", DateTime::<Utc>::UNIX_EPOCH).unwrap();
         assert_eq!((r.input, r.output, r.cache_read), (8, 5, 2));
     }
 
@@ -224,6 +257,13 @@ not json
 
     #[test]
     fn garbage_documents_are_ignored() {
-        assert!(parse_json("{not json", "p", "i", DateTime::<Utc>::UNIX_EPOCH).is_empty());
+        assert!(parse_json(
+            Tool::Gemini,
+            "{not json",
+            "p",
+            "i",
+            DateTime::<Utc>::UNIX_EPOCH
+        )
+        .is_empty());
     }
 }

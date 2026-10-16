@@ -4,6 +4,7 @@ use tokenburn_tui::Args;
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     if args.list_themes {
+        println!("{}", tokenburn_core::SYSTEM_THEME_NAME);
         for name in tokenburn_core::THEME_NAMES {
             println!("{name}");
         }
