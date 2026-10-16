@@ -556,9 +556,16 @@ setup-gitea url: _check-nu
 # Pushing a vX.Y.Z tag starts the Release workflow on whichever host receives it
 # (GitHub: .github/workflows/release.yml, Gitea: .gitea/workflows/release.yml).
 
-# First release of the version already in Cargo.toml (0.1.0): gate, changelog, tag, push to all remotes
-release-initial: check-release _check-git-cliff _check-nu
+# First release of the version already in Cargo.toml (0.1.0): gate, changelog, tag, push to GitHub only
+release-initial: check-release _check-git-cliff _check-nu (_release-initial "origin")
+
+# Same as release-initial, but pushes to every remote
+release-initial-all: check-release _check-git-cliff _check-nu (_release-initial REMOTES)
+
+[private]
+_release-initial remotes:
     #!/usr/bin/env sh
+    remotes="{{ remotes }}"
     set -e
     version=$(nu scripts/version.nu)
     tag="v$version"
@@ -573,19 +580,24 @@ release-initial: check-release _check-git-cliff _check-nu
     git add CHANGELOG.md
     git diff --cached --quiet || git commit -m "chore: release $tag"
     git tag -a "$tag" -m "Release $tag"
-    echo "🏷️  Tagged $tag — pushing to: {{ REMOTES }}"
+    echo "🏷️  Tagged $tag — pushing to: $remotes"
     failed=""; skipped=""
-    for r in {{ REMOTES }}; do
+    for r in $remotes; do
         git remote get-url "$r" >/dev/null 2>&1 || { echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; continue; }
         git push "$r" "$(git branch --show-current)" || failed="$failed $r"
         git push "$r" "$tag" || failed="$failed $r"
     done
     if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then echo "⚠️  Release $tag failed to push to:$failed"; exit 1; fi
-    echo "✅ Release $tag pushed to: {{ REMOTES }} — Release workflows will start."
+    echo "✅ Release $tag pushed to: $remotes — Release workflows will start."
+
+# Bump, commit, tag, then push to GitHub only — triggers the GitHub Release workflow.
+release version: (bump version)
+    git push --follow-tags origin "$(git branch --show-current)"
+    @echo "✅ Release v{{ version }} pushed to GitHub."
 
 # Bump, commit, tag, then push to every remote — triggers the Release workflows.
-release version: (bump version)
+release-all version: (bump version)
     #!/usr/bin/env sh
     failed=""; skipped=""
     for r in {{ REMOTES }}; do
@@ -596,15 +608,15 @@ release version: (bump version)
     if [ -n "$failed" ]; then echo "⚠️  Release v{{ version }} failed to push to:$failed"; exit 1; fi
     echo "✅ Release v{{ version }} pushed to: {{ REMOTES }}"
 
-# Bump, commit, tag, then push to GitHub only.
-release-github version: (bump version)
-    git push --follow-tags origin "$(git branch --show-current)"
-    @echo "✅ Release v{{ version }} pushed to GitHub."
-
 # Bump, commit, tag, then push to Gitea Starscream only.
 release-gitea-starscream version: (bump version)
     git push --follow-tags gitea-starscream "$(git branch --show-current)"
     @echo "✅ Release v{{ version }} pushed to Gitea Starscream."
+
+# Push the latest commit and all tags to GitHub only (no bump, no gate beyond check-all).
+push-release: check-all
+    git push --follow-tags origin "$(git branch --show-current)"
+    @echo "✅ Latest commit + tags pushed to GitHub."
 
 # Push the latest commit and all tags to every remote (no bump, continues on failure).
 push-release-all: check-all
