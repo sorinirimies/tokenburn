@@ -103,8 +103,19 @@ async fn the_json_api_returns_the_same_report() {
     assert_eq!(total, 1000 + 500 + 2000 + 1000 + 3000 + 1500);
 }
 
+/// Theme tests share one persisted settings file: run them one at a time.
+static THEME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn theme_guard() -> std::sync::MutexGuard<'static, ()> {
+    THEME_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[tokio::test]
+#[allow(clippy::await_holding_lock)]
 async fn themes_are_listed_and_a_chosen_one_is_applied_and_remembered() {
+    let _guard = theme_guard();
     let addr = start().await;
     let t = get(addr, "/api/themes").await;
     let v: serde_json::Value = serde_json::from_str(&t.body).unwrap();
@@ -126,7 +137,9 @@ async fn themes_are_listed_and_a_chosen_one_is_applied_and_remembered() {
 }
 
 #[tokio::test]
+#[allow(clippy::await_holding_lock)]
 async fn the_system_theme_follows_the_browser_and_is_remembered() {
+    let _guard = theme_guard();
     let addr = start().await;
     let r = get(addr, "/?theme=System&window=all").await;
     assert_eq!(r.status, 200);

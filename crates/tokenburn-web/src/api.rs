@@ -38,3 +38,9 @@ async fn themes() -> Result<Json<serde_json::Value>> {
 async fn style() -> Result<Css<&'static str>> {
     Ok(Css(CSS))
 }
+
+/// Extra styling for the Cyberpunk theme, imported by the inline theme `<style>`.
+#[route(GET "/cyberpunk.css")]
+async fn cyberpunk_style() -> Result<Css<&'static str>> {
+    Ok(Css(crate::theme::CYBERPUNK_CSS))
+}

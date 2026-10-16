@@ -46,13 +46,15 @@ fn css_for(index: usize) -> String {
         .iter()
         .map(|(k, c)| format!("--{k}:{};", c.hex()))
         .collect();
-    let extra = if THEME_NAMES[index] == "Cyberpunk" {
-        CYBERPUNK_CSS
+    // The extra rules hold quotes and `>` selectors, which HTML escaping would corrupt
+    // inside an inline `<style>`, so they are served at `/cyberpunk.css` and imported.
+    let import = if THEME_NAMES[index] == "Cyberpunk" {
+        "@import url(/cyberpunk.css);"
     } else {
         ""
     };
     format!(
-        ":root{{color-scheme:{};{body}}}{extra}",
+        "{import}:root{{color-scheme:{};{body}}}",
         if t.is_dark { "dark" } else { "light" }
     )
 }
@@ -60,7 +62,7 @@ fn css_for(index: usize) -> String {
 /// Extra component styling for the Cyberpunk theme (cyberpunk.net look): yellow
 /// slab buttons with clipped corners, uppercase display type, hard-edged panels
 /// with a cut corner, neon glow and a faint scanline overlay.
-const CYBERPUNK_CSS: &str = r#"
+pub const CYBERPUNK_CSS: &str = r#"
 body{font-family:"Rajdhani","Oxanium","Bahnschrift","Arial Narrow",system-ui,sans-serif;letter-spacing:.02em;background:var(--bg) repeating-linear-gradient(0deg,transparent 0 2px,rgba(252,238,10,.025) 2px 3px);}
 h1{text-transform:uppercase;letter-spacing:.14em;font-weight:700;text-shadow:2px 0 var(--err),-2px 0 var(--s4);}
 h2{color:var(--s4);letter-spacing:.18em;font-weight:700;}
@@ -195,7 +197,7 @@ mod tests {
             ] {
                 assert!(c.contains(v), "theme {i} lacks {v}");
             }
-            assert!(c.starts_with(":root{") && c.ends_with('}'));
+            assert!(c.contains(":root{") && c.ends_with('}'));
         }
     }
 
@@ -207,7 +209,7 @@ mod tests {
             let c = css(i);
             assert!(
                 c.chars()
-                    .all(|ch| ch.is_ascii_alphanumeric() || "#:;{}-,. ".contains(ch)),
+                    .all(|ch| ch.is_ascii_alphanumeric() || "#:;{}-,.@()/_ ".contains(ch)),
                 "theme {i}: unexpected characters in {c}"
             );
         }
@@ -282,7 +284,11 @@ mod tests {
 
     #[test]
     fn series_vars_are_distinct_per_tool() {
-        let vars: Vec<String> = Tool::ALL.iter().take(8).map(|t| series_var(t.as_str())).collect();
+        let vars: Vec<String> = Tool::ALL
+            .iter()
+            .take(8)
+            .map(|t| series_var(t.as_str()))
+            .collect();
         for (i, v) in vars.iter().enumerate() {
             assert!(!vars[..i].contains(v));
         }
