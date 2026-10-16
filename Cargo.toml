@@ -9,7 +9,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version      = "0.2.6"
+version      = "0.2.7"
 edition      = "2021"
 rust-version = "1.90"   # MSRV across Linux/macOS/Windows graphs (ordered-float 5.5 needs 1.90). tokenburn-web needs 1.98 (Topcoat) and says so itself
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
@@ -55,7 +55,7 @@ topcoat      = "0.10"
 tokio        = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "signal"] }
 
 # Internal crates
-tokenburn-core = { path = "crates/tokenburn-core", version = "0.2.6" }
+tokenburn-core = { path = "crates/tokenburn-core", version = "0.2.7" }
 
 [profile.dev]
 opt-level = 0
