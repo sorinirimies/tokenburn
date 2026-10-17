@@ -10,10 +10,15 @@
 
 use std::borrow::Cow;
 
-use super::chart::{bucket_label_of, chart_bucket, pie, time_series, Pie, TimeSeries};
+use super::chart::{
+    bucket_label_at, bucket_label_of, chart_bucket, pie, time_series_priced, Pie, SavedInput,
+    TimeSeries,
+};
 use super::ops::{build_report, by_project};
 use super::types::{Query, ReportRow};
+use crate::features::savings::{cache_savings, savings_by_bucket, BucketSavings, Savings};
 use crate::features::usage::{Row, Summary, Tool};
+use crate::ExternalSavings;
 
 /// What the user has clicked.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -86,6 +91,15 @@ pub fn project_key(row: &Row) -> String {
 pub struct Drill {
     pub report: Vec<ReportRow>,
     pub total: Summary,
+    /// How many of the selected turns read from the prompt cache.
+    pub cache_turns: u64,
+    /// Everything saved in the selection: cache hits in the selected rows plus
+    /// rtk and compactions that happened in the selected bucket. The external
+    /// sources are not attributed to projects, so they drop out when one is selected.
+    pub savings: Savings,
+    /// Savings per chart bucket (minute, hour, day or month), narrowed to the
+    /// selected project like the bars; oldest first.
+    pub savings_by_bucket: Vec<BucketSavings>,
     pub projects: Vec<(String, Summary)>,
     /// Bars: always the full time range, narrowed to the selected project.
     pub series: TimeSeries,
@@ -98,7 +112,19 @@ pub struct Drill {
 /// Recompute the dashboard for `selection`. A bucket or project that is not in
 /// `rows` any more (the data refreshed, the query changed) is dropped.
 pub fn drill(rows: &[Row], query: &Query, selection: &Selection) -> Drill {
-    let full = time_series(rows, query);
+    drill_priced(rows, query, selection, &SavedInput::default())
+}
+
+/// [`drill`] with the "saved" chart valued at `saved.price` and including pi
+/// compactions (which are left out while a project is selected: they are not
+/// attributed to projects).
+pub fn drill_priced(
+    rows: &[Row],
+    query: &Query,
+    selection: &Selection,
+    saved: &SavedInput,
+) -> Drill {
+    let full = time_series_priced(rows, query, saved);
     let mut sel = selection.clone();
     if sel
         .bucket
@@ -153,14 +179,40 @@ pub fn drill(rows: &[Row], query: &Query, selection: &Selection) -> Drill {
 
     // Bars keep the full x-axis even when a project narrows the values.
     let series = if sel.project.is_some() {
-        restrict(&full, &in_project, query)
+        restrict(&full, &in_project, query, saved.price)
     } else {
         full
     };
     let projects = by_project(&both);
+
+    // External sources: all of them, one bucket's worth, or none (a project).
+    let none = ExternalSavings::default();
+    let all_external = saved.external.unwrap_or(&none);
+    let narrowed;
+    let external: &ExternalSavings = match (&sel.project, &sel.bucket) {
+        (Some(_), _) => &none,
+        (None, Some(b)) => {
+            let bucket = chart_bucket(query);
+            narrowed = all_external.within(|ts| &bucket_label_at(ts, bucket) == b);
+            &narrowed
+        }
+        (None, None) => all_external,
+    };
+    let selection_savings = Savings::from_sources(
+        std::iter::once(cache_savings(both.iter(), saved.price))
+            .chain(Savings::build(std::iter::empty(), external, saved.price).sources),
+    );
+    let by_bucket_external = if sel.project.is_some() {
+        &none
+    } else {
+        all_external
+    };
     Drill {
+        savings: selection_savings,
+        savings_by_bucket: savings_by_bucket(&in_project, query, by_bucket_external, saved.price),
         report: build_report(&both, query),
         total: Summary::of(both.iter()),
+        cache_turns: both.iter().filter(|r| r.cache_read > 0).count() as u64,
         series,
         pie: pie(&by_project(&in_bucket), 8),
         projects,
@@ -169,12 +221,13 @@ pub fn drill(rows: &[Row], query: &Query, selection: &Selection) -> Drill {
 }
 
 /// `full`'s labels with values recomputed from `rows`.
-fn restrict(full: &TimeSeries, rows: &[Row], query: &Query) -> TimeSeries {
+fn restrict(full: &TimeSeries, rows: &[Row], query: &Query, price: f64) -> TimeSeries {
     let mut out = TimeSeries {
         bucket: full.bucket,
         labels: full.labels.clone(),
         tokens: vec![[0; Tool::COUNT]; full.labels.len()],
         cost: vec![[0.0; Tool::COUNT]; full.labels.len()],
+        saved: vec![[0.0; Tool::COUNT]; full.labels.len()],
     };
     let bucket = chart_bucket(query);
     for r in rows {
@@ -183,6 +236,7 @@ fn restrict(full: &TimeSeries, rows: &[Row], query: &Query) -> TimeSeries {
             let t = r.tool.series_index();
             out.tokens[i][t] += r.input + r.output + r.cache_read + r.cache_write;
             out.cost[i][t] += r.cost;
+            out.saved[i][t] += crate::features::savings::cache_usd(r.cache_read, price);
         }
     }
     out
@@ -237,6 +291,17 @@ mod tests {
         assert_eq!(d.total.total_tokens, 3500);
         assert_eq!(d.series.labels.len(), 3, "May 1, 2, 3 (gap filled)");
         assert!(d.selection.is_empty());
+    }
+
+    #[test]
+    fn cached_turns_are_counted_for_the_selection() {
+        let mut rs = rows();
+        rs[0].cache_read = 10;
+        rs[2].cache_read = 20;
+        assert_eq!(drill(&rs, &q(), &Selection::default()).cache_turns, 2);
+        assert_eq!(drill(&rs, &q(), &sel(None, Some("pi:b"))).cache_turns, 0);
+        let first = drill(&rs, &q(), &Selection::default()).series.labels[0].clone();
+        assert_eq!(drill(&rs, &q(), &sel(Some(&first), None)).cache_turns, 1);
     }
 
     #[test]
@@ -331,5 +396,37 @@ mod tests {
         let d = drill(&rows(), &q(), &Selection::default());
         assert!(d.pie.slices.iter().all(|s| s.key.is_some()));
         assert_eq!(project_key(&rows()[0]), "pi:a");
+    }
+
+    #[test]
+    fn a_project_selection_narrows_the_saved_bars() {
+        let mk = |tool, project: &str, ts: &str, read| Row {
+            cache_read: read,
+            ..row(tool, project, ts, 1)
+        };
+        let rows = vec![
+            mk(Tool::Pi, "a", "2026-05-10T12:00:00Z", 1_000_000),
+            mk(Tool::Pi, "b", "2026-05-10T13:00:00Z", 1_000_000),
+        ];
+        let ext = crate::ExternalSavings {
+            compaction_events: vec![("2026-05-10T14:00:00Z".parse().unwrap(), 1_000_000)],
+            ..Default::default()
+        };
+        let input = SavedInput {
+            price: 10.0,
+            external: Some(&ext),
+        };
+        let all = drill_priced(&rows, &q(), &Selection::default(), &input);
+        // 9 + 9 cache + 10 compaction.
+        assert!((all.series.bucket_total(crate::Metric::Saved, 0) - 28.0).abs() < 1e-9);
+        let sel = Selection {
+            project: Some("pi:a".into()),
+            ..Selection::default()
+        };
+        let one = drill_priced(&rows, &q(), &sel, &input);
+        assert!(
+            (one.series.bucket_total(crate::Metric::Saved, 0) - 9.0).abs() < 1e-9,
+            "only project a's cache; compactions are not attributed to projects"
+        );
     }
 }

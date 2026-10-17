@@ -122,6 +122,20 @@ tokenburn --json           # machine-readable (always US dollars)
 
 ![Auto-update: a new turn is logged and the numbers change by themselves](examples/vhs/generated/live-refresh.gif)
 
+**Savings.** Next to what you spent, every front-end shows what you *saved* — in tokens and money, per source:
+
+| Source | Where it comes from | Counted for |
+|---|---|---|
+| Prompt cache | `cache_read` tokens in the usage logs, credited at 90 % of the input price | every tool, follows the filter / drill-down |
+| [rtk](https://github.com/rtk-ai/rtk) | tokens rtk filtered out of command output, from its `history.db` (override: `TOKENBURN_RTK_DB`) | `tool=all` only — rtk cannot say which agent ran a command |
+| pi compaction | context removed by pi's compaction entries (size before vs. the next turn) | pi |
+
+Money is an **estimate**: saved tokens × your input price, `input_price_per_mtok` in `settings.json` (default `$3.00` per million). Shown in the TUI header and, with the `m` metric on *saved*, as a panel under the charts, as a GUI card + panel, a web card + table (JSON at `/api/savings`) and in the CLI with `tokenburn --savings [--input-price 15]`. In the GUI and web, the **chart** dropdown (tokens / cost / **saved**) plots savings per hour, day or month with the same bucket and window filters; that chart covers prompt cache and pi compaction per tool, while rtk (not attributable to a tool) is in the totals and the panel.
+
+**Metric.** The chart's *tokens / cost / saved* dropdown also picks what the headline cards show: token counts, spend (total, per turn, per 1M tokens) or savings (money, tokens, share, per source). The saved breakdown — and its per-interval list — appears only with *saved*, so it is out of the way by default.
+
+**Intervals.** Savings follow the same buckets as everything else — **minutely, hourly, daily or monthly** (`--minutely`, `--hourly`, … / the *bucket* filter / TUI keys `2`–`5`): the saved panel lists what was saved in each interval, rtk and pi compaction land in the minute they happened, and clicking a bar narrows the totals to that interval. A selected project keeps only its own cache savings, since rtk and compactions are not attributed to projects.
+
 **Charts.** Tokens or cost over time (one stacked bar per hour, day or month, one colour per tool) and a donut of the biggest projects. In the GUI and web dashboard they animate in, and clicking drills down:
 
 | Click | Effect |
@@ -196,14 +210,15 @@ No `python3` or `zstd` binary needed — sqlite and zstd are bundled.
 
 | Key | Action |
 |-----|--------|
-| `←/→`, `Tab`, `1-4` | total / hourly / daily / monthly |
+| `←/→`, `Tab`, `1-5` | total / minutely / hourly / daily / monthly |
 | `t` / `w` | cycle tool / window (today → month → all) |
-| `p` | per-project / per-model view |
+| `m` | metric: tokens → cost → saved (headline figures, chart; saved adds the breakdown below the charts) |
 | `/` | free-text filter: all words must match (tool, project, session id); `-word` excludes. `Enter` keeps, `Esc` clears |
 | `f` | per-tool checkboxes with counts — `␣` toggle, `a` all, `n` none, `x` clear |
 | `o` | options: auto-refresh and interval, bar chart, pie chart, pie slices |
 | `T`, `[`, `]` | theme picker / previous / next |
 | `C` | currency picker (preview as you move, saved) |
+| `v` | jump to the saved metric: prompt cache, rtk, pi compaction |
 | `↑/↓`, `j/k`, `g/G` | scroll |
 | `q`, `Esc` | quit (`Esc` first clears an active filter) |
 

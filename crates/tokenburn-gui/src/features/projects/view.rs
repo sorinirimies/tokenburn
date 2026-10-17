@@ -1,7 +1,7 @@
 //! Per-project / per-model breakdown, most expensive first.
 
 use iced::alignment::Horizontal;
-use iced::widget::{column, container, progress_bar, row, scrollable, text};
+use iced::widget::{column, container, progress_bar, row, text};
 use iced::{Element, Length};
 use tokenburn_core::utils::fmt::thousands;
 use tokenburn_core::LayoutClass;
@@ -9,16 +9,19 @@ use tokenburn_core::LayoutClass;
 use crate::message::Message;
 use crate::state::TokenBurn;
 
-pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
-    let narrow = layout.is_narrow();
-    if state.projects.is_empty() {
-        let message = text("No data.").style(text::secondary);
-        return if layout.is_wide() {
-            container(message).center(Length::Fill).into()
-        } else {
-            container(message).padding(30).center_x(Length::Fill).into()
-        };
+/// Whether the breakdown belongs under the report: only when it says something the
+/// report's tool rows do not (a tool with several projects or models).
+pub fn is_shown(state: &TokenBurn) -> bool {
+    tokenburn_core::projects_add_detail(&state.report, &state.projects)
+}
+
+/// The breakdown as a titled section, for the bottom of the report. `None` when it
+/// would only repeat the report.
+pub fn view(state: &TokenBurn, layout: LayoutClass) -> Option<Element<'_, Message>> {
+    if !is_shown(state) {
+        return None;
     }
+    let narrow = layout.is_narrow();
 
     let max_cost = state
         .projects
@@ -83,12 +86,15 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
             body.push(container(line.spacing(8).align_y(iced::Alignment::Center)).padding([4, 10]));
     }
 
-    if layout.is_wide() {
-        column![header, scrollable(body).height(Length::Fill)]
-            .spacing(6)
-            .into()
-    } else {
-        // Scrolled together with the cards by the caller.
-        column![header, body].spacing(6).into()
-    }
+    Some(
+        column![
+            text("Projects / models (by cost)")
+                .size(13)
+                .style(text::secondary),
+            header,
+            body
+        ]
+        .spacing(6)
+        .into(),
+    )
 }

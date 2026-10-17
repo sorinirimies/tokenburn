@@ -27,10 +27,16 @@ pub mod utils;
 
 pub use features::currency::{find as currency_by_code, Currency, CURRENCIES};
 pub use features::report::{
-    axis_label, axis_tokens, bucket_at, bucket_label_of, build_report, by_project, chart_bucket,
-    drill, nice_max, pie, project_key, short_label, short_name, slice_angles, time_series, Bucket,
-    Drill, Metric, Pie, Query, ReportRow, RowFilter, Selection, Slice, TimeSeries, ToolFilter,
-    Window,
+    axis_label, axis_tokens, bucket_at, bucket_label_at, bucket_label_of, build_report, by_project,
+    cards, chart_bucket, drill, drill_priced, nice_max, pie, project_key, projects_add_detail,
+    short_label, short_name, slice_angles, time_series, time_series_priced, Bucket, Card, CardKind,
+    Drill, Metric, Pie, Query, ReportRow, RowFilter, SavedInput, Selection, Slice, TimeSeries,
+    ToolFilter, Window,
+};
+pub use features::savings::{
+    avoided_usd, cache_savings, cache_usd, collect_external, savings_by_bucket, BucketSavings,
+    ExternalSavings, Savings, SavingsSource, SourceSavings, CACHE_READ_PRICE_RATIO,
+    DEFAULT_INPUT_PRICE_PER_MTOK,
 };
 pub use features::settings::{self, Settings};
 pub use features::theme::{
@@ -50,6 +56,8 @@ pub struct Collected {
     pub rows: Vec<Row>,
     /// Non-fatal problems (missing db, unreadable file…), safe to show to the user.
     pub warnings: Vec<String>,
+    /// Savings from sources outside the usage rows (rtk, pi compaction).
+    pub external: ExternalSavings,
 }
 
 /// Collect rows for `tool` from the default on-disk locations, keeping only
@@ -103,5 +111,6 @@ pub fn collect(tool: ToolFilter, start: DateTime<Utc>) -> Collected {
     }
     out.rows.retain(|r| r.ts >= start);
     out.rows.sort_by_key(|r| r.ts);
+    out.external = collect_external(tool, start);
     out
 }

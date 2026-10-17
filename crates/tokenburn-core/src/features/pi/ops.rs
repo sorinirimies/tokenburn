@@ -147,6 +147,99 @@ pub(crate) fn parse_line(line: &str, project: &str, id: &str) -> Option<Row> {
     })
 }
 
+/// One pi context compaction: the session's old messages were replaced by a
+/// summary, so every later turn carries fewer tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Compaction {
+    pub ts: DateTime<Utc>,
+    /// Context size before compacting (pi's own `tokensBefore`).
+    pub tokens_before: u64,
+    /// Context size of the first turn after it, or an estimate from the summary
+    /// text when the session ended right there.
+    pub tokens_after: u64,
+}
+
+impl Compaction {
+    /// Tokens no longer carried by every following turn.
+    pub fn saved(&self) -> u64 {
+        self.tokens_before.saturating_sub(self.tokens_after)
+    }
+}
+
+/// Parsed compactions per session file, cached like the usage rows.
+static COMPACTION_CACHE: LazyLock<FileCache<Vec<Compaction>>> = LazyLock::new(FileCache::default);
+
+/// Compactions from the default sessions directory (none when pi is absent).
+pub fn collect_compactions(start: DateTime<Utc>) -> Vec<Compaction> {
+    match sessions_dir() {
+        Some(dir) if dir.is_dir() => collect_compactions_from(&dir, start),
+        _ => Vec::new(),
+    }
+}
+
+/// Every compaction at or after `start` in the `*.jsonl` files below `root`.
+pub fn collect_compactions_from(root: &Path, start: DateTime<Utc>) -> Vec<Compaction> {
+    let files = walk_ext(root, &["jsonl"]);
+    let live: HashSet<PathBuf> = files.iter().cloned().collect();
+    let mut out = Vec::new();
+    for file in files {
+        if !modified_since(&file, start) {
+            continue;
+        }
+        let Some(sig) = Sig::of(&file, 0) else {
+            continue;
+        };
+        let parsed = COMPACTION_CACHE.get_or_parse(&file, sig, || parse_compactions(&file));
+        out.extend(parsed.iter().filter(|c| c.ts >= start).copied());
+    }
+    COMPACTION_CACHE.prune_under(root, &live);
+    out
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompactionLine {
+    timestamp: Option<String>,
+    summary: Option<String>,
+    tokens_before: Option<f64>,
+}
+
+fn parse_compactions(file: &Path) -> Vec<Compaction> {
+    let Some(lines) = read_lines(file) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Compaction> = Vec::new();
+    // A compaction waiting for the next turn, whose usage shows the new context size.
+    let mut pending = false;
+    for line in lines {
+        if line.contains("\"type\":\"compaction\"") {
+            if let Some(c) = parse_compaction_line(&line) {
+                out.push(c);
+                pending = true;
+            }
+        } else if pending {
+            if let Some(row) = parse_line(&line, "", "") {
+                if let Some(c) = out.last_mut() {
+                    c.tokens_after = row.input + row.cache_read + row.cache_write;
+                }
+                pending = false;
+            }
+        }
+    }
+    out
+}
+
+/// A compaction entry; `tokens_after` is estimated from the summary (≈4 bytes
+/// per token) until a following turn replaces it.
+pub(crate) fn parse_compaction_line(line: &str) -> Option<Compaction> {
+    let rec: CompactionLine = serde_json::from_str(line).ok()?;
+    Some(Compaction {
+        ts: parse_ts(&rec.timestamp?)?,
+        tokens_before: num_f(rec.tokens_before),
+        tokens_after: rec.summary.map_or(0, |s| s.len() as u64 / 4),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,5 +371,63 @@ mod tests {
         let rows = collect_pi_from(dir.path(), start).unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].project, "home-me-proj");
+    }
+
+    const COMPACTION: &str = r#"{"type":"compaction","timestamp":"2026-05-01T11:00:00Z","summary":"0123456789012345678901234567890123456789","tokensBefore":1000}"#;
+    const AFTER: &str = r#"{"timestamp":"2026-05-01T11:01:00Z","message":{"usage":{"input":100,"output":5,"cacheRead":200,"cacheWrite":50,"cost":{"total":0.1}}}}"#;
+
+    #[test]
+    fn compaction_savings_use_the_next_turns_context() {
+        let c = parse_compaction_line(COMPACTION).unwrap();
+        assert_eq!(
+            (c.tokens_before, c.tokens_after, c.saved()),
+            (1000, 10, 990)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("s.jsonl");
+        fs::write(&f, format!("{LINE}\n{COMPACTION}\nnoise\n{AFTER}\n")).unwrap();
+        let got = parse_compactions(&f);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].tokens_after, 350);
+        assert_eq!(got[0].saved(), 650);
+    }
+
+    #[test]
+    fn compaction_at_the_end_of_a_session_falls_back_to_the_summary_estimate() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("s.jsonl");
+        fs::write(&f, format!("{COMPACTION}\n")).unwrap();
+        assert_eq!(parse_compactions(&f)[0].saved(), 990);
+        // Growth past the context never goes negative.
+        let big = Compaction {
+            ts: parse_ts("2026-05-01T11:00:00Z").unwrap(),
+            tokens_before: 5,
+            tokens_after: 9,
+        };
+        assert_eq!(big.saved(), 0);
+    }
+
+    #[test]
+    fn bad_compaction_lines_are_ignored() {
+        assert!(parse_compaction_line("nope").is_none());
+        assert!(parse_compaction_line(r#"{"type":"compaction","tokensBefore":1}"#).is_none());
+    }
+
+    #[test]
+    fn compactions_are_collected_by_window_and_cached() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let proj = dir.path().join("--cp--");
+        fs::create_dir_all(&proj).unwrap();
+        fs::write(proj.join("s.jsonl"), format!("{COMPACTION}\n{AFTER}\n")).unwrap();
+        let all = "1970-01-01T00:00:00Z".parse().unwrap();
+        let after = "2026-06-01T00:00:00Z".parse().unwrap();
+        assert_eq!(collect_compactions_from(dir.path(), all).len(), 1);
+        let (h0, _) = COMPACTION_CACHE.stats();
+        assert_eq!(collect_compactions_from(dir.path(), all).len(), 1);
+        assert_eq!(COMPACTION_CACHE.stats().0 - h0, 1, "served from the cache");
+        assert!(collect_compactions_from(dir.path(), after).is_empty());
+        fs::remove_file(proj.join("s.jsonl")).unwrap();
+        assert!(collect_compactions_from(dir.path(), all).is_empty());
     }
 }

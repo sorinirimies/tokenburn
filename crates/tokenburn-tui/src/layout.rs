@@ -1,10 +1,10 @@
 //! Top-level screen layout.
 
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::Frame;
 
-use crate::app::{App, View};
-use crate::features::{chart, filter, options, pie, projects, report, theme};
+use crate::app::App;
+use crate::features::{chart, filter, options, pie, projects, report, savings, theme};
 use crate::widgets::{header, status_bar};
 use tokenburn_core::LayoutClass;
 
@@ -37,6 +37,75 @@ fn render_too_small(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
     );
 }
 
+/// The report table with what goes under it, top to bottom: the projects / models
+/// breakdown (only when it adds detail), the charts, and the saved panel (with the
+/// `saved` metric). The table keeps at least 5 rows; when room runs out the
+/// projects go first, then the charts, then the saved panel shrinks.
+fn render_report(app: &mut App, frame: &mut Frame, body: Rect, class: LayoutClass) {
+    const TABLE_MIN: u16 = 5;
+    let mut spare = body.height.saturating_sub(TABLE_MIN);
+
+    // The charts come first (the screen's own height, or the compact one when room
+    // is short), the saved panel takes what is left, then the projects table.
+    let want = chart_height(body.height + 5);
+    let chart_rows = if want <= spare {
+        want
+    } else if want > 0 && 9 <= spare {
+        9
+    } else {
+        0
+    };
+    spare -= chart_rows;
+    let saved_rows = if app.metric == tokenburn_core::Metric::Saved {
+        savings::view::wanted_height(app).min(spare)
+    } else {
+        0
+    };
+    spare -= saved_rows;
+    let projects_rows =
+        if projects::view::is_shown(app) && projects::view::wanted_height(app) <= spare {
+            projects::view::wanted_height(app)
+        } else {
+            0
+        };
+
+    let show_chart = app.options.show_chart && chart_rows > 0;
+    let show_pie = app.options.show_pie && chart_rows > 0 && !class.is_narrow();
+    let chart_rows = if show_chart || show_pie {
+        chart_rows
+    } else {
+        0
+    };
+
+    let [table_area, projects_area, charts_area, saved_area] = Layout::vertical([
+        Constraint::Min(TABLE_MIN),
+        Constraint::Length(projects_rows),
+        Constraint::Length(chart_rows),
+        Constraint::Length(saved_rows),
+    ])
+    .areas(body);
+
+    report::view::render(app, frame, table_area);
+    if projects_rows > 0 {
+        projects::view::render(app, frame, projects_area);
+    }
+    match (show_chart, show_pie) {
+        (true, true) => {
+            let [c, p] =
+                Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
+                    .areas(charts_area);
+            chart::view::render(app, frame, c);
+            pie::view::render(app, frame, p);
+        }
+        (true, false) => chart::view::render(app, frame, charts_area),
+        (false, true) => pie::view::render(app, frame, charts_area),
+        _ => {}
+    }
+    if saved_rows > 0 {
+        savings::view::render(app, frame, saved_area);
+    }
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
     // Paint the whole screen first so the theme background shows everywhere.
     frame.render_widget(
@@ -64,37 +133,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     header::render(app, frame, head);
 
-    match app.view {
-        View::Report => {
-            // What fits: the charts need height (they vanish on short terminals and
-            // shrink on small ones) and the pie needs width (it vanishes when narrow).
-            let chart_rows = chart_height(area.height);
-            let show_chart = app.options.show_chart && chart_rows > 0;
-            let show_pie = app.options.show_pie && chart_rows > 0 && !class.is_narrow();
-            if show_chart || show_pie {
-                let [table_area, bottom] =
-                    Layout::vertical([Constraint::Min(5), Constraint::Length(chart_rows)])
-                        .areas(body);
-                report::view::render(app, frame, table_area);
-                match (show_chart, show_pie) {
-                    (true, true) => {
-                        let [c, p] = Layout::horizontal([
-                            Constraint::Percentage(55),
-                            Constraint::Percentage(45),
-                        ])
-                        .areas(bottom);
-                        chart::view::render(app, frame, c);
-                        pie::view::render(app, frame, p);
-                    }
-                    (true, false) => chart::view::render(app, frame, bottom),
-                    _ => pie::view::render(app, frame, bottom),
-                }
-            } else {
-                report::view::render(app, frame, body);
-            }
-        }
-        View::Projects => projects::view::render(app, frame, body),
-    }
+    render_report(app, frame, body, class);
 
     status_bar::render(app, frame, foot);
 
@@ -143,13 +182,46 @@ mod tests {
     }
 
     #[test]
-    fn renders_report_and_projects() {
+    fn renders_the_report_and_menu_and_no_view_switch() {
         let mut app = app_with_rows();
         let out = draw(&mut app);
         assert!(out.contains("TokenBurn"));
         assert!(out.contains("TOTAL"));
-        app.toggle_view();
-        assert!(draw(&mut app).contains("pi:proj"));
+        assert!(
+            out.contains("Settings") && out.contains("About"),
+            "menu top right:\n{out}"
+        );
+        assert!(out.contains("metric:tokens"));
+        assert!(
+            !out.contains("Projects /"),
+            "one project per tool only repeats the report:\n{out}"
+        );
+    }
+
+    /// Two projects under one tool: the breakdown has something to add.
+    fn two_projects_app() -> App {
+        let mut app = day_app();
+        let mut b = app.all_rows[0].clone();
+        b.project = "other".into();
+        b.id = "y".into();
+        b.cost = 0.25;
+        app.all_rows.push(b);
+        app.rebuild();
+        app
+    }
+
+    #[test]
+    fn projects_show_under_the_report_only_when_they_add_detail() {
+        let mut one = day_app();
+        assert!(!draw(&mut one).contains("Projects / models"));
+        let mut two = two_projects_app();
+        let out = draw(&mut two);
+        assert!(out.contains("Projects / models (by cost)"), "{out}");
+        assert!(out.contains("pi:proj") && out.contains("pi:other"), "{out}");
+        // No room: the report table keeps its rows and the breakdown gives way.
+        let short = draw_at(&mut two, 120, 12);
+        assert!(!short.contains("Projects / models"), "{short}");
+        assert!(short.contains("2026-05-01"));
     }
 
     #[test]
@@ -339,9 +411,6 @@ mod tests {
         app.set_currency(tokenburn_core::features::currency::index_of("EUR"));
         let own = draw(&mut app);
         assert!(own.contains("€0.25") && own.contains("cur:EUR ") && !own.contains("cur:EUR ≈"));
-
-        app.toggle_view();
-        assert!(draw(&mut app).contains("€0.25"), "the projects table too");
     }
 
     #[test]
@@ -402,7 +471,7 @@ mod tests {
             assert!(out.contains(col), "{col} missing:\n{out}");
         }
         assert!(
-            out.contains("cache r/w"),
+            out.contains("cache read"),
             "the header shows the cache totals"
         );
         assert!(out.contains("theme:") && out.contains("cur:"));
@@ -419,7 +488,7 @@ mod tests {
             "{out}"
         );
         assert!(
-            !out.contains("cache r/w"),
+            !out.contains("cache read"),
             "no cache totals in the header either"
         );
         assert!(out.contains("Share by project") && out.contains("Total tokens"));
@@ -510,11 +579,14 @@ mod tests {
                 let _ = draw_at(&mut app, w, h);
             }
         }
-        // The other view and an empty state, too.
+        // Every metric, with the projects breakdown, and an empty state, too.
         app.options.open = false;
-        app.toggle_view();
-        for (w, h) in [(40, 10), (65, 20), (150, 50)] {
-            let _ = draw_at(&mut app, w, h);
+        let mut app = two_projects_app();
+        for metric in tokenburn_core::Metric::ALL {
+            app.metric = metric;
+            for (w, h) in [(40, 10), (65, 20), (150, 50), (110, 30), (200, 80)] {
+                let _ = draw_at(&mut app, w, h);
+            }
         }
         let mut empty = App::new();
         for (w, h) in [(40, 10), (65, 20), (150, 50)] {
@@ -531,12 +603,13 @@ mod tests {
     }
 
     #[test]
-    fn the_projects_view_drops_the_turns_column_when_narrow() {
-        let mut app = day_app();
-        app.toggle_view();
-        let wide = draw_at(&mut app, 120, 30);
-        assert!(wide.contains("turns"));
-        let narrow = draw_at(&mut app, 60, 30);
+    fn the_projects_section_drops_the_turns_column_when_narrow() {
+        let mut app = two_projects_app();
+        let wide = draw_at(&mut app, 120, 40);
+        assert!(wide
+            .lines()
+            .any(|l| l.contains("tool:project") && l.contains("turns")));
+        let narrow = draw_at(&mut app, 60, 40);
         let head = narrow.lines().find(|l| l.contains("tool:project")).unwrap();
         assert!(
             !head.contains("turns") && head.contains("total") && head.contains("cost"),
@@ -563,5 +636,184 @@ mod tests {
             title.contains("cur:USD") && !title.contains("win:"),
             "{title}"
         );
+    }
+
+    /// `app_with_rows` plus cache reads and rtk/compaction savings: 1M of each at $10/M.
+    fn app_with_savings() -> App {
+        let mut app = app_with_rows();
+        app.all_rows[0].cache_read = 1_000_000;
+        app.input_price = 10.0;
+        app.external = tokenburn_core::ExternalSavings {
+            rtk_tokens: 1_000_000,
+            rtk_commands: 7,
+            compaction_tokens: 1_000_000,
+            compactions: 2,
+            ..Default::default()
+        };
+        app.rebuild();
+        app
+    }
+
+    fn saved(mut app: App) -> App {
+        app.metric = tokenburn_core::Metric::Saved;
+        app
+    }
+
+    #[test]
+    fn the_metric_decides_what_the_header_shows() {
+        let mut app = app_with_savings();
+        let tokens = draw(&mut app);
+        assert!(
+            tokens.contains("total tokens") && !tokens.contains("tokens saved"),
+            "{tokens}"
+        );
+        app.cycle_metric();
+        let cost = draw(&mut app);
+        assert!(
+            cost.contains("per turn") && cost.contains("$0.50"),
+            "{cost}"
+        );
+        assert!(!cost.contains("total tokens") && !cost.contains("tokens saved"));
+        app.cycle_metric();
+        let saved = draw(&mut app);
+        assert!(
+            saved.contains("tokens saved") && saved.contains("3.00M"),
+            "{saved}"
+        );
+        assert!(saved.contains("$29.00"), "9 + 10 + 10: {saved}");
+        app.cycle_metric();
+        assert_eq!(app.metric, tokenburn_core::Metric::Tokens, "wraps around");
+    }
+
+    #[test]
+    fn saved_follows_the_currency() {
+        let mut app = saved(app_with_savings());
+        app.currency = tokenburn_core::currency_by_code("EUR").unwrap();
+        assert!(draw(&mut app).contains("€26.68"));
+    }
+
+    #[test]
+    fn narrow_header_keeps_the_first_saved_figures_that_fit() {
+        let mut app = saved(app_with_savings());
+        let mut term = Terminal::new(TestBackend::new(48, 20)).unwrap();
+        term.draw(|f| render(&mut app, f)).unwrap();
+        let out = term.backend().to_string();
+        assert!(out.contains("saved $29.00"), "{out}");
+    }
+
+    #[test]
+    fn m_cycles_the_metric_and_v_jumps_to_saved() {
+        use crossterm::event::{KeyCode, KeyEvent};
+        use tokenburn_core::Metric;
+        let mut app = app_with_savings();
+        for want in [Metric::Cost, Metric::Saved, Metric::Tokens] {
+            crate::events::handle_key(&mut app, KeyEvent::from(KeyCode::Char('m')));
+            assert_eq!(app.metric, want);
+        }
+        crate::events::handle_key(&mut app, KeyEvent::from(KeyCode::Char('v')));
+        assert_eq!(app.metric, Metric::Saved);
+        // `p` no longer switches views.
+        crate::events::handle_key(&mut app, KeyEvent::from(KeyCode::Char('p')));
+        assert_eq!(app.metric, Metric::Saved);
+    }
+
+    #[test]
+    fn the_saved_panel_sits_below_the_charts_with_a_line_per_source() {
+        let mut app = saved(app_with_savings());
+        let out = draw_at(&mut app, 130, 40);
+        for needle in [
+            "Saved",
+            "Prompt cache",
+            "rtk",
+            "7 commands",
+            "pi compaction",
+            "2 compactions",
+            "total",
+            "$9.00",
+            "of what it would have cost",
+            "$10.00/M input tokens",
+        ] {
+            assert!(out.contains(needle), "missing {needle:?}:\n{out}");
+        }
+        let pos = |s: &str| out.lines().position(|l| l.contains(s)).unwrap();
+        assert!(
+            pos("Share by project") < pos("valued at"),
+            "below the charts:\n{out}"
+        );
+        assert!(out.contains("TOTAL"), "the report table keeps its rows");
+        // Other metrics: no panel.
+        app.metric = tokenburn_core::Metric::Tokens;
+        assert!(!draw_at(&mut app, 130, 40).contains("valued at"));
+    }
+
+    #[test]
+    fn the_charts_follow_the_metric() {
+        let mut app = day_app();
+        assert!(draw_at(&mut app, 130, 40).contains("Total tokens"));
+        app.metric = tokenburn_core::Metric::Cost;
+        let cost = draw_at(&mut app, 130, 40);
+        assert!(
+            cost.contains(" Cost ") && !cost.contains("Total tokens"),
+            "{cost}"
+        );
+        assert!(cost.contains("$0.50"), "bar value in money");
+        let mut app = saved(app_with_savings());
+        app.query.bucket = tokenburn_core::Bucket::Day;
+        app.rebuild();
+        let out = draw_at(&mut app, 130, 40);
+        assert!(out.contains("Saved (cache + rtk + compaction)"), "{out}");
+    }
+
+    #[test]
+    fn the_saved_panel_lists_savings_per_interval_at_the_chosen_granularity() {
+        use tokenburn_core::{bucket_label_at, Bucket};
+        let mut app = saved(app_with_savings());
+        let ts = app.all_rows[0].ts;
+        app.external.rtk_events = vec![(ts, 1_000_000, 7)];
+        app.external.compaction_events = vec![(ts, 1_000_000)];
+        for (bucket, noun) in [
+            (Bucket::Minute, "minute"),
+            (Bucket::Hour, "hour"),
+            (Bucket::Day, "day"),
+            (Bucket::Month, "month"),
+        ] {
+            app.query.bucket = bucket;
+            app.rebuild();
+            let out = draw_at(&mut app, 130, 50);
+            assert!(out.contains(&format!("per {noun}")), "{noun}:\n{out}");
+            assert!(out.contains(&bucket_label_at(ts, bucket)), "{noun}:\n{out}");
+            assert_eq!(
+                app.savings_by_bucket().len(),
+                1,
+                "everything shares one {noun}"
+            );
+            assert_eq!(app.savings_by_bucket()[0].savings.tokens, 3_000_000);
+        }
+        app.query.bucket = Bucket::None;
+        app.rebuild();
+        assert!(draw_at(&mut app, 130, 50).contains("per day"));
+    }
+
+    #[test]
+    fn the_saved_panel_explains_an_empty_result_and_missing_rtk() {
+        let mut app = app_with_rows();
+        app.all_rows[0].cache_read = 0;
+        app.rebuild();
+        let mut app = saved(app);
+        assert!(draw_at(&mut app, 130, 40).contains("Nothing saved"));
+
+        let mut app = saved(app_with_savings());
+        app.external.rtk_tokens = 0;
+        app.query.tool = tokenburn_core::ToolFilter::PI;
+        app.rebuild();
+        assert!(draw_at(&mut app, 130, 50).contains("rtk is counted only with tool:all"));
+    }
+
+    #[test]
+    fn on_a_short_terminal_the_saved_panel_shrinks_before_the_table_does() {
+        let mut app = saved(app_with_savings());
+        let out = draw_at(&mut app, 120, 16);
+        assert!(out.contains("TOTAL") && out.contains("valued at"), "{out}");
+        assert!(!out.contains("Share by project"), "charts give way:\n{out}");
     }
 }

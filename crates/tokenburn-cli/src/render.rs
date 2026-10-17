@@ -1,7 +1,7 @@
 //! Plain-text table renderer.
 
-use tokenburn_core::utils::fmt::thousands;
-use tokenburn_core::{Currency, ReportRow};
+use tokenburn_core::utils::fmt::{percent, thousands};
+use tokenburn_core::{BucketSavings, Currency, ReportRow, Savings};
 
 const HEAD_BUCKET: [&str; 1] = ["bucket"];
 const HEAD: [&str; 7] = [
@@ -86,6 +86,59 @@ pub fn table(rows: &[ReportRow], currency: &Currency) -> String {
     out
 }
 
+/// The "saved" block: one line per source, then the total. `spent_usd` is the
+/// report's cost, which gives the share saved. Empty text when nothing was saved.
+pub fn savings(sv: &Savings, currency: &Currency, spent_usd: f64) -> String {
+    if sv.is_empty() {
+        return "saved: nothing (no cache hits, rtk or pi compaction found)\n".to_string();
+    }
+    let mut out = String::from("saved (estimate)\n");
+    for s in &sv.sources {
+        out.push_str(&format!(
+            "  {:<14}{:>16} tokens  {:>12}  ({} {})\n",
+            s.source.label(),
+            thousands(s.tokens),
+            currency.format(s.usd),
+            thousands(s.events),
+            s.source.event_noun(),
+        ));
+    }
+    out.push_str(&format!(
+        "  {:<14}{:>16} tokens  {:>12}",
+        "total",
+        thousands(sv.tokens),
+        currency.format(sv.usd)
+    ));
+    if let Some(p) = sv.percent_of_would_be(spent_usd) {
+        out.push_str(&format!("  ({} of what it would have cost)", percent(p)));
+    }
+    out.push('\n');
+    out
+}
+
+/// Savings per interval (minute, hour, day or month), oldest first: one line per
+/// bucket with the money and where it came from.
+pub fn savings_by_bucket(buckets: &[BucketSavings], currency: &Currency) -> String {
+    let mut out = String::from("saved per interval\n");
+    for b in buckets {
+        let split = b
+            .savings
+            .sources
+            .iter()
+            .map(|s| format!("{} {}", s.source.label(), currency.format(s.usd)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push_str(&format!(
+            "  {:<18}{:>16} tokens  {:>12}  ({})\n",
+            b.label,
+            thousands(b.savings.tokens),
+            currency.format(b.savings.usd),
+            split,
+        ));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,5 +189,40 @@ mod tests {
         assert!(!t.contains("cost_usd"));
         let jpy = tokenburn_core::currency_by_code("JPY").unwrap();
         assert!(table(&[rr(None, "pi", 100)], &jpy).contains("¥225"));
+    }
+
+    #[test]
+    fn savings_block_lists_sources_and_the_share() {
+        use tokenburn_core::{SavingsSource, SourceSavings};
+        let sv = Savings::from_sources([
+            SourceSavings {
+                source: SavingsSource::PromptCache,
+                tokens: 1_000_000,
+                usd: 2.5,
+                events: 10,
+            },
+            SourceSavings {
+                source: SavingsSource::Rtk,
+                tokens: 500,
+                usd: 2.5,
+                events: 3,
+            },
+        ]);
+        let t = savings(&sv, &Currency::USD, 5.0);
+        assert!(t.starts_with("saved (estimate)"), "{t}");
+        assert!(t.contains("Prompt cache") && t.contains("1,000,000 tokens"));
+        assert!(t.contains("(3 commands)") && t.contains("$2.50"));
+        assert!(
+            t.contains("$5.00") && t.contains("50% of what it would have cost"),
+            "{t}"
+        );
+        let eur = tokenburn_core::currency_by_code("EUR").unwrap();
+        assert!(savings(&sv, &eur, 5.0).contains("€2.30"));
+    }
+
+    #[test]
+    fn savings_block_when_nothing_was_saved() {
+        let t = savings(&Savings::default(), &Currency::USD, 1.0);
+        assert!(t.starts_with("saved: nothing"));
     }
 }

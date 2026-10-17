@@ -58,7 +58,9 @@ fn boot() -> (TokenBurn, Task<Message>) {
     }
     // The user's own exchange rates, then the currency: an explicit --currency is
     // remembered like --theme, otherwise the saved one is used.
-    state.rates = tokenburn_core::settings::load().rates;
+    let settings = tokenburn_core::settings::load();
+    state.input_price = settings.input_price();
+    state.rates = settings.rates;
     match currency {
         Some(c) => state.set_currency(tokenburn_core::features::currency::index_of(c.code)),
         None => state.currency = tokenburn_core::settings::currency(),

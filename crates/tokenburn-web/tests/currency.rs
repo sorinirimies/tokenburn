@@ -30,7 +30,9 @@ async fn costs_follow_the_selected_currency_and_it_is_remembered() {
     }
 
     // Choose euros: converted amounts, a € symbol, and the cost label says "≈".
-    let eur = get(addr, &format!("/?{ALL_DAILY}&currency=EUR")).await.body;
+    let eur = get(addr, &format!("/?{ALL_DAILY}&currency=EUR&metric=cost"))
+        .await
+        .body;
     assert!(eur.contains(">€1.38<"), "1.50 USD at 0.92: {eur}");
     assert!(eur.contains("cost ≈"), "built-in rates are estimates");
     assert!(

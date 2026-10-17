@@ -28,7 +28,7 @@ button { cursor:pointer; border-color:var(--accent); }
 .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
 .card .label { color:var(--dim); font-size:12px; }
 .card .value { font-size:22px; font-variant-numeric:tabular-nums; }
-.card.cost .value { color:var(--ok); }
+.card.cost .value, .card.saved .value { color:var(--ok); }
 table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
 th, td { padding:8px 12px; text-align:right; font-variant-numeric:tabular-nums; border-bottom:1px solid var(--line); }
 th { color:var(--accent); font-weight:600; background:var(--sel); }

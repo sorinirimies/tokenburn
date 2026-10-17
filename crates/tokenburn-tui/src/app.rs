@@ -12,20 +12,10 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use tokenburn_core::features::currency::{index_of, resolve};
 use tokenburn_core::{
-    build_report, by_project, collect, Bucket, Collected, Query, ReportRow, Row, RowFilter,
-    Summary, Tool, ToolFilter, Window,
+    build_report, by_project, collect, Bucket, Collected, ExternalSavings, Metric, Query,
+    ReportRow, Row, RowFilter, Savings, Summary, Tool, ToolFilter, Window,
 };
 use tokenburn_core::{Currency, CURRENCIES};
-
-/// Which main panel is shown.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum View {
-    /// Aggregated report table + chart.
-    #[default]
-    Report,
-    /// Per-project / per-model breakdown.
-    Projects,
-}
 
 /// Messages sent from the loader thread.
 pub enum BackgroundResult {
@@ -34,7 +24,8 @@ pub enum BackgroundResult {
 
 pub struct App {
     pub query: Query,
-    pub view: View,
+    /// What the headline figures and the chart show: tokens, cost or saved (`m`).
+    pub metric: Metric,
     pub options: Options,
     /// Index into [`tokenburn_core::THEME_NAMES`].
     pub theme_index: usize,
@@ -50,6 +41,13 @@ pub struct App {
     /// The user's own exchange rates from settings.json (code → units per dollar).
     pub rates: BTreeMap<String, f64>,
     pub currency_picker_open: bool,
+    /// Savings from rtk and pi compaction, as of the last load.
+    pub external: ExternalSavings,
+    /// US dollars per million input tokens, to value the savings.
+    pub input_price: f64,
+    /// Everything saved in the current view (cache hits of the filtered rows + `external`).
+    savings: Savings,
+    savings_by_bucket: Vec<tokenburn_core::BucketSavings>,
     /// When the last reload was started (drives auto-refresh).
     pub last_reload: Option<Instant>,
     /// Everything the last load returned (the filter works on this).
@@ -96,7 +94,7 @@ impl App {
         let (bg_tx, bg_rx) = mpsc::channel();
         Self {
             query: Query::default(),
-            view: View::default(),
+            metric: Metric::Tokens,
             options: Options::default(),
             theme_index: 0,
             theme: UiTheme::by_index(0),
@@ -106,6 +104,10 @@ impl App {
             currency: Currency::USD,
             rates: BTreeMap::new(),
             currency_picker_open: false,
+            external: ExternalSavings::default(),
+            input_price: tokenburn_core::DEFAULT_INPUT_PRICE_PER_MTOK,
+            savings: Savings::default(),
+            savings_by_bucket: Vec::new(),
             last_reload: None,
             all_rows: Vec::new(),
             rows_len: 0,
@@ -188,6 +190,7 @@ impl App {
                     }
                     self.all_rows = collected.rows;
                     self.warnings = collected.warnings;
+                    self.external = collected.external;
                     self.is_loading = false;
                     self.last_refresh = Some(Local::now());
                     self.rebuild();
@@ -213,6 +216,13 @@ impl App {
         };
         self.rows_len = filtered.len();
         self.total = Summary::of(filtered.iter());
+        self.savings = Savings::build(filtered.iter(), &self.external, self.input_price);
+        self.savings_by_bucket = tokenburn_core::savings_by_bucket(
+            &filtered,
+            &self.query,
+            &self.external,
+            self.input_price,
+        );
         self.report = build_report(&filtered, &self.query);
         self.projects = by_project(&filtered);
         self.status_message = Some(self.status_text());
@@ -263,10 +273,7 @@ impl App {
 
     /// Number of selectable lines in the current view.
     pub fn line_count(&self) -> usize {
-        match self.view {
-            View::Report => self.report.len(),
-            View::Projects => self.projects.len(),
-        }
+        self.report.len()
     }
 
     pub fn clamp_selection(&mut self) {
@@ -413,13 +420,21 @@ impl App {
         }
     }
 
-    pub fn toggle_view(&mut self) {
-        self.view = match self.view {
-            View::Report => View::Projects,
-            View::Projects => View::Report,
-        };
-        self.table_state.select(None);
-        self.clamp_selection();
+    /// Next chart / headline metric: tokens → cost → saved → tokens.
+    pub fn cycle_metric(&mut self) {
+        let all = Metric::ALL;
+        let i = all.iter().position(|m| *m == self.metric).unwrap_or(0);
+        self.metric = all[(i + 1) % all.len()];
+    }
+
+    /// Everything saved in the current view.
+    /// Savings per chart interval (minute, hour, day or month), oldest first.
+    pub fn savings_by_bucket(&self) -> &[tokenburn_core::BucketSavings] {
+        &self.savings_by_bucket
+    }
+
+    pub fn savings(&self) -> &Savings {
+        &self.savings
     }
 
     /// Grand total over the rows that pass the filter.
@@ -500,6 +515,7 @@ mod tests {
                 collected: Collected {
                     rows: vec![row("a"), row("b")],
                     warnings: vec![],
+                    ..Default::default()
                 },
             })
             .unwrap();
@@ -514,6 +530,7 @@ mod tests {
                 collected: Collected {
                     rows: vec![row("a"), row("b"), row("c")],
                     warnings: vec![],
+                    ..Default::default()
                 },
             })
             .unwrap();
@@ -533,6 +550,7 @@ mod tests {
                 collected: Collected {
                     rows: vec![row("alpha"), row("beta"), row("gamma")],
                     warnings: vec![],
+                    ..Default::default()
                 },
             })
             .unwrap();
@@ -548,6 +566,7 @@ mod tests {
                 collected: Collected {
                     rows: vec![row("alpha"), row("beta"), row("alpine")],
                     warnings: vec![],
+                    ..Default::default()
                 },
             })
             .unwrap();
@@ -567,6 +586,7 @@ mod tests {
                 collected: Collected {
                     rows: vec![row("x")],
                     warnings: vec![],
+                    ..Default::default()
                 },
             })
             .unwrap();
@@ -635,5 +655,39 @@ mod tests {
         app.options.auto_refresh = false;
         app.rebuild();
         assert!(app.status_message.unwrap().contains("auto-refresh off"));
+    }
+
+    #[test]
+    fn savings_follow_the_load_and_the_filter() {
+        let mut cached = row("a");
+        cached.cache_read = 1_000_000;
+        let ext = ExternalSavings {
+            rtk_tokens: 1_000_000,
+            rtk_commands: 3,
+            ..Default::default()
+        };
+        let mut app = App::new();
+        app.input_price = 10.0;
+        app.bg_tx
+            .send(BackgroundResult::Loaded {
+                query: app.query,
+                collected: Collected {
+                    rows: vec![cached, row("b")],
+                    external: ext.clone(),
+                    ..Default::default()
+                },
+            })
+            .unwrap();
+        app.poll_background();
+        assert_eq!(app.external, ext);
+        assert_eq!(app.savings().tokens, 2_000_000);
+        assert!((app.savings().usd - 19.0).abs() < 1e-9, "9 cache + 10 rtk");
+
+        // Filtering the cached row out removes its cache saving; rtk stays.
+        app.set_filter_text("-a".into());
+        assert_eq!(app.savings().tokens, 1_000_000);
+        assert!((app.savings().usd - 10.0).abs() < 1e-9);
+        app.clear_filter();
+        assert_eq!(app.savings().tokens, 2_000_000);
     }
 }

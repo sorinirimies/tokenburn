@@ -5,4 +5,5 @@ pub mod options;
 pub mod pie;
 pub mod projects;
 pub mod report;
+pub mod savings;
 pub mod theme;

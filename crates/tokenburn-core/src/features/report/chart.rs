@@ -18,15 +18,24 @@ pub enum Metric {
     Tokens,
     /// Estimated `$` cost (only for tools that log one).
     Cost,
+    /// Estimated `$` saved by prompt caching and pi compaction (rtk cannot be
+    /// attributed to a tool, so it only appears in the savings totals).
+    Saved,
 }
 
 impl Metric {
-    pub const ALL: [Metric; 2] = [Metric::Tokens, Metric::Cost];
+    pub const ALL: [Metric; 3] = [Metric::Tokens, Metric::Cost, Metric::Saved];
+
+    /// Is the value a US-dollar amount (converted to the display currency)?
+    pub fn is_money(self) -> bool {
+        matches!(self, Metric::Cost | Metric::Saved)
+    }
 
     pub fn label(self) -> &'static str {
         match self {
             Metric::Tokens => "tokens",
             Metric::Cost => "cost",
+            Metric::Saved => "saved",
         }
     }
 }
@@ -43,7 +52,8 @@ impl std::str::FromStr for Metric {
         match s.to_ascii_lowercase().as_str() {
             "tokens" => Ok(Metric::Tokens),
             "cost" => Ok(Metric::Cost),
-            other => Err(format!("must be tokens or cost (got '{other}')")),
+            "saved" => Ok(Metric::Saved),
+            other => Err(format!("must be tokens, cost or saved (got '{other}')")),
         }
     }
 }
@@ -59,6 +69,8 @@ pub struct TimeSeries {
     pub labels: Vec<String>,
     pub tokens: Vec<[u64; Tool::COUNT]>,
     pub cost: Vec<[f64; Tool::COUNT]>,
+    /// Estimated US dollars saved (prompt cache; pi compaction under pi).
+    pub saved: Vec<[f64; Tool::COUNT]>,
 }
 
 impl TimeSeries {
@@ -71,6 +83,7 @@ impl TimeSeries {
         match metric {
             Metric::Tokens => self.tokens[i][tool.series_index()] as f64,
             Metric::Cost => self.cost[i][tool.series_index()],
+            Metric::Saved => self.saved.get(i).map_or(0.0, |b| b[tool.series_index()]),
         }
     }
 
@@ -100,7 +113,7 @@ impl TimeSeries {
     /// (tokens are untouched), ready to be drawn with that currency's axis labels.
     pub fn in_currency(&self, currency: &Currency) -> TimeSeries {
         let mut out = self.clone();
-        for bucket in &mut out.cost {
+        for bucket in out.cost.iter_mut().chain(out.saved.iter_mut()) {
             for v in bucket.iter_mut() {
                 *v = currency.convert(*v);
             }
@@ -135,6 +148,11 @@ fn label(ts: DateTime<Local>, bucket: Bucket) -> String {
     ts.format(bucket.format()).to_string()
 }
 
+/// The label of the chart bucket containing the instant `ts`.
+pub fn bucket_label_at(ts: DateTime<chrono::Utc>, bucket: Bucket) -> String {
+    label(ts.with_timezone(&Local), bucket)
+}
+
 /// The label of the chart bucket containing `row` — the same string
 /// [`TimeSeries::labels`] uses, so a clicked bar can be matched to its rows.
 pub fn bucket_label_of(row: &Row, bucket: Bucket) -> String {
@@ -144,8 +162,33 @@ pub fn bucket_label_of(row: &Row, bucket: Bucket) -> String {
 /// Build the stacked series for `rows` at [`chart_bucket`] granularity, with
 /// empty buckets filled in so gaps in time show as gaps in the chart.
 pub fn time_series(rows: &[Row], query: &Query) -> TimeSeries {
+    time_series_priced(rows, query, &SavedInput::default())
+}
+
+/// What the "saved" metric needs besides the rows.
+#[derive(Debug, Clone, Copy)]
+pub struct SavedInput<'a> {
+    /// US dollars per million input tokens.
+    pub price: f64,
+    /// The sources outside the usage rows; pi compactions are charted under pi.
+    pub external: Option<&'a crate::ExternalSavings>,
+}
+
+impl Default for SavedInput<'_> {
+    fn default() -> Self {
+        SavedInput {
+            price: crate::DEFAULT_INPUT_PRICE_PER_MTOK,
+            external: None,
+        }
+    }
+}
+
+type Slot = ([u64; Tool::COUNT], [f64; Tool::COUNT], [f64; Tool::COUNT]);
+
+/// [`time_series`] with the savings valued at `saved.price`.
+pub fn time_series_priced(rows: &[Row], query: &Query, saved: &SavedInput) -> TimeSeries {
     let bucket = chart_bucket(query);
-    let mut map: BTreeMap<String, ([u64; Tool::COUNT], [f64; Tool::COUNT])> = BTreeMap::new();
+    let mut map: BTreeMap<String, Slot> = BTreeMap::new();
     let (mut first, mut last): (Option<DateTime<Local>>, Option<DateTime<Local>>) = (None, None);
 
     for r in rows {
@@ -156,6 +199,16 @@ pub fn time_series(rows: &[Row], query: &Query) -> TimeSeries {
         let i = r.tool.series_index();
         slot.0[i] += r.input + r.output + r.cache_read + r.cache_write;
         slot.1[i] += r.cost;
+        slot.2[i] += crate::features::savings::cache_usd(r.cache_read, saved.price);
+    }
+    let compactions = saved.external.map_or(&[][..], |e| &e.compaction_events[..]);
+    for (ts, tokens) in compactions {
+        let ts = ts.with_timezone(&Local);
+        // Only buckets that exist (the rows' time range) can show a compaction.
+        if let Some(slot) = map.get_mut(&label(ts, bucket)) {
+            slot.2[Tool::Pi.series_index()] +=
+                crate::features::savings::avoided_usd(*tokens, saved.price);
+        }
     }
 
     let (Some(first), Some(last)) = (first, last) else {
@@ -178,22 +231,26 @@ pub fn time_series(rows: &[Row], query: &Query) -> TimeSeries {
 
     let mut tokens = Vec::with_capacity(labels.len());
     let mut cost = Vec::with_capacity(labels.len());
+    let mut saved_usd = Vec::with_capacity(labels.len());
     for l in &labels {
-        let (t, c) = map.get(l).copied().unwrap_or_default();
+        let (t, c, s) = map.get(l).copied().unwrap_or_default();
         tokens.push(t);
         cost.push(c);
+        saved_usd.push(s);
     }
     TimeSeries {
         bucket,
         labels,
         tokens,
         cost,
+        saved: saved_usd,
     }
 }
 
 /// Midnight / hour / first-of-month at or before `ts`.
 fn start_of(ts: DateTime<Local>, bucket: Bucket) -> DateTime<Local> {
     let naive = match bucket {
+        Bucket::Minute => ts.date_naive().and_hms_opt(ts.hour(), ts.minute(), 0),
         Bucket::Hour => ts.date_naive().and_hms_opt(ts.hour(), 0, 0),
         _ => floor(ts, bucket).and_hms_opt(0, 0, 0),
     };
@@ -204,6 +261,7 @@ fn start_of(ts: DateTime<Local>, bucket: Bucket) -> DateTime<Local> {
 
 fn next(ts: DateTime<Local>, bucket: Bucket) -> DateTime<Local> {
     match bucket {
+        Bucket::Minute => ts + Duration::minutes(1),
         Bucket::Hour => ts + Duration::hours(1),
         Bucket::Month | Bucket::None => {
             let (y, m) = if ts.month() == 12 {
@@ -248,7 +306,7 @@ pub fn nice_max(max: f64) -> f64 {
 pub fn axis_label(metric: Metric, v: f64, currency: &Currency) -> String {
     match metric {
         Metric::Tokens => axis_tokens(v),
-        Metric::Cost => currency.axis(v),
+        Metric::Cost | Metric::Saved => currency.axis(v),
     }
 }
 
@@ -331,7 +389,7 @@ pub fn pie(projects: &[(String, Summary)], top_n: usize) -> Pie {
     };
     let value = |s: &Summary| match metric {
         Metric::Cost => s.cost_usd,
-        Metric::Tokens => s.total_tokens as f64,
+        Metric::Tokens | Metric::Saved => s.total_tokens as f64,
     };
 
     let mut slices: Vec<Slice> = projects
@@ -469,6 +527,38 @@ mod tests {
             chart_bucket(&q(Bucket::Hour, Window::All)),
             Bucket::Hour,
             "an explicit bucket is kept"
+        );
+    }
+
+    #[test]
+    fn minutely_series_steps_by_the_minute_and_fills_gaps() {
+        let rows = [
+            row(Tool::Pi, "2026-05-10T12:00:10Z", 5, 0.0),
+            row(Tool::Pi, "2026-05-10T12:00:50Z", 7, 0.0),
+            row(Tool::Pi, "2026-05-10T12:03:00Z", 1, 0.0),
+        ];
+        let ts = time_series(&rows, &q(Bucket::Minute, Window::Today));
+        assert_eq!(ts.labels.len(), 4, "12:00, 12:01, 12:02, 12:03");
+        assert_eq!(
+            ts.bucket_total(Metric::Tokens, 0),
+            12.0,
+            "same minute adds up"
+        );
+        assert_eq!(ts.bucket_total(Metric::Tokens, 1), 0.0);
+        assert_eq!(ts.bucket_total(Metric::Tokens, 3), 1.0);
+        assert_eq!(ts.saved.len(), 4);
+        // Labels carry minutes and are unique.
+        assert!(ts
+            .labels
+            .iter()
+            .all(|l| l.len() == "2026-05-10 12:00".len()));
+        let mut l = ts.labels.clone();
+        l.dedup();
+        assert_eq!(l.len(), 4);
+        assert_eq!(
+            bucket_label_of(&rows[0], Bucket::Minute),
+            ts.labels[0],
+            "a clicked bar matches its rows"
         );
     }
 
@@ -653,6 +743,116 @@ mod tests {
             tokens.in_currency(&eur),
             tokens,
             "a tokens pie is untouched"
+        );
+    }
+
+    // ── saved metric ────────────────────────────────────────────────────────
+
+    fn cached(tool: Tool, ts: &str, read: u64) -> Row {
+        Row {
+            cache_read: read,
+            ..row(tool, ts, 1, 0.0)
+        }
+    }
+
+    fn saved_rows() -> Vec<Row> {
+        vec![
+            cached(Tool::Pi, "2026-05-10T12:00:00Z", 1_000_000),
+            cached(Tool::Claude, "2026-05-10T13:00:00Z", 2_000_000),
+            cached(Tool::Pi, "2026-05-12T12:00:00Z", 0),
+        ]
+    }
+
+    #[test]
+    fn the_saved_metric_parses_and_is_money() {
+        assert_eq!("saved".parse::<Metric>(), Ok(Metric::Saved));
+        assert_eq!(Metric::Saved.to_string(), "saved");
+        assert_eq!(Metric::ALL.len(), 3);
+        assert!(Metric::Saved.is_money() && Metric::Cost.is_money() && !Metric::Tokens.is_money());
+        assert!("bytes".parse::<Metric>().unwrap_err().contains("saved"));
+    }
+
+    #[test]
+    fn saved_money_is_stacked_per_tool_per_bucket() {
+        let input = SavedInput {
+            price: 10.0,
+            external: None,
+        };
+        let ts = time_series_priced(&saved_rows(), &q(Bucket::Day, Window::All), &input);
+        assert_eq!(ts.labels.len(), 3, "10th, 11th (empty), 12th");
+        // 1M × $10 × 0.9 = $9 for pi, $18 for claude, on the first day.
+        assert!((ts.value(Metric::Saved, 0, Tool::Pi) - 9.0).abs() < 1e-9);
+        assert!((ts.value(Metric::Saved, 0, Tool::Claude) - 18.0).abs() < 1e-9);
+        assert!((ts.bucket_total(Metric::Saved, 0) - 27.0).abs() < 1e-9);
+        assert_eq!(ts.bucket_total(Metric::Saved, 1), 0.0);
+        assert_eq!(ts.bucket_total(Metric::Saved, 2), 0.0, "no cache hits");
+        assert_eq!(ts.active_tools(Metric::Saved), vec![Tool::Pi, Tool::Claude]);
+        assert!((ts.max_total(Metric::Saved) - 27.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_default_price_applies_without_settings() {
+        let ts = time_series(&saved_rows(), &q(Bucket::Day, Window::All));
+        assert!(
+            (ts.value(Metric::Saved, 0, Tool::Pi) - 2.7).abs() < 1e-9,
+            "$3 default"
+        );
+    }
+
+    #[test]
+    fn compactions_count_under_pi_in_their_bucket() {
+        let rows = saved_rows();
+        let ext = crate::ExternalSavings {
+            compaction_events: vec![
+                (utc("2026-05-12T09:00:00Z"), 1_000_000),
+                // Outside the rows' range: no bucket to show it in.
+                (utc("2026-06-30T09:00:00Z"), 5_000_000),
+            ],
+            ..Default::default()
+        };
+        let input = SavedInput {
+            price: 10.0,
+            external: Some(&ext),
+        };
+        let ts = time_series_priced(&rows, &q(Bucket::Day, Window::All), &input);
+        assert!(
+            (ts.value(Metric::Saved, 2, Tool::Pi) - 10.0).abs() < 1e-9,
+            "1M × $10"
+        );
+        assert_eq!(ts.value(Metric::Saved, 2, Tool::Claude), 0.0);
+        assert!(
+            (ts.value(Metric::Saved, 0, Tool::Pi) - 9.0).abs() < 1e-9,
+            "cache only"
+        );
+    }
+
+    #[test]
+    fn saved_buckets_follow_the_bucket_size() {
+        let rows = saved_rows();
+        let input = SavedInput {
+            price: 10.0,
+            external: None,
+        };
+        let month = time_series_priced(&rows, &q(Bucket::Month, Window::All), &input);
+        assert_eq!(month.labels, ["2026-05"]);
+        assert!((month.bucket_total(Metric::Saved, 0) - 27.0).abs() < 1e-9);
+        let hour = time_series_priced(&rows, &q(Bucket::Hour, Window::Today), &input);
+        assert_eq!(hour.saved.len(), hour.labels.len());
+    }
+
+    #[test]
+    fn saved_money_converts_with_the_currency() {
+        let eur = crate::currency_by_code("EUR").unwrap();
+        let input = SavedInput {
+            price: 10.0,
+            external: None,
+        };
+        let usd = time_series_priced(&saved_rows(), &q(Bucket::Day, Window::All), &input);
+        let conv = usd.in_currency(&eur);
+        assert!((conv.value(Metric::Saved, 0, Tool::Pi) - eur.convert(9.0)).abs() < 1e-9);
+        assert_eq!(
+            axis_label(Metric::Saved, conv.max_total(Metric::Saved), &eur),
+            eur.axis(eur.convert(27.0))
         );
     }
 }

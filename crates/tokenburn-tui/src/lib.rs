@@ -54,7 +54,9 @@ where
     }
     // The user's own exchange rates, then the currency: an explicit --currency is
     // remembered like --theme, otherwise the saved one is used.
-    app.rates = tokenburn_core::settings::load().rates;
+    let settings = tokenburn_core::settings::load();
+    app.input_price = settings.input_price();
+    app.rates = settings.rates;
     match currency {
         Some(c) => app.set_currency(tokenburn_core::features::currency::index_of(c.code)),
         None => app.currency = tokenburn_core::settings::currency(),

@@ -15,6 +15,10 @@ pub struct Settings {
     /// approximate ones: `{"EUR": 0.91}`. Never written by TokenBurn itself.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub rates: BTreeMap<String, f64>,
+    /// What one million input tokens cost you, in US dollars. Prices the tokens
+    /// saved by prompt caching, rtk and pi compaction
+    /// (default [`crate::DEFAULT_INPUT_PRICE_PER_MTOK`]).
+    pub input_price_per_mtok: f64,
 }
 
 impl Default for Settings {
@@ -23,11 +27,23 @@ impl Default for Settings {
             theme: crate::THEME_NAMES[0].to_string(),
             currency: "USD".to_string(),
             rates: BTreeMap::new(),
+            input_price_per_mtok: crate::DEFAULT_INPUT_PRICE_PER_MTOK,
         }
     }
 }
 
 impl Settings {
+    /// The input price to value savings at: the saved one when it is a sane
+    /// positive number, otherwise the default.
+    pub fn input_price(&self) -> f64 {
+        let p = self.input_price_per_mtok;
+        if p.is_finite() && p > 0.0 {
+            p
+        } else {
+            crate::DEFAULT_INPUT_PRICE_PER_MTOK
+        }
+    }
+
     /// The saved theme as a [`crate::ThemeChoice`] (unknown names fall back to preset 0).
     pub fn theme_choice(&self) -> crate::ThemeChoice {
         crate::ThemeChoice::parse(&self.theme).unwrap_or(crate::ThemeChoice::Preset(0))

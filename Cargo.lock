@@ -5028,6 +5028,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "rusqlite",
  "serde_json",
  "tokenburn-core",
 ]
@@ -5085,6 +5086,7 @@ version = "0.2.7"
 dependencies = [
  "chrono",
  "clap",
+ "rusqlite",
  "serde_json",
  "tokenburn-core",
  "tokio",

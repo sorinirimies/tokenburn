@@ -15,6 +15,7 @@ pub mod opencode;
 pub mod pi;
 pub mod qwen;
 pub mod report;
+pub mod savings;
 pub mod settings;
 pub mod theme;
 pub mod usage;

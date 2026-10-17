@@ -44,3 +44,15 @@ async fn style() -> Result<Css<&'static str>> {
 async fn cyberpunk_style() -> Result<Css<&'static str>> {
     Ok(Css(crate::theme::CYBERPUNK_CSS))
 }
+
+/// What prompt caching, rtk and pi compaction saved, valued at the saved input
+/// price, in US dollars: `/api/savings?tool=all&window=month`.
+#[route(GET "/api/savings")]
+async fn savings(cx: &Cx) -> Result<Json<tokenburn_core::Savings>> {
+    let query = query_params::<UsageParams>(cx)?.to_query();
+    Ok(Json(
+        load(query, &Default::default(), tokenburn_core::Currency::USD)
+            .await
+            .savings,
+    ))
+}

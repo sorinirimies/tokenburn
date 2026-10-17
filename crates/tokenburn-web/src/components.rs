@@ -1,8 +1,9 @@
 //! Server-rendered page components.
 
-use tokenburn_core::utils::fmt::{compact, thousands};
+use tokenburn_core::utils::fmt::thousands;
 use tokenburn_core::{
-    Bucket, CURRENCIES, Currency, Metric, Query, ReportRow, Summary, ToolFilter, Window,
+    Bucket, BucketSavings, CURRENCIES, Currency, Metric, Query, ReportRow, Savings, Summary,
+    ToolFilter, Window,
 };
 use topcoat::{
     Result,
@@ -11,7 +12,9 @@ use topcoat::{
 };
 
 use crate::charts::{self, Bars, Col, SliceGeom};
-use crate::data::{Dashboard, share_percent};
+use crate::data::{
+    Dashboard, MAX_BUCKET_ROWS, bucket_noun, bucket_rows, savings_rows, share_percent,
+};
 use crate::params::WINDOW_CHOICES;
 use crate::theme;
 use tokenburn_core::Selection;
@@ -35,19 +38,108 @@ pub async fn brand(active: String) -> Result<impl View> {
 
 /// Row of headline totals.
 #[component]
-pub async fn summary_cards(total: Summary, currency: Currency) -> Result<impl View> {
-    // "cost ≈" when the exchange rate is a built-in estimate.
-    let cost_label = format!("cost{}", currency.approx_mark());
+pub async fn summary_cards(
+    metric: Metric,
+    total: Summary,
+    currency: Currency,
+    savings: &Savings,
+) -> Result<impl View> {
+    // Which figures show follows the chart metric (tokens / cost / saved).
+    let cards = tokenburn_core::cards(metric, &total, savings, &currency);
     Ok(view! {
         <section class="cards">
-            <div class="card"><div class="label">"turns"</div><div class="value">(thousands(total.turns))</div></div>
-            <div class="card"><div class="label">"total tokens"</div><div class="value">(compact(total.total_tokens))</div></div>
-            <div class="card"><div class="label">"input"</div><div class="value">(compact(total.input))</div></div>
-            <div class="card"><div class="label">"output"</div><div class="value">(compact(total.output))</div></div>
-            <div class="card"><div class="label">"cache read"</div><div class="value">(compact(total.cache_read))</div></div>
-            <div class="card"><div class="label">"cache write"</div><div class="value">(compact(total.cache_write))</div></div>
-            <div class="card cost"><div class="label">(cost_label)</div><div class="value">(currency.format(total.cost_usd))</div></div>
+            for c in &cards {
+                <div class=(card_class(c.kind))><div class="label">(c.label.clone())</div><div class="value">(c.value.clone())</div></div>
+            }
         </section>
+    })
+}
+
+/// CSS class of a card: `card`, `card cost` or `card saved`.
+pub fn card_class(kind: tokenburn_core::CardKind) -> &'static str {
+    match kind {
+        tokenburn_core::CardKind::Plain => "card",
+        tokenburn_core::CardKind::Cost => "card cost",
+        tokenburn_core::CardKind::Saved => "card saved",
+    }
+}
+
+/// The bar chart's title for `metric`.
+pub fn chart_title(metric: Metric) -> &'static str {
+    match metric {
+        Metric::Tokens => "Tokens over time",
+        Metric::Cost => "Cost over time",
+        Metric::Saved => "Saved over time (cache + compaction)",
+    }
+}
+
+/// What prompt caching, rtk and pi compaction saved, per source. Renders nothing
+/// when nothing was saved.
+#[component]
+pub async fn savings_panel(
+    savings: &Savings,
+    currency: Currency,
+    spent_usd: f64,
+    input_price: f64,
+    buckets: &[BucketSavings],
+    noun: &str,
+) -> Result<impl View> {
+    let rows = savings_rows(savings, currency, spent_usd);
+    let per_bucket = bucket_rows(buckets, currency, MAX_BUCKET_ROWS);
+    let per_title = format!("Saved per {noun}");
+    let basis = format!(
+        "estimate · valued at {}/M input tokens",
+        currency.format(input_price)
+    );
+    Ok(view! {
+        if !rows.is_empty() {
+            <section class="savings">
+                <h2>"Saved " <small class="ver">(basis)</small></h2>
+                <div class="table-wrap"><table>
+                    <thead>
+                        <tr>
+                            <th class="left">"source"</th>
+                            <th>"tokens"</th>
+                            <th>"saved"</th>
+                            <th class="left opt2">"basis"</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        for r in &rows {
+                            <tr class=(if r.total { "total" } else { "" })>
+                                <td class="left">(r.label.clone())</td>
+                                <td>(r.tokens.clone())</td>
+                                <td class="cost">(r.money.clone())</td>
+                                <td class="left opt2">(r.basis.clone())</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table></div>
+                if !per_bucket.is_empty() {
+                    <h2>(per_title)</h2>
+                    <div class="table-wrap"><table class="per-bucket">
+                        <thead>
+                            <tr>
+                                <th class="left">"interval"</th>
+                                <th class="opt2">"tokens"</th>
+                                <th>"saved"</th>
+                                <th class="left opt2">"by source"</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            for b in &per_bucket {
+                                <tr>
+                                    <td class="left">(b.label.clone())</td>
+                                    <td class="opt2">(b.tokens.clone())</td>
+                                    <td class="cost">(b.money.clone())</td>
+                                    <td class="left opt2">(b.split.clone())</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table></div>
+                }
+            </section>
+        }
     })
 }
 
@@ -61,6 +153,13 @@ pub async fn filters(
 ) -> Result<impl View> {
     Ok(view! {
         <form class="filters" method="get" action="/">
+            <label>"chart "
+                <select name="metric" onchange="this.form.submit()">
+                    for m in Metric::ALL {
+                        <option value=(m.label()) selected=(m == metric)>(m.label())</option>
+                    }
+                </select>
+            </label>
             <label>"tool "
                 <select name="tool" onchange="this.form.submit()">
                     for t in ToolFilter::ALL {
@@ -82,13 +181,7 @@ pub async fn filters(
                     }
                 </select>
             </label>
-            <label>"chart "
-                <select name="metric" onchange="this.form.submit()">
-                    for m in Metric::ALL {
-                        <option value=(m.label()) selected=(m == metric)>(m.label())</option>
-                    }
-                </select>
-            </label>
+
             <label>"currency "
                 <select name="currency" onchange="this.form.submit()">
                     for cur in CURRENCIES {
@@ -220,6 +313,13 @@ pub async fn live_filters(
     );
     Ok(view! {
         <div class="filters">
+            <label>"chart "
+                <select :value=$(metric.get()) @change=$(|e: Event| metric.set(e.target.value))>
+                    for x in Metric::ALL {
+                        <option value=(x.label()) selected=(x.label() == m)>(x.label())</option>
+                    }
+                </select>
+            </label>
             <label>"tool "
                 <select :value=$(tool.get()) @change=$(|e: Event| tool.set(e.target.value))>
                     for x in ToolFilter::ALL {
@@ -241,13 +341,7 @@ pub async fn live_filters(
                     }
                 </select>
             </label>
-            <label>"chart "
-                <select :value=$(metric.get()) @change=$(|e: Event| metric.set(e.target.value))>
-                    for x in Metric::ALL {
-                        <option value=(x.label()) selected=(x.label() == m)>(x.label())</option>
-                    }
-                </select>
-            </label>
+
             <label>"currency "
                 <select :value=$(currency.get()) @change=$(|e: Event| currency.set(e.target.value))>
                     for cc in CURRENCIES {
@@ -284,9 +378,14 @@ pub async fn dashboard_body(
             <div class="warn">"⚠ " (w.clone())</div>
         }
 
-        summary_cards(total: d.total, currency: d.currency)
+        summary_cards(metric: metric, total: d.total, currency: d.currency, savings: &d.savings)
+
 
         charts_panel(d: d, metric: metric, base: base, animate: live, click_bucket: click_bucket, click_project: click_project)
+
+        if metric == Metric::Saved {
+            savings_panel(savings: &d.savings, currency: d.currency, spent_usd: d.total.cost_usd, input_price: d.input_price, buckets: &d.savings_by_bucket, noun: bucket_noun(&d.query))
+        }
 
         <section>
             <h2>"Report · " (d.query.bucket.label())</h2>
@@ -300,7 +399,7 @@ pub async fn dashboard_body(
             }
         </section>
 
-        if !d.projects.is_empty() {
+        if tokenburn_core::projects_add_detail(&d.report, &d.projects) {
             <section>
                 <h2>"Projects / models (by cost)"</h2>
                 projects_table(projects: &d.projects, currency: d.currency)
@@ -600,7 +699,7 @@ pub async fn charts_panel(
     Ok(view! {
         <section class="charts">
             <div class="panel">
-                <h2>(if metric == Metric::Cost { "Cost over time" } else { "Tokens over time" })</h2>
+                <h2>(chart_title(metric))</h2>
                 bars_chart(bars: &bars, metric: metric, base: base, sel: &sel, animate: animate, click: click_bucket)
                 <ul class="legend">
                     for (var, name) in swatches {

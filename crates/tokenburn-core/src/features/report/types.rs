@@ -91,17 +91,25 @@ pub enum Bucket {
     /// One overall total (+ per-tool breakdown).
     #[default]
     None,
+    Minute,
     Hour,
     Day,
     Month,
 }
 
 impl Bucket {
-    pub const ALL: [Bucket; 4] = [Bucket::None, Bucket::Hour, Bucket::Day, Bucket::Month];
+    pub const ALL: [Bucket; 5] = [
+        Bucket::None,
+        Bucket::Minute,
+        Bucket::Hour,
+        Bucket::Day,
+        Bucket::Month,
+    ];
 
     /// `strftime` format for the bucket label (local time).
     pub fn format(self) -> &'static str {
         match self {
+            Bucket::Minute => "%Y-%m-%d %H:%M",
             Bucket::Hour => "%Y-%m-%d %H:00",
             Bucket::Day => "%Y-%m-%d",
             Bucket::Month | Bucket::None => "%Y-%m",
@@ -111,6 +119,7 @@ impl Bucket {
     pub fn label(self) -> &'static str {
         match self {
             Bucket::None => "total",
+            Bucket::Minute => "minutely",
             Bucket::Hour => "hourly",
             Bucket::Day => "daily",
             Bucket::Month => "monthly",
@@ -120,7 +129,7 @@ impl Bucket {
     /// Default window for this bucket size.
     pub fn default_window(self) -> Window {
         match self {
-            Bucket::Hour => Window::Today,
+            Bucket::Minute | Bucket::Hour => Window::Today,
             Bucket::Month => Window::All,
             Bucket::Day | Bucket::None => Window::Month,
         }
@@ -132,11 +141,12 @@ impl FromStr for Bucket {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "none" | "total" => Ok(Self::None),
+            "minute" | "minutely" => Ok(Self::Minute),
             "hour" | "hourly" => Ok(Self::Hour),
             "day" | "daily" => Ok(Self::Day),
             "month" | "monthly" => Ok(Self::Month),
             other => Err(format!(
-                "must be total, hourly, daily or monthly (got '{other}')"
+                "must be total, minutely, hourly, daily or monthly (got '{other}')"
             )),
         }
     }
@@ -213,16 +223,20 @@ pub struct Query {
 }
 
 impl Query {
-    /// Build a query from the classic CLI flags. `--hourly` wins over
+    /// Build a query from the classic CLI flags. `--minutely` wins over `--hourly`,
+    /// which wins over
     /// `--daily` over `--monthly`; `--all` forces the all-history window.
     pub fn from_flags(
         tool: ToolFilter,
+        minutely: bool,
         hourly: bool,
         daily: bool,
         monthly: bool,
         all: bool,
     ) -> Self {
-        let bucket = if hourly {
+        let bucket = if minutely {
+            Bucket::Minute
+        } else if hourly {
             Bucket::Hour
         } else if daily {
             Bucket::Day
@@ -265,6 +279,8 @@ mod tests {
             assert_eq!(b.label().parse::<Bucket>().unwrap(), b);
         }
         assert_eq!("day".parse::<Bucket>().unwrap(), Bucket::Day);
+        assert_eq!("minute".parse::<Bucket>().unwrap(), Bucket::Minute);
+        assert_eq!(Bucket::Minute.default_window(), Window::Today);
         assert!("weekly".parse::<Bucket>().is_err());
     }
 

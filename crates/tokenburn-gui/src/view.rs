@@ -3,7 +3,7 @@
 use iced::widget::{column, container, responsive, scrollable, text};
 use iced::{Element, Length};
 
-use crate::features::{about, projects, report};
+use crate::features::{about, report};
 use crate::message::Message;
 use crate::state::{TokenBurn, View};
 use crate::widgets::{header, summary_cards};
@@ -22,7 +22,6 @@ impl TokenBurn {
     pub fn view_for(&self, layout: LayoutClass) -> Element<'_, Message> {
         let body = match self.view {
             View::Report => report::view::view(self, layout),
-            View::Projects => projects::view::view(self, layout),
             View::Settings => about::view::settings(self),
             View::About => about::view::about(self),
         };
@@ -40,13 +39,15 @@ impl TokenBurn {
 
         let spacing = if layout.is_narrow() { 8 } else { 12 };
         let padding = if layout.is_narrow() { 10 } else { 16 };
-        let cards = summary_cards::view(self, layout);
+        let cards: Element<'_, Message> = summary_cards::view(self, layout);
+        // The saved and projects sections sit below the charts: then the page scrolls.
+        let scrolls = report::view::page_scrolls(self, layout);
         // Wide: the cards stay put and only the table scrolls. Otherwise the cards
         // would eat most of a short window, so the whole page scrolls (the header
         // and the status line stay).
         let content: Element<'_, Message> = if !self.view.is_data() {
             body
-        } else if layout.is_wide() {
+        } else if !scrolls {
             column![cards, body].spacing(spacing).into()
         } else {
             scrollable(column![cards, body].spacing(spacing))
@@ -98,6 +99,7 @@ mod tests {
                 row(Tool::Claude, "alpha", "2026-05-02T11:00:00Z", 500),
             ],
             warnings: vec![],
+            ..Default::default()
         });
         app
     }
@@ -112,13 +114,40 @@ mod tests {
     }
 
     #[test]
-    fn the_projects_view_builds() {
+    fn settings_and_about_build_and_the_menu_toggles_back_to_the_report() {
+        for view in [View::Settings, View::About] {
+            let mut app = loaded();
+            app.view = view;
+            build_all(&app);
+            let _ = app.update(Message::ViewSelected(view.toggled(app.view)));
+            assert_eq!(app.view, View::Report, "pressing the open item closes it");
+            let _ = app.update(Message::ViewSelected(view.toggled(app.view)));
+            assert_eq!(app.view, view, "pressing it from the report opens it");
+        }
+        assert_eq!(
+            View::About.toggled(View::Settings),
+            View::About,
+            "switches directly"
+        );
+        assert!(View::Report.is_data() && !View::Settings.is_data());
+    }
+
+    #[test]
+    fn projects_show_under_the_report_only_when_they_add_detail() {
+        use crate::features::projects::view::is_shown;
         let mut app = loaded();
-        app.view = View::Projects;
+        let shown = is_shown(&app);
+        assert_eq!(
+            shown,
+            app.projects.len() > 1
+                && tokenburn_core::projects_add_detail(&app.report, &app.projects)
+        );
         build_all(&app);
-        let mut empty = TokenBurn::new();
-        empty.view = View::Projects;
-        build_all(&empty);
+        // One project per tool repeats the report's tool rows: leave it out.
+        app.projects.truncate(1);
+        assert!(!is_shown(&app));
+        build_all(&app);
+        assert!(!is_shown(&TokenBurn::new()));
     }
 
     #[test]
@@ -158,8 +187,8 @@ mod tests {
     #[test]
     fn messages_drive_the_state() {
         let mut app = loaded();
-        let _ = app.update(Message::ViewSelected(View::Projects));
-        assert_eq!(app.view, View::Projects);
+        let _ = app.update(Message::ViewSelected(View::About));
+        assert_eq!(app.view, View::About);
         let _ = app.update(Message::MetricSelected(tokenburn_core::Metric::Cost));
         assert_eq!(app.chart_metric, tokenburn_core::Metric::Cost);
         let _ = app.update(Message::ToolSelected(tokenburn_core::ToolFilter::PI));
@@ -229,6 +258,7 @@ mod tests {
         app.apply(Collected {
             rows: vec![],
             warnings: vec![],
+            ..Default::default()
         });
         assert!(app.selection.is_empty());
     }
@@ -249,6 +279,7 @@ mod tests {
         app.apply(Collected {
             rows: app.rows.clone(),
             warnings: vec![],
+            ..Default::default()
         });
         assert!(!app.is_animating());
 
@@ -307,7 +338,7 @@ mod tests {
                 app.chart_metric = metric;
                 build_all(&app);
             }
-            app.view = View::Projects;
+            app.view = View::Settings;
             build_all(&app);
             app.view = View::Report;
         }

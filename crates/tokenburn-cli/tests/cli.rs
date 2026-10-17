@@ -38,6 +38,7 @@ fn tokenburn(root: &Path, args: &[&str]) -> Output {
         .env("LOCALAPPDATA", root.join("localappdata"))
         .env("TOKENBURN_PI_SESSIONS", root.join("sessions"))
         .env("TOKENBURN_ZED_DB", root.join("none.db"))
+        .env("TOKENBURN_RTK_DB", root.join("rtk.db"))
         .env("TOKENBURN_CONFIG_DIR", root.join("config"));
     for v in [
         "PI_CODING_AGENT_SESSION_DIR",
@@ -164,4 +165,157 @@ fn unknown_currencies_are_rejected_and_the_list_is_printed() {
     assert!(String::from_utf8_lossy(&o.stderr).contains("unknown currency"));
     let list = stdout(&tokenburn(&root, &["--list-currencies"]));
     assert!(list.contains("EUR") && list.contains("Japanese yen") && list.lines().count() >= 20);
+}
+
+/// An rtk-shaped history database in the sandbox, plus a cached pi turn and a compaction.
+fn add_savings_sources(root: &Path) {
+    let db = rusqlite::Connection::open(root.join("rtk.db")).unwrap();
+    db.execute_batch(
+        "CREATE TABLE commands (id INTEGER PRIMARY KEY, timestamp TEXT NOT NULL, \
+         original_cmd TEXT, rtk_cmd TEXT, input_tokens INTEGER, output_tokens INTEGER, \
+         saved_tokens INTEGER NOT NULL, savings_pct REAL);
+         INSERT INTO commands (timestamp, saved_tokens) VALUES ('2026-05-01T10:30:00+00:00', 1000000);",
+    )
+    .unwrap();
+    let extra = [
+        r#"{"timestamp":"2026-05-02T10:00:00Z","message":{"usage":{"input":1,"output":1,"cacheRead":1000000,"cacheWrite":0,"cost":{"total":0.5}}}}"#,
+        r#"{"type":"compaction","timestamp":"2026-05-02T11:00:00Z","summary":"s","tokensBefore":1000000}"#,
+    ];
+    let f = root.join("sessions/--demo--/b.jsonl");
+    std::fs::write(f, extra.join("\n")).unwrap();
+}
+
+#[test]
+fn savings_are_listed_per_source_with_a_total() {
+    let root = sandbox("savings");
+    add_savings_sources(&root);
+    let o = tokenburn(&root, &["--all", "--savings", "--input-price", "10"]);
+    assert!(o.status.success(), "{o:?}");
+    let out = stdout(&o);
+    assert!(out.contains("saved (estimate)"), "{out}");
+    // 1M cache reads × $10 × 0.9, 1M rtk × $10, ~1M compaction × $10
+    assert!(
+        out.contains("Prompt cache") && out.contains("$9.00"),
+        "{out}"
+    );
+    assert!(out.contains("rtk") && out.contains("(1 commands)"), "{out}");
+    assert!(
+        out.contains("pi compaction") && out.contains("(1 compactions)"),
+        "{out}"
+    );
+    assert!(out.contains("of what it would have cost"), "{out}");
+}
+
+#[test]
+fn savings_json_wraps_the_report_and_is_opt_in() {
+    let root = sandbox("savings-json");
+    add_savings_sources(&root);
+    let plain: serde_json::Value =
+        serde_json::from_str(&stdout(&tokenburn(&root, &["--all", "--json"]))).unwrap();
+    assert!(plain.is_array(), "no flag, no change to the JSON shape");
+
+    let o = tokenburn(&root, &["--all", "--json", "-s", "--input-price", "10"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&o)).unwrap();
+    assert!(v["report"].is_array());
+    let names: Vec<&str> = v["savings"]["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["source"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["prompt_cache", "rtk", "pi_compaction"]);
+    assert_eq!(v["savings"]["tokens"].as_u64().unwrap(), 3_000_000);
+    assert!((v["savings"]["usd"].as_f64().unwrap() - 29.0).abs() < 1e-9);
+}
+
+#[test]
+fn bucketed_reports_also_list_savings_per_interval() {
+    let root = sandbox("savings-buckets");
+    add_savings_sources(&root);
+    let run = |flag: &str| {
+        stdout(&tokenburn(
+            &root,
+            &["--all", flag, "--savings", "--input-price", "10"],
+        ))
+    };
+    let intervals = |out: &str| -> Vec<String> {
+        out.lines()
+            .skip_while(|l| !l.starts_with("saved per interval"))
+            .skip(1)
+            .map(String::from)
+            .collect()
+    };
+
+    let daily = intervals(&run("--daily"));
+    assert_eq!(daily.len(), 2, "{daily:?}");
+    assert!(
+        daily[0].contains("2026-05-01")
+            && daily[0].contains("$10.00")
+            && daily[0].contains("rtk $10.00")
+    );
+    assert!(daily[1].contains("2026-05-02") && daily[1].contains("$19.00"));
+    assert!(daily[1].contains("Prompt cache $9.00") && daily[1].contains("pi compaction $10.00"));
+
+    // One compaction at 11:00 and one cached turn at 10:00 are different minutes and hours.
+    for flag in ["--minutely", "--hourly"] {
+        let rows = intervals(&run(flag));
+        assert_eq!(rows.len(), 3, "{flag}: rtk, cache, compaction: {rows:?}");
+    }
+
+    let monthly = intervals(&run("--monthly"));
+    assert_eq!(monthly.len(), 1);
+    assert!(monthly[0].contains("2026-05") && monthly[0].contains("$29.00"));
+
+    let total = stdout(&tokenburn(
+        &root,
+        &["--all", "--savings", "--input-price", "10"],
+    ));
+    assert!(!total.contains("saved per interval"), "no buckets, no list");
+}
+
+#[test]
+fn savings_json_carries_by_bucket_only_for_bucketed_reports() {
+    let root = sandbox("savings-buckets-json");
+    add_savings_sources(&root);
+    let json = |args: &[&str]| -> serde_json::Value {
+        serde_json::from_str(&stdout(&tokenburn(&root, args))).unwrap()
+    };
+    let v = json(&["--all", "--daily", "--json", "-s", "--input-price", "10"]);
+    let b = v["savings"]["by_bucket"].as_array().unwrap();
+    assert_eq!(b.len(), 2);
+    assert_eq!(b[0]["label"], "2026-05-01");
+    assert!((b[1]["savings"]["usd"].as_f64().unwrap() - 19.0).abs() < 1e-9);
+    let v = json(&["--all", "--json", "-s"]);
+    assert!(v["savings"].get("by_bucket").is_none());
+}
+
+#[test]
+fn rtk_savings_need_every_tool_and_nothing_saved_says_so() {
+    let root = sandbox("savings-scope");
+    add_savings_sources(&root);
+    let out = stdout(&tokenburn(&root, &["--tool", "pi", "--all", "-s"]));
+    assert!(
+        !out.contains("(1 commands)"),
+        "rtk is not attributable to pi: {out}"
+    );
+
+    let bare = sandbox("savings-none");
+    let out = stdout(&tokenburn(&bare, &["--all", "--savings"]));
+    assert!(out.contains("saved: nothing"), "{out}");
+}
+
+#[test]
+fn savings_on_an_empty_selection_still_answer_in_json() {
+    let root = sandbox("savings-empty");
+    let o = tokenburn(&root, &["--tool", "amp", "--all", "--json", "-s"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&o)).unwrap();
+    assert_eq!(v["report"].as_array().unwrap().len(), 0);
+    assert_eq!(v["savings"]["tokens"], 0);
+}
+
+#[test]
+fn a_bad_input_price_is_rejected() {
+    let root = sandbox("savings-bad-price");
+    let o = tokenburn(&root, &["--input-price", "-3"]);
+    assert!(!o.status.success());
 }

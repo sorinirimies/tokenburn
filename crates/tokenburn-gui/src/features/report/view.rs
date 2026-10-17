@@ -1,9 +1,7 @@
 //! Aggregated report table, with a share-of-tokens bar per line.
 
 use iced::alignment::Horizontal;
-use iced::widget::{
-    button, column, container, pick_list, progress_bar, row, scrollable, space, text,
-};
+use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
 use iced::{Element, Length};
 use tokenburn_core::utils::fmt::thousands;
 
@@ -13,6 +11,7 @@ use crate::features::theme::chart_colors;
 use crate::message::Message;
 use crate::state::TokenBurn;
 use crate::widgets::charts::{donut, stacked_bars};
+use crate::widgets::savings;
 
 /// A numeric column of the table.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -64,6 +63,14 @@ fn columns(layout: LayoutClass) -> &'static [Col] {
         LayoutClass::Medium => &[Col::Turns, Col::Input, Col::Output, Col::Total],
         LayoutClass::Narrow => &[Col::Total],
     }
+}
+
+/// Whether the page as a whole scrolls (cards, charts and tables together) rather
+/// than just the table: when stacked, or when the saved / projects sections add height.
+pub fn page_scrolls(state: &TokenBurn, layout: LayoutClass) -> bool {
+    !layout.is_wide()
+        || savings::view(state, layout).is_some()
+        || crate::features::projects::view::is_shown(state)
 }
 
 pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
@@ -147,7 +154,12 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         body = body.push(container(line).padding([4, 10]));
     }
 
-    if layout.is_wide() {
+    // The saved breakdown goes below the charts, never beside or inside them, so
+    // the donut keeps its size; the projects breakdown goes under the table. While
+    // either shows, the whole page scrolls.
+    let saved = savings::view(state, layout);
+    let projects = crate::features::projects::view::view(state, layout);
+    if layout.is_wide() && saved.is_none() && projects.is_none() {
         // The charts stay put; only the table scrolls.
         column![
             charts(state, layout),
@@ -159,9 +171,15 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     } else {
         // Stacked charts are tall: the caller scrolls the whole page (cards, charts and
         // table together) instead of squeezing the table.
-        column![charts(state, layout), header, body]
-            .spacing(10)
-            .into()
+        let mut page = column![charts(state, layout)].spacing(10);
+        if let Some(saved) = saved {
+            page = page.push(saved);
+        }
+        page = page.push(header).push(body);
+        if let Some(projects) = projects {
+            page = page.push(projects);
+        }
+        page.into()
     }
 }
 
@@ -175,28 +193,26 @@ fn cell_right<'a>(s: String, portion: u16) -> iced::widget::Text<'a> {
         .width(Length::FillPortion(portion))
 }
 
+/// The bar chart's title for `metric`.
+pub fn chart_title(metric: Metric) -> &'static str {
+    match metric {
+        Metric::Tokens => "Tokens over time",
+        Metric::Cost => "Cost over time",
+        Metric::Saved => "Saved over time (cache + compaction)",
+    }
+}
+
 /// Stacked bars over time (left) and the share donut (right).
 fn charts(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     let chart_height = if layout.is_narrow() { 170.0 } else { 200.0 };
     let colors = chart_colors(state.theme_index);
     let metric = state.chart_metric;
-    let title = format!(
-        "{} over time",
-        if metric == Metric::Cost {
-            "Cost"
-        } else {
-            "Tokens"
-        }
-    );
+    let title = chart_title(metric);
 
     let bars = column![
-        row![
-            text(title).size(13).style(text::secondary),
-            space::horizontal(),
-            pick_list(&Metric::ALL[..], Some(metric), Message::MetricSelected),
-        ]
-        .align_y(iced::Alignment::Center)
-        .height(Length::Fixed(34.0)),
+        row![text(title).size(13).style(text::secondary),]
+            .align_y(iced::Alignment::Center)
+            .height(Length::Fixed(34.0)),
         stacked_bars(
             state.series.in_currency(&state.currency),
             metric,

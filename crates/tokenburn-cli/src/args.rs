@@ -11,6 +11,10 @@ pub struct Args {
     #[arg(long, short, value_name = "TOOL", default_value = "all")]
     pub tool: ToolFilter,
 
+    /// Bucket by minute (default window: today).
+    #[arg(long)]
+    pub minutely: bool,
+
     /// Bucket by hour (default window: today).
     #[arg(long)]
     pub hourly: bool,
@@ -37,15 +41,40 @@ pub struct Args {
     #[arg(long, short = 'c', value_name = "CODE")]
     pub currency: Option<Currency>,
 
+    /// Also show what you saved: prompt-cache hits, rtk output filtering and pi
+    /// context compaction, in tokens and money. With `--json` the output becomes
+    /// `{"report": [...], "savings": {...}}`.
+    #[arg(long, short = 's')]
+    pub savings: bool,
+
+    /// US dollars per million input tokens, used to value the savings (default:
+    /// `input_price_per_mtok` from settings.json, else 3.0).
+    #[arg(long, value_name = "USD", value_parser = parse_price)]
+    pub input_price: Option<f64>,
+
     /// Print every supported currency and exit.
     #[arg(long)]
     pub list_currencies: bool,
 }
 
+fn parse_price(s: &str) -> Result<f64, String> {
+    s.parse::<f64>()
+        .ok()
+        .filter(|p| p.is_finite() && *p > 0.0)
+        .ok_or_else(|| format!("must be a positive number (got '{s}')"))
+}
+
 impl Args {
     /// Translate flags into a core [`Query`].
     pub fn query(&self) -> Query {
-        Query::from_flags(self.tool, self.hourly, self.daily, self.monthly, self.all)
+        Query::from_flags(
+            self.tool,
+            self.minutely,
+            self.hourly,
+            self.daily,
+            self.monthly,
+            self.all,
+        )
     }
 }
 
@@ -81,6 +110,21 @@ mod tests {
             (q.tool, q.bucket, q.window),
             (ToolFilter::PI, Bucket::Day, Window::All)
         );
+    }
+
+    #[test]
+    fn savings_flags() {
+        let a = Args::parse_from(["tokenburn"]);
+        assert!(!a.savings && a.input_price.is_none());
+        let a = Args::parse_from(["tokenburn", "-s", "--input-price", "15"]);
+        assert!(a.savings);
+        assert_eq!(a.input_price, Some(15.0));
+        for bad in ["0", "-1", "abc", "inf"] {
+            assert!(
+                Args::try_parse_from(["tokenburn", "--input-price", bad]).is_err(),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

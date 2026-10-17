@@ -43,7 +43,7 @@ fn main() {
             app.poll_background();
             std::thread::sleep(Duration::from_millis(5));
         }
-        // What a user does between refreshes: filter, look at projects, redraw.
+        // What a user does between refreshes: filter, switch metric, redraw.
         app.filter.text = if i % 2 == 0 {
             "pi".into()
         } else {
@@ -51,7 +51,7 @@ fn main() {
         };
         app.rebuild();
         if i % 3 == 0 {
-            app.toggle_view();
+            app.cycle_metric();
         }
         for _ in 0..3 {
             term.draw(|f| layout::render(&mut app, f)).unwrap();

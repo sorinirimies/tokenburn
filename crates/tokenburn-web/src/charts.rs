@@ -426,6 +426,33 @@ mod tests {
     }
 
     #[test]
+    fn the_saved_metric_uses_money_and_the_saved_values() {
+        let rows = [
+            Row {
+                cache_read: 1_000_000,
+                ..row(Tool::Pi, "2026-05-10T12:00:00Z", 1000)
+            },
+            row(Tool::Pi, "2026-05-12T12:00:00Z", 2000),
+        ];
+        let s = tokenburn_core::time_series_priced(
+            &rows,
+            &Query {
+                bucket: Bucket::Day,
+                window: Window::Month,
+                ..Query::default()
+            },
+            &tokenburn_core::SavedInput {
+                price: 10.0,
+                external: None,
+            },
+        );
+        let b = bars(&s, Metric::Saved, None, &Currency::USD);
+        assert!(b.grid[4].label.starts_with('$'), "{}", b.grid[4].label);
+        assert_eq!(b.grid[4].label, "$10.00", "nice max of $9");
+        assert!(b.cols[0].title.contains("$9"), "tooltip carries the money");
+    }
+
+    #[test]
     fn an_empty_series_is_flagged_not_drawn() {
         let b = bars(&TimeSeries::default(), Metric::Tokens, None, &Currency::USD);
         assert!(b.empty && b.cols.is_empty() && b.grid.is_empty());

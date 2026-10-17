@@ -71,6 +71,11 @@ pub fn currency() -> Currency {
     resolve(&s.currency, &s.rates)
 }
 
+/// The saved input price (US dollars per million tokens) used to value savings.
+pub fn input_price() -> f64 {
+    load().input_price()
+}
+
 /// Persist the display currency by code (case-insensitive; unknown codes are ignored).
 /// The user's `rates` are left untouched.
 pub fn save_currency(code: &str) -> Result<()> {
@@ -251,5 +256,24 @@ mod tests {
         save_currency("nonsense").unwrap();
         assert_eq!(load().currency, "EUR", "an unknown code changes nothing");
         unsafe { std::env::remove_var("TOKENBURN_CONFIG_DIR") };
+    }
+
+    #[test]
+    fn input_price_defaults_round_trips_and_rejects_nonsense() {
+        assert_eq!(
+            Settings::default().input_price(),
+            crate::DEFAULT_INPUT_PRICE_PER_MTOK
+        );
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.json");
+        std::fs::write(&p, r#"{"input_price_per_mtok": 15.0}"#).unwrap();
+        assert_eq!(load_from(&p).input_price(), 15.0);
+        // A file from before the setting existed keeps the default.
+        std::fs::write(&p, r#"{"theme":"Nord"}"#).unwrap();
+        assert_eq!(load_from(&p).input_price(), 3.0);
+        for bad in ["0", "-2", "null"] {
+            std::fs::write(&p, format!(r#"{{"input_price_per_mtok": {bad}}}"#)).unwrap();
+            assert_eq!(load_from(&p).input_price(), 3.0, "{bad}");
+        }
     }
 }

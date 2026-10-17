@@ -1,12 +1,11 @@
 //! Title bar with the grand total and the active query.
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
-use tokenburn_core::utils::fmt::compact;
-use tokenburn_core::LayoutClass;
+use tokenburn_core::{CardKind, LayoutClass};
 
 use crate::app::App;
 use crate::features::theme::UiTheme;
@@ -44,6 +43,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         chip(th, "view", q.bucket.label()),
     ];
     if !narrow {
+        // The metric the headline figures and the chart show (`m` cycles it).
+        title_spans.insert(2, chip(th, "metric", app.metric.label()));
         title_spans.push(chip(th, "window", q.window.label()));
     } else if area.width >= 52 {
         title_spans.push(chip(th, "win", q.window.label()));
@@ -72,39 +73,74 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         Style::default().fg(th.muted),
     ));
     let title = Line::from(title_spans);
+    let title_w = title.width();
 
-    let mut totals_spans = vec![
-        stat(th, "turns", t.turns.to_string()),
-        stat(th, "total", compact(t.total_tokens)),
-    ];
-    if !class.is_narrow() {
-        totals_spans.push(stat(th, "in", compact(t.input)));
-        totals_spans.push(stat(th, "out", compact(t.output)));
+    // The headline figures follow the metric: token counts, spend, or savings. As
+    // many as fit the line.
+    let mut totals_spans = Vec::new();
+    let mut used = 0usize;
+    let room = area.width.saturating_sub(2) as usize;
+    let max_cards = match class {
+        LayoutClass::Narrow => 2,
+        LayoutClass::Medium => 4,
+        LayoutClass::Wide => usize::MAX,
+    };
+    for card in tokenburn_core::cards(app.metric, &t, app.savings(), &app.currency)
+        .into_iter()
+        .take(max_cards)
+    {
+        let span = match card.kind {
+            CardKind::Plain => stat(th, &card.label, card.value),
+            CardKind::Cost => badge(th.success, th.bg, &card.label, &card.value),
+            CardKind::Saved => badge(th.accent, th.bg, &card.label, &card.value),
+        };
+        used += span.width();
+        if used > room {
+            break;
+        }
+        totals_spans.push(span);
     }
-    if class.is_wide() {
-        totals_spans.push(stat(
-            th,
-            "cache r/w",
-            format!("{}/{}", compact(t.cache_read), compact(t.cache_write)),
-        ));
-    }
-    totals_spans.push(Span::styled(
-        format!(" {} ", app.currency.format(t.cost_usd)),
-        Style::default()
-            .fg(th.bg)
-            .bg(th.success)
-            .add_modifier(Modifier::BOLD),
-    ));
     let totals = Line::from(totals_spans);
 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(th.border));
     frame.render_widget(Paragraph::new(vec![title, totals]).block(block), area);
+    // The menu, top right of the title line: settings and about (not on narrow
+    // terminals, where the status bar lists the keys).
+    const MENU_W: usize = 22;
+    if !class.is_narrow() && title_w + MENU_W + 2 <= area.width as usize {
+        let menu = Line::from(vec![
+            Span::styled(" o ", Style::default().fg(th.bg).bg(th.accent)),
+            Span::styled(" Settings ", Style::default().fg(th.text)),
+            Span::styled(" i ", Style::default().fg(th.bg).bg(th.accent)),
+            Span::styled(" About ", Style::default().fg(th.text)),
+        ]);
+        let inner = Rect {
+            x: area.x + 1,
+            y: area.y + 1,
+            width: area.width.saturating_sub(2),
+            height: 1,
+        };
+        frame.render_widget(Paragraph::new(menu).alignment(Alignment::Right), inner);
+    }
 }
 
 fn chip(th: UiTheme, label: &str, value: &str) -> Span<'static> {
     Span::styled(format!(" {label}:{value} "), Style::default().fg(th.accent))
+}
+
+/// A highlighted figure (spend or savings).
+fn badge(
+    bg: ratatui::style::Color,
+    fg: ratatui::style::Color,
+    label: &str,
+    value: &str,
+) -> Span<'static> {
+    Span::styled(
+        format!(" {label} {value} "),
+        Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+    )
 }
 
 fn stat(th: UiTheme, label: &str, value: String) -> Span<'static> {

@@ -35,6 +35,21 @@ pub fn sandbox() -> &'static Sandbox {
         ]
         .join("\n");
         std::fs::write(proj.join("a.jsonl"), body).unwrap();
+        // An rtk-shaped history database: 2M tokens saved by 40 commands.
+        let rtk = rusqlite::Connection::open(root.join("rtk.db")).unwrap();
+        rtk.execute_batch(
+            "CREATE TABLE commands (id INTEGER PRIMARY KEY, timestamp TEXT NOT NULL, \
+             original_cmd TEXT, rtk_cmd TEXT, input_tokens INTEGER, output_tokens INTEGER, \
+             saved_tokens INTEGER NOT NULL, savings_pct REAL);",
+        )
+        .unwrap();
+        for i in 0..40 {
+            rtk.execute(
+                "INSERT INTO commands (timestamp, saved_tokens) VALUES (?1, 50000)",
+                [format!("2026-05-01T10:{i:02}:00+00:00")],
+            )
+            .unwrap();
+        }
         let config = root.join("config");
         // SAFETY: runs once, inside `get_or_init`, before any server thread reads
         // the environment (every test calls `sandbox()` first).
@@ -47,6 +62,7 @@ pub fn sandbox() -> &'static Sandbox {
             std::env::set_var("LOCALAPPDATA", root.join("localappdata"));
             std::env::set_var("TOKENBURN_PI_SESSIONS", &sessions);
             std::env::set_var("TOKENBURN_ZED_DB", root.join("none.db"));
+            std::env::set_var("TOKENBURN_RTK_DB", root.join("rtk.db"));
             std::env::set_var("TOKENBURN_CONFIG_DIR", &config);
             for v in [
                 "PI_CODING_AGENT_SESSION_DIR",

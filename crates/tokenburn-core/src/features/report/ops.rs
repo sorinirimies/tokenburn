@@ -58,6 +58,27 @@ pub fn build_report(rows: &[Row], query: &Query) -> Vec<ReportRow> {
 }
 
 /// Per-project (or per-model, where a tool logs no project) breakdown, most expensive first.
+/// Whether a projects / models breakdown tells something the report does not:
+/// true when some tool has more than one project (or model) behind it. With one
+/// per tool the breakdown would repeat the report's tool rows.
+pub fn projects_add_detail(report: &[ReportRow], projects: &[(String, Summary)]) -> bool {
+    let tools: std::collections::BTreeSet<&str> = report
+        .iter()
+        .map(|r| r.tool.as_str())
+        .filter(|t| *t != "TOTAL")
+        .collect();
+    let tools = if tools.is_empty() {
+        projects
+            .iter()
+            .filter_map(|(k, _)| k.split(':').next())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+    } else {
+        tools.len()
+    };
+    projects.len() > tools
+}
+
 pub fn by_project(rows: &[Row]) -> Vec<(String, Summary)> {
     let mut groups: BTreeMap<(&'static str, &str), Vec<&Row>> = BTreeMap::new();
     for r in rows {
@@ -81,6 +102,27 @@ pub fn by_project(rows: &[Row]) -> Vec<(String, Summary)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn projects_are_detail_only_when_a_tool_has_several() {
+        use super::*;
+        let rr = |tool: &str| ReportRow {
+            bucket: None,
+            tool: tool.into(),
+            summary: Summary::default(),
+        };
+        let p = |k: &str| (k.to_string(), Summary::default());
+        let report = [rr("pi"), rr("claude"), rr("TOTAL")];
+        assert!(!projects_add_detail(&report, &[p("pi:a"), p("claude:b")]));
+        assert!(projects_add_detail(
+            &report,
+            &[p("pi:a"), p("pi:b"), p("claude:b")]
+        ));
+        assert!(!projects_add_detail(&[], &[]));
+        // No tool rows to compare with: tools come from the project keys.
+        assert!(!projects_add_detail(&[], &[p("pi:a")]));
+        assert!(projects_add_detail(&[], &[p("pi:a"), p("pi:b")]));
+    }
+
     use super::*;
     use crate::features::report::types::Window;
     use crate::features::usage::Tool;
@@ -129,11 +171,25 @@ mod tests {
             row(Tool::Pi, "2026-05-20T12:00:00Z", 1, 0.1),
             row(Tool::Pi, "2026-07-10T12:00:00Z", 1, 0.1),
         ];
-        let q = Query::from_flags(ToolFilter::All, false, false, true, false);
+        let q = Query::from_flags(ToolFilter::All, false, false, false, true, false);
         assert_eq!(q.window, Window::All);
         let rep = build_report(&rows, &q);
         assert_eq!(rep.len(), 2);
         assert_eq!(rep[0].summary.turns, 2);
+    }
+
+    #[test]
+    fn minutely_buckets_group_by_the_minute() {
+        let rows = vec![
+            row(Tool::Pi, "2026-05-10T12:00:05Z", 1, 0.1),
+            row(Tool::Pi, "2026-05-10T12:00:55Z", 1, 0.1),
+            row(Tool::Pi, "2026-05-10T12:01:05Z", 1, 0.1),
+        ];
+        let q = Query::from_flags(ToolFilter::All, true, false, false, false, false);
+        let rep = build_report(&rows, &q);
+        assert_eq!(rep.len(), 2);
+        assert_eq!(rep[0].summary.turns, 2);
+        assert!(rep[0].bucket.as_deref().unwrap().len() == 16);
     }
 
     #[test]
@@ -143,10 +199,12 @@ mod tests {
 
     #[test]
     fn flags_precedence_and_windows() {
-        let q = Query::from_flags(ToolFilter::All, true, true, true, false);
+        let q = Query::from_flags(ToolFilter::All, false, true, true, true, false);
         assert_eq!((q.bucket, q.window), (Bucket::Hour, Window::Today));
-        let q = Query::from_flags(ToolFilter::All, false, true, false, true);
+        let q = Query::from_flags(ToolFilter::All, false, false, true, false, true);
         assert_eq!((q.bucket, q.window), (Bucket::Day, Window::All));
+        let q = Query::from_flags(ToolFilter::All, true, true, true, true, false);
+        assert_eq!((q.bucket, q.window), (Bucket::Minute, Window::Today));
     }
 
     #[test]

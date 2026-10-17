@@ -38,6 +38,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
             .options
             .open_tab(crate::features::options::Tab::Settings),
         KeyCode::Char('i') => app.options.open_tab(crate::features::options::Tab::About),
+        KeyCode::Char('m') => app.cycle_metric(),
+        KeyCode::Char('v') => app.metric = tokenburn_core::Metric::Saved,
         KeyCode::Char('T') => app.theme_picker_open = true,
         KeyCode::Char('C') => app.currency_picker_open = true,
         KeyCode::Char(']') => app.cycle_theme(1),
@@ -49,13 +51,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('t') => app.cycle_tool(),
         KeyCode::Char('w') => app.cycle_window(),
-        KeyCode::Char('p') => app.toggle_view(),
         KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => app.cycle_bucket(true),
         KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => app.cycle_bucket(false),
         KeyCode::Char('1') => app.set_bucket(Bucket::None),
-        KeyCode::Char('2') => app.set_bucket(Bucket::Hour),
-        KeyCode::Char('3') => app.set_bucket(Bucket::Day),
-        KeyCode::Char('4') => app.set_bucket(Bucket::Month),
+        KeyCode::Char('2') => app.set_bucket(Bucket::Minute),
+        KeyCode::Char('3') => app.set_bucket(Bucket::Hour),
+        KeyCode::Char('4') => app.set_bucket(Bucket::Day),
+        KeyCode::Char('5') => app.set_bucket(Bucket::Month),
         _ => crate::features::report::events::handle_nav(app, key),
     }
 }
@@ -161,8 +163,19 @@ mod tests {
     #[test]
     fn digit_selects_bucket_and_window() {
         let mut app = App::new();
-        handle_key(&mut app, KeyEvent::from(KeyCode::Char('2')));
-        assert_eq!(app.query.bucket, Bucket::Hour);
-        assert_eq!(app.query.window, tokenburn_core::Window::Today);
+        for (key, bucket, window) in [
+            ('2', Bucket::Minute, tokenburn_core::Window::Today),
+            ('3', Bucket::Hour, tokenburn_core::Window::Today),
+            ('4', Bucket::Day, tokenburn_core::Window::Month),
+            ('5', Bucket::Month, tokenburn_core::Window::All),
+            ('1', Bucket::None, tokenburn_core::Window::Month),
+        ] {
+            handle_key(&mut app, KeyEvent::from(KeyCode::Char(key)));
+            assert_eq!(
+                (app.query.bucket, app.query.window),
+                (bucket, window),
+                "{key}"
+            );
+        }
     }
 }

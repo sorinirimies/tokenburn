@@ -4,10 +4,12 @@ Interactive terminal UI ([Ratatui](https://ratatui.rs)) for [TokenBurn](https://
 
 | Key | Action |
 |-----|--------|
-| `←/→`, `Tab`, `1-4` | total / hourly / daily / monthly |
+| `←/→`, `Tab`, `1-5` | total / minutely / hourly / daily / monthly |
 | `t` | cycle tool (all → pi → zed) |
 | `w` | cycle window (today → month → all) |
-| `p` | toggle per-project / per-model view |
+| `m` | cycle the metric: tokens → cost → saved (headline figures, chart and, for saved, the breakdown panel) |
+| `v` | jump to the saved metric |
+| `o` / `i` | settings / about (menu, top right) |
 | `↑/↓`, `j/k` | scroll |
 | `/` | filter rows by text (`word`, `-exclude`; Enter keep · Esc clear) |
 | `f` | filter by tool (checkboxes with counts) |

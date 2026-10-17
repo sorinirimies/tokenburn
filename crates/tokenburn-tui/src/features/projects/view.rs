@@ -1,36 +1,37 @@
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
+use ratatui::widgets::{Block, Borders, Cell, Row, Table};
 use ratatui::Frame;
 use tokenburn_core::utils::fmt::thousands;
 use tokenburn_core::LayoutClass;
 
 use crate::app::App;
 
-pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
+/// Whether the breakdown belongs under the report: only when it says something the
+/// tool rows do not (a tool with several projects or models).
+pub fn is_shown(app: &App) -> bool {
+    tokenburn_core::projects_add_detail(&app.report, &app.projects)
+}
+
+/// Rows the section would like: header, border and up to [`MAX_ROWS`] projects.
+pub fn wanted_height(app: &App) -> u16 {
+    (app.projects.len().min(MAX_ROWS) as u16) + 3
+}
+
+/// Most projects listed (the most expensive ones).
+pub const MAX_ROWS: usize = 6;
+
+/// The projects / models table, drawn under the report when [`is_shown`].
+pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let th = app.theme;
     let border = Style::default().fg(th.border);
-    if app.projects.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No data.")
-                .style(Style::default().fg(th.muted))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(border)
-                        .title(" Projects "),
-                ),
-            area,
-        );
-        return;
-    }
-
     // Narrow terminals have no room for the turn count.
     let narrow = LayoutClass::from_cols(area.width).is_narrow();
 
     let rows: Vec<Row> = app
         .projects
         .iter()
+        .take(MAX_ROWS)
         .map(|(name, s)| {
             let mut cells = vec![Cell::from(name.clone())
                 .style(Style::default().fg(th.tool(name.split(':').next().unwrap_or(""))))];
@@ -73,9 +74,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 .borders(Borders::ALL)
                 .border_style(border)
                 .title(" Projects / models (by cost) "),
-        )
-        .row_highlight_style(Style::default().bg(th.selection))
-        .highlight_symbol("▶ ");
+        );
 
-    frame.render_stateful_widget(table, area, &mut app.table_state);
+    frame.render_widget(table, area);
 }

@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use tokenburn_core::{
-    drill, Collected, Currency, Metric, Pie, Query, ReportRow, Row, Selection, Summary, TimeSeries,
-    CURRENCIES,
+    drill_priced, BucketSavings, Collected, Currency, ExternalSavings, Metric, Pie, Query,
+    ReportRow, Row, SavedInput, Savings, Selection, Summary, TimeSeries, CURRENCIES,
 };
 
 /// How often the GUI re-reads the logs by itself.
@@ -33,22 +33,32 @@ fn progress(start: Option<Instant>, now: Instant, len: Duration) -> f32 {
     })
 }
 
-/// Which main panel is shown.
+/// Which main panel is shown. The report is home; Settings and About are menu
+/// buttons that swap it out and toggle back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum View {
     #[default]
     Report,
-    Projects,
     Settings,
     About,
 }
 
 impl View {
-    pub const ALL: [View; 4] = [View::Report, View::Projects, View::Settings, View::About];
+    pub const ALL: [View; 3] = [View::Report, View::Settings, View::About];
 
     /// Whether the view shows usage data (so the totals cards belong above it).
     pub fn is_data(self) -> bool {
-        matches!(self, View::Report | View::Projects)
+        matches!(self, View::Report)
+    }
+
+    /// What pressing the menu button for `self` does: open it, or go back to the
+    /// report when it is already open.
+    pub fn toggled(self, current: View) -> View {
+        if self == current {
+            View::Report
+        } else {
+            self
+        }
     }
 }
 
@@ -56,7 +66,6 @@ impl fmt::Display for View {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             View::Report => "Report",
-            View::Projects => "Projects",
             View::Settings => "Settings",
             View::About => "About",
         })
@@ -91,6 +100,14 @@ pub struct TokenBurn {
     pub selection: Selection,
     /// Headline totals for the current selection.
     pub total: Summary,
+    /// Savings from rtk and pi compaction, as of the last load.
+    pub external: ExternalSavings,
+    /// US dollars per million input tokens, to value the savings.
+    pub input_price: f64,
+    /// Everything saved in the current selection.
+    pub savings: Savings,
+    /// Savings per chart bucket (the same granularity as the bars).
+    pub savings_by_bucket: Vec<BucketSavings>,
     /// Entry animation of the charts, eased 0 → 1 (1 = finished).
     pub anim: f32,
     anim_started: Option<Instant>,
@@ -142,6 +159,10 @@ impl TokenBurn {
             chart_metric: Metric::Tokens,
             selection: Selection::default(),
             total: Summary::default(),
+            external: ExternalSavings::default(),
+            input_price: tokenburn_core::DEFAULT_INPUT_PRICE_PER_MTOK,
+            savings: Savings::default(),
+            savings_by_bucket: Vec::new(),
             anim: 1.0,
             anim_started: None,
             sel_anim: 1.0,
@@ -222,6 +243,7 @@ impl TokenBurn {
         ));
         self.rows = collected.rows;
         self.warnings = collected.warnings;
+        self.external = collected.external;
         self.error_message = None;
         self.recompute();
         // Grow the charts in the first time a view appears — not on every refresh.
@@ -234,10 +256,20 @@ impl TokenBurn {
 
     /// Rebuild the report, totals and both charts for the current selection.
     pub fn recompute(&mut self) {
-        let d = drill(&self.rows, &self.query, &self.selection);
+        let d = drill_priced(
+            &self.rows,
+            &self.query,
+            &self.selection,
+            &SavedInput {
+                price: self.input_price,
+                external: Some(&self.external),
+            },
+        );
         self.selection = d.selection;
         self.report = d.report;
         self.total = d.total;
+        self.savings = d.savings;
+        self.savings_by_bucket = d.savings_by_bucket;
         self.projects = d.projects;
         self.series = d.series;
         self.pie = d.pie;

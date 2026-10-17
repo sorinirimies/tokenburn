@@ -12,6 +12,10 @@ pub struct Args {
     #[arg(long, short, value_name = "TOOL", default_value = "all")]
     pub tool: ToolFilter,
 
+    /// Start bucketed by minute (default window: today).
+    #[arg(long)]
+    pub minutely: bool,
+
     /// Start bucketed by hour (default window: today).
     #[arg(long)]
     pub hourly: bool,
@@ -53,7 +57,14 @@ fn parse_theme(s: &str) -> Result<ThemeChoice, String> {
 impl Args {
     /// Translate flags into a core [`Query`].
     pub fn query(&self) -> Query {
-        Query::from_flags(self.tool, self.hourly, self.daily, self.monthly, self.all)
+        Query::from_flags(
+            self.tool,
+            self.minutely,
+            self.hourly,
+            self.daily,
+            self.monthly,
+            self.all,
+        )
     }
 }
 
