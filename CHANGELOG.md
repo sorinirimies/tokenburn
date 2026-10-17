@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.0](https://github.com/sorinirimies/tokenburn/compare/v0.2.7...v0.3.0) — 2026-10-17
+
+### ✨ Features
+
+- Show savings (prompt cache, rtk, pi compaction) in CLI, TUI, GUI and web ([`e87a01a`](https://github.com/sorinirimies/tokenburn/commit/e87a01a3e4975be5c085fac95ef9e296b0d9f729))
+
 ## [0.2.6](https://github.com/sorinirimies/tokenburn/compare/v0.2.5...v0.2.6) — 2026-10-16
 
 ### ✨ Features
