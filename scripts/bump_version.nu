@@ -9,7 +9,8 @@
 #   nu scripts/bump_version.nu 0.2.0
 #
 # What it does:
-#   1. Validates the supplied semantic version string.
+#   1. Validates the supplied semantic version string, and rejects one that is
+#      equal to or older than the current version.
 #   2. Updates `workspace.package.version` in the root Cargo.toml.
 #   3. Updates the `tokenburn-core` dependency version wherever it appears.
 #   4. Updates the version badge in README.md (if present).
@@ -22,6 +23,7 @@
 # leaves a half-bumped version behind.
 #
 # Flags:
+#   --check       only validate the version (well-formed and strictly newer), then exit
 #   --yes          non-interactive (CI)
 #   --skip-checks  the caller already ran the gate (`just bump` runs check-release;
 #                  the nightly workflows verify on every platform before releasing)
@@ -34,6 +36,50 @@ def validate_version [version: string] {
     let pattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$'
     if ($version | find --regex $pattern | is-empty) {
         print $"(ansi red)Error:(ansi reset) '($version)' is not a valid semantic version."
+        exit 1
+    }
+}
+
+# Compare two validated versions: 1 if a > b, -1 if a < b, 0 if equal (semver precedence:
+# MAJOR.MINOR.PATCH numerically, a pre-release sorts below its release, pre-release
+# identifiers compare one by one, numeric ones numerically and below alphanumeric ones).
+def compare_versions [a: string, b: string] {
+    let pa = ($a | split row "-" | first 1 | get 0 | split row "." | each {|x| $x | into int })
+    let pb = ($b | split row "-" | first 1 | get 0 | split row "." | each {|x| $x | into int })
+    for i in 0..2 {
+        if ($pa | get $i) > ($pb | get $i) { return 1 }
+        if ($pa | get $i) < ($pb | get $i) { return (-1) }
+    }
+    let ra = ($a | split row "-" | skip 1 | str join "-")
+    let rb = ($b | split row "-" | skip 1 | str join "-")
+    if $ra == $rb { return 0 }
+    if ($ra | is-empty) { return 1 }
+    if ($rb | is-empty) { return (-1) }
+    let ia = ($ra | split row ".")
+    let ib = ($rb | split row ".")
+    for i in 0..(([($ia | length) ($ib | length)] | math min) - 1) {
+        let x = ($ia | get $i)
+        let y = ($ib | get $i)
+        if $x == $y { continue }
+        let xn = ($x =~ '^\d+$')
+        let yn = ($y =~ '^\d+$')
+        if $xn and $yn { return (if ($x | into int) > ($y | into int) { 1 } else { -1 }) }
+        if $xn { return (-1) }
+        if $yn { return 1 }
+        return (if $x > $y { 1 } else { -1 })
+    }
+    if ($ia | length) > ($ib | length) { 1 } else if ($ia | length) < ($ib | length) { -1 } else { 0 }
+}
+
+# Reject a version that is not strictly newer than the current one.
+def require_newer [current: string, new: string] {
+    let c = (compare_versions $new $current)
+    if $c == 0 {
+        print $"(ansi red)Error:(ansi reset) ($new) is already the current version."
+        exit 1
+    }
+    if $c < 0 {
+        print $"(ansi red)Error:(ansi reset) ($new) is older than the current version ($current); a bump must go up."
         exit 1
     }
 }
@@ -110,6 +156,7 @@ def main [
     new_version: string,  # New version in X.Y.Z format
     --yes (-y),           # Skip confirmation prompt (non-interactive)
     --skip-checks,        # The caller already ran the quality gate
+    --check,              # Only validate the version (valid, and newer than current), then exit
 ] {
     print ""
     print $"(ansi cyan)══════════════════════════════════════════════════════════════(ansi reset)"
@@ -124,14 +171,11 @@ def main [
     print $"  New version     : (ansi green)($new_version)(ansi reset)"
     print ""
 
-    if $current_version == $new_version {
-        print $"(ansi yellow)⚠(ansi reset) Version is already ($new_version). Nothing to do."
-        exit 0
-    }
-
     # 1. Validate — everything that can be known up front, before any work.
     validate_version $new_version
-    print $"(ansi green)✓(ansi reset) Version string validated."
+    require_newer $current_version $new_version
+    print $"(ansi green)✓(ansi reset) Version string validated and newer than ($current_version)."
+    if $check { return }
 
     if (^git tag --list $tag | str trim | is-not-empty) {
         print $"(ansi red)Error:(ansi reset) tag ($tag) already exists."
