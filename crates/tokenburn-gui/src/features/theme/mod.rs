@@ -146,3 +146,82 @@ mod tests {
         assert_eq!(a.series.len(), 8);
     }
 }
+
+/// Clearly outlined secondary button: accent-tinted fill and border, strong
+/// hover/press feedback, dimmed when disabled.
+pub fn action_button(
+    theme: &Theme,
+    status: iced::widget::button::Status,
+) -> iced::widget::button::Style {
+    use iced::widget::button::{Status, Style};
+    let p = theme.palette();
+    let base = p.background;
+    let mix = |a: Color, b: Color, t: f32| Color {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: 1.0,
+    };
+    let surface = theme.extended_palette().background.weak.color;
+    let (bg, border, text) = match status {
+        Status::Active => (
+            mix(surface, p.primary, 0.12),
+            mix(surface, p.primary, 0.55),
+            p.text,
+        ),
+        Status::Hovered => (mix(surface, p.primary, 0.28), p.primary, p.text),
+        Status::Pressed => (mix(surface, p.primary, 0.42), p.primary, p.text),
+        Status::Disabled => (
+            mix(surface, base, 0.4),
+            mix(surface, base, 0.4),
+            mix(p.text, base, 0.6),
+        ),
+    };
+    Style {
+        background: Some(bg.into()),
+        text_color: text,
+        border: iced::Border {
+            color: border,
+            width: 1.0,
+            radius: 7.0.into(),
+        },
+        ..Style::default()
+    }
+}
+
+/// Solid accent button for the selected / primary state.
+pub fn primary_button(
+    theme: &Theme,
+    status: iced::widget::button::Status,
+) -> iced::widget::button::Style {
+    use iced::widget::button::{Status, Style};
+    let p = theme.palette();
+    let lum = 0.299 * p.primary.r + 0.587 * p.primary.g + 0.114 * p.primary.b;
+    let on = if lum > 0.6 {
+        Color::from_rgb(0.06, 0.07, 0.1)
+    } else {
+        Color::WHITE
+    };
+    let mix = |a: Color, b: Color, t: f32| Color {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: 1.0,
+    };
+    let bg = match status {
+        Status::Active => p.primary,
+        Status::Hovered => mix(p.primary, Color::WHITE, 0.18),
+        Status::Pressed => mix(p.primary, Color::BLACK, 0.2),
+        Status::Disabled => mix(p.background, p.primary, 0.2),
+    };
+    Style {
+        background: Some(bg.into()),
+        text_color: on,
+        border: iced::Border {
+            color: mix(p.primary, Color::WHITE, 0.35),
+            width: 1.0,
+            radius: 7.0.into(),
+        },
+        ..Style::default()
+    }
+}

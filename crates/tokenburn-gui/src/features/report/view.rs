@@ -273,7 +273,7 @@ fn charts(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         chips = chips.push(
             button(text("✕ clear").size(12))
                 .padding([2, 8])
-                .style(button::secondary)
+                .style(crate::features::theme::action_button)
                 .on_press(Message::ClearSelection),
         );
         chips = chips.push(

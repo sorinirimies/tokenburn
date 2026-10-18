@@ -132,9 +132,9 @@ fn menu(state: &TokenBurn) -> Element<'_, Message> {
         button(text(label).size(13))
             .padding([4, 10])
             .style(if state.view == view {
-                button::primary
+                crate::features::theme::primary_button
             } else {
-                button::secondary
+                crate::features::theme::action_button
             })
             .on_press(Message::ViewSelected(view.toggled(state.view)))
     };

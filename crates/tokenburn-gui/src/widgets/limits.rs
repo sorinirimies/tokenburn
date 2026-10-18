@@ -49,7 +49,7 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Option<Element<'_, Messag
                     text(a.clone()).style(text::warning),
                     space::horizontal(),
                     button(text("Dismiss").size(12))
-                        .style(button::secondary)
+                        .style(crate::features::theme::action_button)
                         .on_press(Message::DismissAlert),
                 ]
                 .align_y(iced::Alignment::Center),

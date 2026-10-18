@@ -23,7 +23,14 @@ table.kv th { text-align:left; color:var(--dim); font-weight:400; padding:5px 18
 h2 { margin:0 0 8px; font-size:14px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; }
 form.filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
 select, button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font:inherit; }
-button { cursor:pointer; border-color:var(--accent); }
+button, a.clear { cursor:pointer; background:color-mix(in srgb, var(--accent) 12%, var(--panel)); border:1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); padding:7px 14px; border-radius:7px; color:var(--fg); text-decoration:none; transition:background .15s, border-color .15s; }
+button:hover, a.clear:hover { background:color-mix(in srgb, var(--accent) 28%, var(--panel)); border-color:var(--accent); }
+button:active, a.clear:active { background:color-mix(in srgb, var(--accent) 42%, var(--panel)); }
+button:focus-visible, a.clear:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+button:disabled { opacity:.45; cursor:not-allowed; }
+.tabs .tab { transition:background .15s, border-color .15s; }
+.tabs .tab:hover { border-color:var(--accent); color:var(--fg); }
+.tabs .tab.active { background:color-mix(in srgb, var(--accent) 24%, var(--panel)); font-weight:600; }
 .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
 .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
 .card .label { color:var(--dim); font-size:12px; }
