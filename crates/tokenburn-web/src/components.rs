@@ -196,7 +196,7 @@ pub async fn filters(
 ) -> Result<impl View> {
     Ok(view! {
         <form class="filters" method="get" action="/">
-            <label>"chart "
+            <label>"chart shows "
                 <select name="metric" onchange="this.form.submit()">
                     for m in Metric::ALL {
                         <option value=(m.label()) selected=(m == metric)>(m.label())</option>
@@ -210,14 +210,14 @@ pub async fn filters(
                     }
                 </select>
             </label>
-            <label>"view "
+            <label>"group by "
                 <select name="bucket" onchange="this.form.submit()">
                     for b in Bucket::ALL {
                         <option value=(b.label()) selected=(b == query.bucket)>(b.label())</option>
                     }
                 </select>
             </label>
-            <label>"window "
+            <label>"period "
                 <select name="window" onchange="this.form.submit()">
                     for w in Window::ALL {
                         <option value=(w.label()) selected=(w == query.window)>(w.label())</option>
@@ -356,7 +356,7 @@ pub async fn live_filters(
     );
     Ok(view! {
         <div class="filters">
-            <label>"chart "
+            <label>"chart shows "
                 <select :value=$(metric.get()) @change=$(|e: Event| metric.set(e.target.value))>
                     for x in Metric::ALL {
                         <option value=(x.label()) selected=(x.label() == m)>(x.label())</option>
@@ -370,14 +370,14 @@ pub async fn live_filters(
                     }
                 </select>
             </label>
-            <label>"view "
+            <label>"group by "
                 <select :value=$(bucket.get()) @change=$(|e: Event| bucket.set(e.target.value))>
                     for x in Bucket::ALL {
                         <option value=(x.label()) selected=(x.label() == b)>(x.label())</option>
                     }
                 </select>
             </label>
-            <label>"window "
+            <label>"period "
                 <select :value=$(window.get()) @change=$(|e: Event| window.set(e.target.value))>
                     for x in WINDOW_CHOICES {
                         <option value=(x) selected=(x == w)>(x)</option>
