@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.2](https://github.com/sorinirimies/tokenburn/compare/v0.3.1...v0.3.2) — 2026-10-18
+
+### ✨ Features
+
+- Spending limits with desktop alerts; cost is always the last card/column ([`91d8c4a`](https://github.com/sorinirimies/tokenburn/commit/91d8c4aa6e13187eb563711364e1653cca00c60b))
+
 ## [0.3.1](https://github.com/sorinirimies/tokenburn/compare/v0.3.0...v0.3.1) — 2026-10-17
 
 ### 📦 Dependencies
