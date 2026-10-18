@@ -68,6 +68,12 @@ where
     let mut dirty = true;
     while !app.should_quit {
         dirty |= app.poll_background();
+        if std::mem::take(&mut app.bell) {
+            // A limit level was just crossed: ring the terminal bell.
+            use std::io::Write as _;
+            let _ = std::io::stdout().write_all(b"\x07");
+            let _ = std::io::stdout().flush();
+        }
         app.tick_auto_refresh();
         dirty |= app.refresh_system_theme();
         if app.is_loading {

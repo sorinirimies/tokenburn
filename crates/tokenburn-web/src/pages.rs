@@ -11,8 +11,8 @@ use topcoat::{
 use crate::{
     app::is_interactive,
     components::{brand, dashboard_body, filters, live_filters, theme_style},
-    data::{REFRESH_EVERY, load},
-    params::{UsageParams, parse, parse_metric, parse_selection, pick_currency},
+    data::{REFRESH_EVERY, apply_limit_params, load},
+    params::{LimitParams, UsageParams, parse, parse_metric, parse_selection, pick_currency},
     theme,
 };
 
@@ -162,8 +162,29 @@ async fn about_page(cx: &Cx) -> Result<impl View> {
 
 #[page("/settings")]
 async fn settings_page(cx: &Cx) -> Result<impl View> {
-    let _ = cx;
     let (theme_index, currency) = saved_theme_and_currency();
+    // The limits form: a submit saves, a bad number says so and keeps the old limits.
+    let submitted = query_params::<LimitParams>(cx)?;
+    let mut limits = settings::load().limits;
+    let mut message = String::new();
+    if submitted.save.is_some() {
+        match apply_limit_params(&limits, submitted) {
+            Ok(new) => {
+                let _ = settings::save_limits(&new);
+                limits = new;
+                message = "Limits saved.".to_string();
+            }
+            Err(e) => message = e,
+        }
+    }
+    let field =
+        |p: tokenburn_core::Period| limits.get(p).map(|v| v.to_string()).unwrap_or_default();
+    let (daily, weekly, monthly) = (
+        field(tokenburn_core::Period::Day),
+        field(tokenburn_core::Period::Week),
+        field(tokenburn_core::Period::Month),
+    );
+    let notify = limits.notify;
     Ok(view! {
         document(interactive: false, theme: theme_index, title: format!("Settings — {}", tokenburn_core::appinfo::title()),
             <header class="top">brand(active: "settings".to_string())</header>
@@ -186,6 +207,21 @@ async fn settings_page(cx: &Cx) -> Result<impl View> {
                         </select>
                     </label>
                     <button type="submit">"Save"</button>
+                </form>
+            </section>
+            <section>
+                <h2>"Spending limits"</h2>
+                <p class="dim">"In US dollars; empty or 0 = off. Limits never block anything: you get progress bars, and a desktop notification when one is nearly reached or exceeded (checked every 30 s while this server runs)."</p>
+                if !message.is_empty() {
+                    <p class="limit-msg">(message.clone())</p>
+                }
+                <form class="filters limits-form" method="get" action="/settings">
+                    <input type="hidden" name="save" value="1">
+                    <label>"daily " <input type="text" inputmode="decimal" name="limit_daily" value=(daily.clone()) placeholder="off"></label>
+                    <label>"weekly " <input type="text" inputmode="decimal" name="limit_weekly" value=(weekly.clone()) placeholder="off"></label>
+                    <label>"monthly " <input type="text" inputmode="decimal" name="limit_monthly" value=(monthly.clone()) placeholder="off"></label>
+                    <label><input type="checkbox" name="notify" value="on" checked=(notify)> " desktop notifications"</label>
+                    <button type="submit">"Save limits"</button>
                 </form>
             </section>
         )

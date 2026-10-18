@@ -9,10 +9,14 @@
 //! tokenburn --monthly            all history, bucketed by month
 //! tokenburn --daily --all        all history, bucketed by day
 //! tokenburn --json               machine-readable output
+//! tokenburn --limit-daily 20     set a daily budget (also --limit-weekly / --limit-monthly)
+//! tokenburn --limits             how much of each limit is used
+//! tokenburn --watch              desktop notification when a limit is near / exceeded
 //! tokenburn --savings            also show tokens/money saved (cache, rtk, pi compaction)
 //! ```
 
 pub mod args;
+pub mod limits;
 pub mod render;
 
 use std::io::Write;
@@ -34,6 +38,9 @@ pub fn run(args: &Args, out: &mut impl Write) -> Result<()> {
     let currency = args
         .currency
         .unwrap_or_else(tokenburn_core::settings::currency);
+    if limits::wanted(args) {
+        return limits::run(args, &currency, out);
+    }
     let query = args.query();
     let now = Local::now();
     let collected = collect(query.tool, query.window.start(now));

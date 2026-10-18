@@ -115,6 +115,16 @@ pub async fn serve(opts: ServerOptions) -> std::io::Result<()> {
             eprintln!("tokenburn-web: could not open a browser ({e}); visit {url}");
         }
     }
+    // Spending limits: look every 30 s, page open or not, and raise a desktop
+    // notification when a level is crossed.
+    tokio::spawn(async {
+        loop {
+            for a in crate::data::watch_limits().await {
+                println!("tokenburn-web: {}", a.title());
+            }
+            tokio::time::sleep(crate::data::WATCH_EVERY).await;
+        }
+    });
     // Exit immediately on Ctrl+C / SIGTERM: open live-update streams would
     // otherwise hold graceful shutdown until its timeout.
     tokio::select! {

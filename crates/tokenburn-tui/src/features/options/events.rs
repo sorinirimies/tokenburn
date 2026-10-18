@@ -24,6 +24,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('-') => o.adjust(-1),
         _ => {}
     }
+    if app.options.limits_dirty {
+        app.options.limits_dirty = false;
+        app.limits_edited();
+    }
 }
 
 #[cfg(test)]

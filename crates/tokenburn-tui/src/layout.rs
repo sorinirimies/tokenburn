@@ -43,6 +43,13 @@ fn render_too_small(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
 /// projects go first, then the charts, then the saved panel shrinks.
 fn render_report(app: &mut App, frame: &mut Frame, body: Rect, class: LayoutClass) {
     const TABLE_MIN: u16 = 5;
+    // One line of limit progress on top, when limits are set and there is room.
+    let limits_rows = u16::from(!app.limit_statuses.is_empty() && body.height > TABLE_MIN + 3);
+    let [limits_area, body] =
+        Layout::vertical([Constraint::Length(limits_rows), Constraint::Min(0)]).areas(body);
+    if limits_rows > 0 {
+        crate::features::limits::view::render(app, frame, limits_area, class);
+    }
     let mut spare = body.height.saturating_sub(TABLE_MIN);
 
     // The charts come first (the screen's own height, or the compact one when room
@@ -654,6 +661,22 @@ mod tests {
         app
     }
 
+    #[test]
+    fn the_cost_card_is_always_there_even_when_the_others_do_not_fit() {
+        for metric in tokenburn_core::Metric::ALL {
+            for width in [50u16, 80, 120, 200] {
+                let mut app = app_with_savings();
+                app.metric = metric;
+                let out = draw_at(&mut app, width, 30);
+                let header: String = out.lines().take(4).collect::<Vec<_>>().join("\n");
+                assert!(
+                    header.contains("cost"),
+                    "{metric:?} at {width} wide lost its cost card:\n{header}"
+                );
+            }
+        }
+    }
+
     fn saved(mut app: App) -> App {
         app.metric = tokenburn_core::Metric::Saved;
         app
@@ -815,5 +838,103 @@ mod tests {
         let out = draw_at(&mut app, 120, 16);
         assert!(out.contains("TOTAL") && out.contains("valued at"), "{out}");
         assert!(!out.contains("Share by project"), "charts give way:\n{out}");
+    }
+
+    fn with_limits(mut app: App) -> App {
+        use tokenburn_core::{Level, LimitStatus, Period};
+        app.limit_statuses = vec![
+            LimitStatus {
+                period: Period::Day,
+                limit_usd: 20.0,
+                spent_usd: 17.0,
+                level: Level::Warn,
+            },
+            LimitStatus {
+                period: Period::Month,
+                limit_usd: 100.0,
+                spent_usd: 20.0,
+                level: Level::Ok,
+            },
+        ];
+        app
+    }
+
+    #[test]
+    fn the_limits_strip_sits_above_the_report_and_only_when_limits_are_set() {
+        let mut none = day_app();
+        assert!(!draw_at(&mut none, 120, 40).contains("limits"));
+        let mut app = with_limits(day_app());
+        let out = draw_at(&mut app, 120, 40);
+        let pos = |s: &str| out.lines().position(|l| l.contains(s)).unwrap();
+        assert!(
+            out.contains("⚠ daily") && out.contains("$17.00/$20.00 85%"),
+            "{out}"
+        );
+        assert!(out.contains("monthly") && out.contains("20%"), "{out}");
+        assert!(pos("limits") < pos("Report ·"), "above the table:\n{out}");
+        // No room: the strip gives way to the table.
+        assert!(!draw_at(&mut app, 120, 11).contains("limits"));
+    }
+
+    #[test]
+    fn limit_rows_show_in_the_settings_popup() {
+        let mut app = day_app();
+        app.options.open = true;
+        app.options
+            .limits
+            .set(tokenburn_core::Period::Day, Some(20.0));
+        let out = draw_at(&mut app, 120, 40);
+        assert!(out.contains("Daily") && out.contains("‹ $20.00 ›"), "{out}");
+        assert!(out.contains("Weekly") && out.contains("‹ off ›"), "{out}");
+        assert!(out.contains("Monthly") && out.contains("Desktop notifications for limits"));
+    }
+
+    #[test]
+    fn a_new_alert_rings_the_bell_once_and_a_plain_check_does_not() {
+        use tokenburn_core::LimitCheck;
+        let mut app = with_limits(day_app());
+        let plain = LimitCheck {
+            limits: app.limits.clone(),
+            statuses: app.limit_statuses.clone(),
+            alerts: vec![],
+        };
+        app.apply_limit_check(plain.clone());
+        assert!(!app.bell);
+        let alert = tokenburn_core::Alert {
+            period: tokenburn_core::Period::Day,
+            level: tokenburn_core::Level::Warn,
+            spent_usd: 17.0,
+            limit_usd: 20.0,
+        };
+        app.apply_limit_check(LimitCheck {
+            alerts: vec![alert],
+            ..plain
+        });
+        assert!(app.bell);
+        // A check arriving while the popup is open does not overwrite the edit.
+        app.options.open = true;
+        app.options
+            .limits
+            .set(tokenburn_core::Period::Week, Some(50.0));
+        app.apply_limit_check(LimitCheck::default());
+        assert_eq!(
+            app.options.limits.get(tokenburn_core::Period::Week),
+            Some(50.0)
+        );
+        assert!(
+            app.limit_statuses.is_empty(),
+            "the strip follows the new check"
+        );
+    }
+
+    #[test]
+    fn editing_a_limit_in_the_popup_updates_the_app() {
+        use crossterm::event::{KeyCode, KeyEvent};
+        let mut app = day_app();
+        app.options.open = true;
+        app.options.cursor = crate::features::options::OptionRow::LimitDaily;
+        crate::events::handle_key(&mut app, KeyEvent::from(KeyCode::Right));
+        assert_eq!(app.limits.get(tokenburn_core::Period::Day), Some(5.0));
+        assert!(!app.options.limits_dirty);
     }
 }

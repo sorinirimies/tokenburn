@@ -30,6 +30,16 @@ pub enum Message {
     SystemThemeTick,
     CurrencySelected(CurrencyChoice),
     ViewSelected(View),
+    /// A limit check finished (limits, how much is used, new alerts).
+    LimitsChecked(tokenburn_core::LimitCheck),
+    /// The text of a limit field in Settings changed (US dollars; empty = off).
+    LimitInput(tokenburn_core::Period, String),
+    /// Enter pressed in a limit field: save the limits.
+    LimitsApplied,
+    /// Desktop notifications for limits on / off.
+    LimitNotifyToggled(bool),
+    /// Hide the alert banner.
+    DismissAlert,
     /// ~10 fps animation tick, only subscribed while loading.
     AnimationTick,
 }

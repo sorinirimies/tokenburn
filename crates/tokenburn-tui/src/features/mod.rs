@@ -1,6 +1,7 @@
 pub mod chart;
 pub mod currency;
 pub mod filter;
+pub mod limits;
 pub mod options;
 pub mod pie;
 pub mod projects;

@@ -19,7 +19,12 @@ use tokenburn_core::{Currency, CURRENCIES};
 
 /// Messages sent from the loader thread.
 pub enum BackgroundResult {
-    Loaded { query: Query, collected: Collected },
+    Loaded {
+        query: Query,
+        collected: Collected,
+    },
+    /// The spending limits checked against this period's spend.
+    Limits(tokenburn_core::LimitCheck),
 }
 
 pub struct App {
@@ -48,6 +53,11 @@ pub struct App {
     /// Everything saved in the current view (cache hits of the filtered rows + `external`).
     savings: Savings,
     savings_by_bucket: Vec<tokenburn_core::BucketSavings>,
+    /// Daily / weekly / monthly limits (information and alarms only).
+    pub limits: tokenburn_core::Limits,
+    pub limit_statuses: Vec<tokenburn_core::LimitStatus>,
+    /// Ring the terminal bell on the next frame (a limit level was just crossed).
+    pub bell: bool,
     /// When the last reload was started (drives auto-refresh).
     pub last_reload: Option<Instant>,
     /// Everything the last load returned (the filter works on this).
@@ -108,6 +118,9 @@ impl App {
             input_price: tokenburn_core::DEFAULT_INPUT_PRICE_PER_MTOK,
             savings: Savings::default(),
             savings_by_bucket: Vec::new(),
+            limits: tokenburn_core::Limits::default(),
+            limit_statuses: Vec::new(),
+            bell: false,
             last_reload: None,
             all_rows: Vec::new(),
             rows_len: 0,
@@ -138,10 +151,15 @@ impl App {
         self.last_reload = Some(Instant::now());
         let query = self.query;
         let tx = self.bg_tx.clone();
+        let (persist, currency) = (self.persist, self.currency);
         thread::spawn(move || {
             let start = query.window.start(Local::now());
             let collected = collect(query.tool, start);
             let _ = tx.send(BackgroundResult::Loaded { query, collected });
+            let _ = tx.send(BackgroundResult::Limits(tokenburn_core::run_limit_check(
+                persist,
+                |v| currency.format(v),
+            )));
         });
     }
 
@@ -184,6 +202,10 @@ impl App {
         let mut changed = false;
         while let Ok(msg) = self.bg_rx.try_recv() {
             match msg {
+                BackgroundResult::Limits(check) => {
+                    self.apply_limit_check(check);
+                    changed = true;
+                }
                 BackgroundResult::Loaded { query, collected } => {
                     if query != self.query {
                         continue;
@@ -199,6 +221,25 @@ impl App {
             }
         }
         changed
+    }
+
+    /// Take a fresh limit check: show it and ring the bell for new alerts.
+    pub fn apply_limit_check(&mut self, check: tokenburn_core::LimitCheck) {
+        self.bell |= !check.alerts.is_empty();
+        self.limits = check.limits;
+        self.limit_statuses = check.statuses;
+        if !self.options.open {
+            self.options.limits = self.limits.clone();
+        }
+    }
+
+    /// Save the limits edited in the options popup; the next load checks them.
+    pub fn limits_edited(&mut self) {
+        self.limits = self.options.limits.clone();
+        if self.persist {
+            let _ = tokenburn_core::settings::save_limits(&self.limits);
+            self.reload();
+        }
     }
 
     /// Re-apply the filter to the loaded rows and rebuild everything derived from

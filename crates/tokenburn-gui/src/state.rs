@@ -72,6 +72,11 @@ impl fmt::Display for View {
     }
 }
 
+/// The Settings fields' text for `limits`: the amount, or empty when off.
+pub fn limit_texts(limits: &tokenburn_core::Limits) -> [String; 3] {
+    tokenburn_core::Period::ALL.map(|p| limits.get(p).map(|v| format!("{v}")).unwrap_or_default())
+}
+
 pub struct TokenBurn {
     pub query: Query,
     pub view: View,
@@ -106,6 +111,13 @@ pub struct TokenBurn {
     pub input_price: f64,
     /// Everything saved in the current selection.
     pub savings: Savings,
+    /// Daily / weekly / monthly spending limits (information and alarms only).
+    pub limits: tokenburn_core::Limits,
+    pub limit_statuses: Vec<tokenburn_core::LimitStatus>,
+    /// The text in the Settings limit fields (daily, weekly, monthly), US dollars.
+    pub limit_inputs: [String; 3],
+    /// The latest alert, shown as a banner until dismissed.
+    pub alert: Option<String>,
     /// Savings per chart bucket (the same granularity as the bars).
     pub savings_by_bucket: Vec<BucketSavings>,
     /// Entry animation of the charts, eased 0 → 1 (1 = finished).
@@ -162,6 +174,10 @@ impl TokenBurn {
             external: ExternalSavings::default(),
             input_price: tokenburn_core::DEFAULT_INPUT_PRICE_PER_MTOK,
             savings: Savings::default(),
+            limits: tokenburn_core::Limits::default(),
+            limit_statuses: Vec::new(),
+            limit_inputs: Default::default(),
+            alert: None,
             savings_by_bucket: Vec::new(),
             anim: 1.0,
             anim_started: None,
@@ -230,6 +246,44 @@ impl TokenBurn {
         if self.persist {
             let _ = tokenburn_core::settings::save_currency(code);
         }
+    }
+
+    /// Take a fresh limit check: show the progress and raise a banner for new alerts.
+    pub fn apply_limit_check(&mut self, check: tokenburn_core::LimitCheck) {
+        if let Some(a) = check.alerts.last() {
+            self.alert = Some(format!(
+                "⚠ {} — {}",
+                a.title(),
+                a.body(|v| self.currency.format(v))
+            ));
+        }
+        if self.limits != check.limits {
+            self.limits = check.limits;
+            self.limit_inputs = limit_texts(&self.limits);
+        }
+        self.limit_statuses = check.statuses;
+    }
+
+    /// Read the three limit fields and keep the ones that parse (empty or `0` = off).
+    /// Returns `false` (and keeps the old limits) when a field is not a number.
+    pub fn apply_limit_inputs(&mut self) -> bool {
+        let mut limits = self.limits.clone();
+        for (period, text) in tokenburn_core::Period::ALL.iter().zip(&self.limit_inputs) {
+            let t = text.trim();
+            if t.is_empty() {
+                limits.set(*period, None);
+            } else {
+                match t.parse::<f64>() {
+                    Ok(v) if v.is_finite() && v >= 0.0 => limits.set(*period, Some(v)),
+                    _ => return false,
+                }
+            }
+        }
+        self.limits = limits;
+        if self.persist {
+            let _ = tokenburn_core::settings::save_limits(&self.limits);
+        }
+        true
     }
 
     /// Install freshly loaded data.

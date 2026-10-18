@@ -85,20 +85,28 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         LayoutClass::Medium => 4,
         LayoutClass::Wide => usize::MAX,
     };
-    for card in tokenburn_core::cards(app.metric, &t, app.savings(), &app.currency)
-        .into_iter()
-        .take(max_cards)
-    {
-        let span = match card.kind {
-            CardKind::Plain => stat(th, &card.label, card.value),
-            CardKind::Cost => badge(th.success, th.bg, &card.label, &card.value),
-            CardKind::Saved => badge(th.accent, th.bg, &card.label, &card.value),
-        };
-        used += span.width();
-        if used > room {
+    // The cost card is last and always kept: it is the figure that must not be cut
+    // off, so the cards before it give way first.
+    let style = |card: &tokenburn_core::Card| match card.kind {
+        CardKind::Plain => stat(th, &card.label, card.value.clone()),
+        CardKind::Cost => badge(th.success, th.bg, &card.label, &card.value),
+        CardKind::Saved => badge(th.accent, th.bg, &card.label, &card.value),
+    };
+    let mut all = tokenburn_core::cards(app.metric, &t, app.savings(), &app.currency);
+    let last = all.pop().map(|c| style(&c));
+    let reserved = last.as_ref().map_or(0, |l| l.width());
+    for card in all.iter().take(max_cards.saturating_sub(1)) {
+        let span = style(card);
+        if used + span.width() + reserved > room {
             break;
         }
+        used += span.width();
         totals_spans.push(span);
+    }
+    if let Some(last) = last {
+        if used + last.width() <= room {
+            totals_spans.push(last);
+        }
     }
     let totals = Line::from(totals_spans);
 

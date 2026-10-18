@@ -19,6 +19,8 @@ pub struct Settings {
     /// saved by prompt caching, rtk and pi compaction
     /// (default [`crate::DEFAULT_INPUT_PRICE_PER_MTOK`]).
     pub input_price_per_mtok: f64,
+    /// Daily / weekly / monthly spending limits (information and alarms only).
+    pub limits: crate::Limits,
 }
 
 impl Default for Settings {
@@ -28,6 +30,7 @@ impl Default for Settings {
             currency: "USD".to_string(),
             rates: BTreeMap::new(),
             input_price_per_mtok: crate::DEFAULT_INPUT_PRICE_PER_MTOK,
+            limits: crate::Limits::default(),
         }
     }
 }

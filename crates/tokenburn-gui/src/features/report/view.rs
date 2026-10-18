@@ -110,10 +110,10 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     for col in columns(layout) {
         header = header.push(cell_right(col.title().to_string(), 3));
     }
-    header = header.push(cell_right("cost".to_string(), 3));
     if !layout.is_narrow() {
         header = header.push(text("share").width(Length::FillPortion(4)));
     }
+    header = header.push(cell_right("cost".to_string(), 3));
     let header = container(header.padding([6, 10])).style(container::rounded_box);
 
     let mut body = column![].spacing(2);
@@ -133,12 +133,6 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         for col in columns(layout) {
             line = line.push(cell_right(thousands(col.value(s)), 3));
         }
-        line = line.push(
-            text(state.currency.format(s.cost_usd))
-                .align_x(Horizontal::Right)
-                .width(Length::FillPortion(3))
-                .style(text::success),
-        );
         if !layout.is_narrow() {
             line = line.push(
                 container(if is_total {
@@ -151,6 +145,12 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
                 .width(Length::FillPortion(4)),
             );
         }
+        line = line.push(
+            text(state.currency.format(s.cost_usd))
+                .align_x(Horizontal::Right)
+                .width(Length::FillPortion(3))
+                .style(text::success),
+        );
         body = body.push(container(line).padding([4, 10]));
     }
 

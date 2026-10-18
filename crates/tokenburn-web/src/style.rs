@@ -38,6 +38,13 @@ td.cost { color:var(--ok); }
 .bar { width:140px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; display:inline-block; }
 .bar > span { display:block; height:100%; background:var(--accent); }
 tr:hover td { background:var(--sel); }
+.limits { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+.limit .label { font-size:.8rem; color:var(--dim); margin-bottom:3px; }
+.limit progress { width:100%; height:8px; accent-color:var(--ok, #3fb950); }
+.limit.warn .label, .limit.warn b { color:var(--warn); }
+.limit.warn progress { accent-color:var(--warn); }
+.limit.over .label, .limit.over b { color:var(--bad, #f85149); }
+.limit.over progress { accent-color:var(--bad, #f85149); }
 .empty, .warn { padding:16px; background:var(--panel); border:1px solid var(--line); border-radius:8px; color:var(--dim); }
 .warn { color:var(--warn); }
 .badge { padding:2px 8px; border-radius:10px; border:1px solid var(--line); }

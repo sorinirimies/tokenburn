@@ -54,7 +54,11 @@ impl TokenBurn {
                 .height(Length::Fill)
                 .into()
         };
-        container(column![header::view(self, layout), content, status].spacing(spacing))
+        let mut page = column![header::view(self, layout)].spacing(spacing);
+        if let Some(limits) = crate::widgets::limits::view(self, layout) {
+            page = page.push(limits);
+        }
+        container(page.push(content).push(status))
             .padding(padding)
             .width(Length::Fill)
             .height(Length::Fill)

@@ -5,6 +5,7 @@ pub mod view;
 
 use std::time::Duration;
 
+use tokenburn_core::Period;
 use tui_slider::SliderState;
 
 /// One selectable row of the options popup.
@@ -16,16 +17,24 @@ pub enum OptionRow {
     ShowPie,
     HiResPie,
     TopN,
+    LimitDaily,
+    LimitWeekly,
+    LimitMonthly,
+    NotifyLimits,
 }
 
 impl OptionRow {
-    pub const ALL: [OptionRow; 6] = [
+    pub const ALL: [OptionRow; 10] = [
         OptionRow::AutoRefresh,
         OptionRow::RefreshSecs,
         OptionRow::ShowChart,
         OptionRow::ShowPie,
         OptionRow::HiResPie,
         OptionRow::TopN,
+        OptionRow::LimitDaily,
+        OptionRow::LimitWeekly,
+        OptionRow::LimitMonthly,
+        OptionRow::NotifyLimits,
     ];
 
     pub fn is_slider(self) -> bool {
@@ -59,6 +68,10 @@ pub struct Options {
     pub refresh_secs: SliderState,
     /// Pie slices before the rest is folded into "other" (3–12).
     pub top_n: SliderState,
+    /// Spending limits being edited (saved by the app after each change).
+    pub limits: tokenburn_core::Limits,
+    /// A limit row changed since the app last saved.
+    pub limits_dirty: bool,
 }
 
 impl Default for Options {
@@ -73,6 +86,8 @@ impl Default for Options {
             hires_pie: true,
             refresh_secs: SliderState::with_step(5.0, 5.0, 300.0, 5.0),
             top_n: SliderState::with_step(6.0, 3.0, 12.0, 1.0),
+            limits: tokenburn_core::Limits::default(),
+            limits_dirty: false,
         }
     }
 }
@@ -113,7 +128,34 @@ impl Options {
             OptionRow::ShowChart => self.show_chart = !self.show_chart,
             OptionRow::ShowPie => self.show_pie = !self.show_pie,
             OptionRow::HiResPie => self.hires_pie = !self.hires_pie,
-            OptionRow::RefreshSecs | OptionRow::TopN => {}
+            OptionRow::NotifyLimits => {
+                self.limits.notify = !self.limits.notify;
+                self.limits_dirty = true;
+            }
+            OptionRow::RefreshSecs
+            | OptionRow::TopN
+            | OptionRow::LimitDaily
+            | OptionRow::LimitWeekly
+            | OptionRow::LimitMonthly => {}
+        }
+    }
+
+    /// The period a limit row edits.
+    pub fn limit_period(row: OptionRow) -> Option<Period> {
+        match row {
+            OptionRow::LimitDaily => Some(Period::Day),
+            OptionRow::LimitWeekly => Some(Period::Week),
+            OptionRow::LimitMonthly => Some(Period::Month),
+            _ => None,
+        }
+    }
+
+    /// US dollars one step moves a limit: $5 a day, $25 a week, $100 a month.
+    pub fn limit_step(period: Period) -> f64 {
+        match period {
+            Period::Day => 5.0,
+            Period::Week => 25.0,
+            Period::Month => 100.0,
         }
     }
 
@@ -122,7 +164,15 @@ impl Options {
         match self.cursor {
             OptionRow::RefreshSecs => step(&mut self.refresh_secs, dir),
             OptionRow::TopN => step(&mut self.top_n, dir),
-            _ => self.toggle(),
+            row => match Self::limit_period(row) {
+                Some(period) => {
+                    let now = self.limits.get(period).unwrap_or(0.0);
+                    let next = (now + f64::from(dir.signum()) * Self::limit_step(period)).max(0.0);
+                    self.limits.set(period, Some(next));
+                    self.limits_dirty = true;
+                }
+                None => self.toggle(),
+            },
         }
     }
 }
@@ -151,7 +201,7 @@ mod tests {
     fn cursor_wraps_both_ways() {
         let mut o = Options::default();
         o.move_cursor(-1);
-        assert_eq!(o.cursor, OptionRow::TopN);
+        assert_eq!(o.cursor, OptionRow::NotifyLimits);
         o.move_cursor(1);
         assert_eq!(o.cursor, OptionRow::AutoRefresh);
     }
@@ -188,6 +238,35 @@ mod tests {
             o.adjust(1);
         }
         assert_eq!(o.top_n(), 12, "clamped at max");
+    }
+
+    #[test]
+    fn limit_rows_step_in_dollars_and_zero_clears() {
+        let mut o = Options {
+            cursor: OptionRow::LimitDaily,
+            ..Options::default()
+        };
+        o.adjust(-1);
+        assert_eq!(o.limits.get(Period::Day), None, "never below off");
+        o.adjust(1);
+        o.adjust(1);
+        assert_eq!(o.limits.get(Period::Day), Some(10.0));
+        assert!(o.limits_dirty);
+        o.adjust(-1);
+        o.adjust(-1);
+        assert_eq!(o.limits.get(Period::Day), None, "back to off");
+        o.cursor = OptionRow::LimitWeekly;
+        o.adjust(1);
+        o.cursor = OptionRow::LimitMonthly;
+        o.adjust(1);
+        assert_eq!(o.limits.get(Period::Week), Some(25.0));
+        assert_eq!(o.limits.get(Period::Month), Some(100.0));
+        // Space on a limit row does nothing; on the notify row it flips it.
+        o.toggle();
+        assert_eq!(o.limits.get(Period::Month), Some(100.0));
+        o.cursor = OptionRow::NotifyLimits;
+        o.toggle();
+        assert!(!o.limits.notify);
     }
 
     #[test]

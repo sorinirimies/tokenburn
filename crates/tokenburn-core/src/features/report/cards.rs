@@ -38,6 +38,12 @@ fn card(label: &str, value: String, kind: CardKind) -> Card {
 ///   card per source.
 pub fn cards(metric: Metric, total: &Summary, savings: &Savings, currency: &Currency) -> Vec<Card> {
     let approx = currency.approx_mark();
+    // The cost is always the last card, whichever metric is shown.
+    let spent = card(
+        &format!("cost{approx}"),
+        currency.format(total.cost_usd),
+        CardKind::Cost,
+    );
     match metric {
         Metric::Tokens => vec![
             card("turns", thousands(total.turns), CardKind::Plain),
@@ -46,6 +52,7 @@ pub fn cards(metric: Metric, total: &Summary, savings: &Savings, currency: &Curr
             card("output", compact(total.output), CardKind::Plain),
             card("cache read", compact(total.cache_read), CardKind::Plain),
             card("cache write", compact(total.cache_write), CardKind::Plain),
+            spent,
         ],
         Metric::Cost => {
             let per_turn = if total.turns > 0 {
@@ -61,11 +68,6 @@ pub fn cards(metric: Metric, total: &Summary, savings: &Savings, currency: &Curr
             vec![
                 card("turns", thousands(total.turns), CardKind::Plain),
                 card(
-                    &format!("cost{approx}"),
-                    currency.format(total.cost_usd),
-                    CardKind::Cost,
-                ),
-                card(
                     &format!("per turn{approx}"),
                     currency.format(per_turn),
                     CardKind::Cost,
@@ -75,6 +77,7 @@ pub fn cards(metric: Metric, total: &Summary, savings: &Savings, currency: &Curr
                     currency.format(per_mtok),
                     CardKind::Cost,
                 ),
+                spent,
             ]
         }
         Metric::Saved => {
@@ -96,6 +99,7 @@ pub fn cards(metric: Metric, total: &Summary, savings: &Savings, currency: &Curr
                     CardKind::Saved,
                 ));
             }
+            out.push(spent);
             out
         }
     }
@@ -147,29 +151,36 @@ mod tests {
                 "input",
                 "output",
                 "cache read",
-                "cache write"
+                "cache write",
+                "cost"
             ]
         );
-        assert_eq!(labels(&c), ["turns", "cost", "per turn", "per 1M tokens"]);
+        assert_eq!(labels(&c), ["turns", "per turn", "per 1M tokens", "cost"]);
         assert_eq!(labels(&s)[..2], ["saved", "tokens saved"]);
-        assert!(t.iter().all(|c| c.kind == CardKind::Plain));
-        assert!(s.iter().all(|c| c.kind == CardKind::Saved));
+        for set in [&t, &c, &s] {
+            let last = set.last().unwrap();
+            assert_eq!(
+                (last.label.as_str(), last.kind, last.value.as_str()),
+                ("cost", CardKind::Cost, "$8.00"),
+                "the cost is always the last card"
+            );
+        }
     }
 
     #[test]
     fn cost_cards_divide_by_turns_and_tokens() {
         let c = cards(Metric::Cost, &total(), &Savings::default(), &Currency::USD);
-        assert_eq!(c[1].value, "$8.00");
-        assert_eq!(c[2].value, "$2.00", "8 over 4 turns");
-        assert_eq!(c[3].value, "$4.00", "8 over ~2M tokens");
+        assert_eq!(c[3].value, "$8.00");
+        assert_eq!(c[1].value, "$2.00", "8 over 4 turns");
+        assert_eq!(c[2].value, "$4.00", "8 over ~2M tokens");
         let none = cards(
             Metric::Cost,
             &Summary::default(),
             &Savings::default(),
             &Currency::USD,
         );
-        assert_eq!(none[2].value, "$0.00", "no division by zero");
-        assert_eq!(none[3].value, "$0.00");
+        assert_eq!(none[1].value, "$0.00", "no division by zero");
+        assert_eq!(none[2].value, "$0.00");
     }
 
     #[test]
@@ -179,7 +190,7 @@ mod tests {
         assert_eq!(s[1].value, "1.00M");
         assert_eq!(
             labels(&s),
-            ["saved", "tokens saved", "of would-be cost", "rtk"]
+            ["saved", "tokens saved", "of would-be cost", "rtk", "cost"]
         );
         assert_eq!(s[2].value, percent(0.2));
         assert_eq!(s[3].value, "$2.00");
@@ -190,6 +201,6 @@ mod tests {
             &Savings::default(),
             &Currency::USD,
         );
-        assert_eq!(labels(&none), ["saved", "tokens saved"]);
+        assert_eq!(labels(&none), ["saved", "tokens saved", "cost"]);
     }
 }

@@ -11,14 +11,18 @@ impl TokenBurn {
     pub fn reload(&mut self) -> Task<Message> {
         self.is_loading = true;
         self.status_message = Some("Loading…".into());
-        commands::load(self.query)
+        Task::batch([commands::load(self.query), self.check_limits()])
+    }
+
+    fn check_limits(&self) -> Task<Message> {
+        commands::check_limits(self.persist, self.currency)
     }
 
     /// Like [`Self::reload`] but keeps the status line (the periodic refresh must not
     /// flash "Loading…" every few seconds).
     fn reload_quietly(&mut self) -> Task<Message> {
         self.is_loading = true;
-        commands::load(self.query)
+        Task::batch([commands::load(self.query), self.check_limits()])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -96,6 +100,39 @@ impl TokenBurn {
             }
             Message::ViewSelected(view) => {
                 self.view = view;
+                Task::none()
+            }
+            Message::LimitsChecked(check) => {
+                self.apply_limit_check(check);
+                Task::none()
+            }
+            Message::LimitInput(period, text) => {
+                let i = tokenburn_core::Period::ALL
+                    .iter()
+                    .position(|p| *p == period)
+                    .unwrap_or(0);
+                self.limit_inputs[i] = text;
+                Task::none()
+            }
+            Message::LimitsApplied => {
+                if self.apply_limit_inputs() {
+                    self.error_message = None;
+                    self.limit_statuses.clear();
+                    self.check_limits()
+                } else {
+                    self.error_message = Some("Limits must be numbers (US dollars).".into());
+                    Task::none()
+                }
+            }
+            Message::LimitNotifyToggled(on) => {
+                self.limits.notify = on;
+                if self.persist {
+                    let _ = tokenburn_core::settings::save_limits(&self.limits);
+                }
+                Task::none()
+            }
+            Message::DismissAlert => {
+                self.alert = None;
                 Task::none()
             }
             Message::AnimationTick => {
@@ -261,5 +298,77 @@ mod theme_tests {
     fn the_window_menu_refuses_to_run_off_the_main_thread_instead_of_crashing() {
         // Test threads are never the main thread, and AppKit must only be touched there.
         assert!(!crate::window::macos::install_window_menu());
+    }
+
+    #[test]
+    fn limit_fields_parse_apply_and_reject_bad_input() {
+        use tokenburn_core::Period;
+        let mut app = TokenBurn::new();
+        let _ = app.update(Message::LimitInput(Period::Day, "20".into()));
+        let _ = app.update(Message::LimitInput(Period::Week, " 100.5 ".into()));
+        let _ = app.update(Message::LimitInput(Period::Month, "".into()));
+        let _ = app.update(Message::LimitsApplied);
+        assert_eq!(app.limits.get(Period::Day), Some(20.0));
+        assert_eq!(app.limits.get(Period::Week), Some(100.5));
+        assert_eq!(app.limits.get(Period::Month), None);
+        assert!(app.error_message.is_none());
+        // `0` clears.
+        let _ = app.update(Message::LimitInput(Period::Day, "0".into()));
+        let _ = app.update(Message::LimitsApplied);
+        assert_eq!(app.limits.get(Period::Day), None);
+        // Not a number (or negative): keep the old limits and say so.
+        for bad in ["abc", "-5", "inf"] {
+            let _ = app.update(Message::LimitInput(Period::Week, bad.into()));
+            let _ = app.update(Message::LimitsApplied);
+            assert_eq!(app.limits.get(Period::Week), Some(100.5), "{bad}");
+            assert!(app.error_message.as_deref().unwrap().contains("numbers"));
+        }
+    }
+
+    #[test]
+    fn a_check_updates_the_bars_and_the_fields_and_the_banner_dismisses() {
+        use tokenburn_core::{Level, LimitCheck, LimitStatus, Limits, Period};
+        let mut app = TokenBurn::new();
+        let mut limits = Limits::default();
+        limits.set(Period::Day, Some(20.0));
+        let _ = app.update(Message::LimitsChecked(LimitCheck {
+            limits: limits.clone(),
+            statuses: vec![LimitStatus {
+                period: Period::Day,
+                limit_usd: 20.0,
+                spent_usd: 25.0,
+                level: Level::Over,
+            }],
+            alerts: vec![tokenburn_core::Alert {
+                period: Period::Day,
+                level: Level::Over,
+                spent_usd: 25.0,
+                limit_usd: 20.0,
+            }],
+        }));
+        assert_eq!(app.limit_statuses.len(), 1);
+        assert_eq!(
+            app.limit_inputs[0], "20",
+            "the Settings field follows the saved limit"
+        );
+        assert!(app
+            .alert
+            .as_deref()
+            .unwrap()
+            .contains("daily limit exceeded"));
+        // The page and the Settings panel build with all of it.
+        for view in [crate::state::View::Report, crate::state::View::Settings] {
+            app.view = view;
+            for l in [
+                tokenburn_core::LayoutClass::Wide,
+                tokenburn_core::LayoutClass::Narrow,
+            ] {
+                let _ = app.view_for(l);
+            }
+        }
+        let _ = app.update(Message::DismissAlert);
+        assert!(app.alert.is_none());
+        let _ = app.update(Message::LimitNotifyToggled(false));
+        assert!(!app.limits.notify);
     }
 }

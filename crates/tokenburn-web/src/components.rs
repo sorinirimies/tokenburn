@@ -36,6 +36,49 @@ pub async fn brand(active: String) -> Result<impl View> {
     })
 }
 
+/// Progress of each spending limit (daily / weekly / monthly), coloured by how close
+/// it is. Renders nothing when no limit is set.
+#[component]
+pub async fn limits_panel(
+    check: &tokenburn_core::LimitCheck,
+    currency: Currency,
+) -> Result<impl View> {
+    let rows: Vec<(String, String, u32, &'static str)> = check
+        .statuses
+        .iter()
+        .map(|s| {
+            (
+                format!(
+                    "{} · {} of {} ({}%)",
+                    s.period.label(),
+                    currency.format(s.spent_usd),
+                    currency.format(s.limit_usd),
+                    s.percent()
+                ),
+                match s.level {
+                    tokenburn_core::Level::Ok => String::new(),
+                    tokenburn_core::Level::Warn => "⚠ nearly reached".to_string(),
+                    tokenburn_core::Level::Over => "🚨 exceeded".to_string(),
+                },
+                crate::data::bar_percent(s),
+                crate::data::level_class(s.level),
+            )
+        })
+        .collect();
+    Ok(view! {
+        if !rows.is_empty() {
+            <section class="limits">
+                for (label, note, pct, class) in &rows {
+                    <div class=(*class)>
+                        <div class="label">(label.clone()) " " <b>(note.clone())</b></div>
+                        <progress max="100" value=(pct.to_string())>(pct.to_string()) "%"</progress>
+                    </div>
+                }
+            </section>
+        }
+    })
+}
+
 /// Row of headline totals.
 #[component]
 pub async fn summary_cards(
@@ -224,8 +267,8 @@ pub async fn report_table(report: &[ReportRow], currency: Currency) -> Result<im
                     <th class="opt1">"cache read"</th>
                     <th class="opt1">"cache write"</th>
                     <th>"total"</th>
-                    <th>"cost"</th>
                     <th class="left opt2">"share"</th>
+                    <th>"cost"</th>
                 </tr>
             </thead>
             <tbody>
@@ -239,12 +282,12 @@ pub async fn report_table(report: &[ReportRow], currency: Currency) -> Result<im
                         <td class="opt1">(thousands(r.summary.cache_read))</td>
                         <td class="opt1">(thousands(r.summary.cache_write))</td>
                         <td>(thousands(r.summary.total_tokens))</td>
-                        <td class="cost">(currency.format(r.summary.cost_usd))</td>
                         <td class="left opt2">
                             if r.tool != "TOTAL" {
                                 <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent(r.summary.total_tokens, max), theme::series_var(&r.tool)))></span></span>
                             }
                         </td>
+                        <td class="cost">(currency.format(r.summary.cost_usd))</td>
                     </tr>
                 }
             </tbody>
@@ -271,8 +314,8 @@ pub async fn projects_table(
                     <th class="left">"tool:project/model"</th>
                     <th class="opt2">"turns"</th>
                     <th>"total tokens"</th>
-                    <th>"cost"</th>
                     <th class="left opt2">"share"</th>
+                    <th>"cost"</th>
                 </tr>
             </thead>
             <tbody>
@@ -281,10 +324,10 @@ pub async fn projects_table(
                         <td class="left">(name.clone())</td>
                         <td class="opt2">(thousands(s.turns))</td>
                         <td>(thousands(s.total_tokens))</td>
-                        <td class="cost">(currency.format(s.cost_usd))</td>
                         <td class="left opt2">
                             <span class="bar"><span style=(format!("width:{}%;background:{}", share_percent((s.cost_usd * 10_000.0) as u64, max), theme::series_var(name.split(':').next().unwrap_or(""))))></span></span>
                         </td>
+                        <td class="cost">(currency.format(s.cost_usd))</td>
                     </tr>
                 }
             </tbody>
@@ -377,6 +420,8 @@ pub async fn dashboard_body(
         for w in &d.warnings {
             <div class="warn">"⚠ " (w.clone())</div>
         }
+
+        limits_panel(check: &d.limits, currency: d.currency)
 
         summary_cards(metric: metric, total: d.total, currency: d.currency, savings: &d.savings)
 

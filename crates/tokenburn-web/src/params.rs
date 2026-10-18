@@ -42,6 +42,18 @@ impl UsageParams {
     }
 }
 
+/// The Settings page's limit fields, as submitted.
+#[query_params(error = redirect("/settings"))]
+pub struct LimitParams {
+    /// Present when the limits form was submitted.
+    pub save: Option<String>,
+    pub limit_daily: Option<String>,
+    pub limit_weekly: Option<String>,
+    pub limit_monthly: Option<String>,
+    /// A checked checkbox sends `on`; unchecked sends nothing.
+    pub notify: Option<String>,
+}
+
 /// The currency to show: an explicit, valid `requested` code wins (with the user's own
 /// rate from `rates` if they set one), otherwise `saved`.
 pub fn pick_currency(

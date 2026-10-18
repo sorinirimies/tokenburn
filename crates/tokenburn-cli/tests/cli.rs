@@ -319,3 +319,70 @@ fn a_bad_input_price_is_rejected() {
     let o = tokenburn(&root, &["--input-price", "-3"]);
     assert!(!o.status.success());
 }
+
+/// A sandbox with one $0.25 turn happening right now.
+fn sandbox_today(name: &str) -> PathBuf {
+    let root = sandbox(name);
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+    let line = format!(
+        r#"{{"timestamp":"{now}","message":{{"usage":{{"input":1,"output":1,"cacheRead":0,"cacheWrite":0,"cost":{{"total":0.25}}}}}}}}"#
+    );
+    std::fs::write(root.join("sessions/--demo--/now.jsonl"), line).unwrap();
+    root
+}
+
+#[test]
+fn limits_with_none_set_says_how_to_set_one() {
+    let root = sandbox_today("limits-none");
+    let out = stdout(&tokenburn(&root, &["--limits"]));
+    assert!(
+        out.contains("No limits set") && out.contains("--limit-daily"),
+        "{out}"
+    );
+}
+
+#[test]
+fn limits_are_saved_and_show_their_progress() {
+    let root = sandbox_today("limits-set");
+    let o = tokenburn(
+        &root,
+        &[
+            "--limit-daily",
+            "0.2",
+            "--limit-weekly",
+            "100",
+            "--limit-monthly",
+            "0.3",
+        ],
+    );
+    assert!(o.status.success());
+    assert!(stdout(&o).contains("Saved limits"));
+    let saved = std::fs::read_to_string(root.join("config/settings.json")).unwrap();
+    assert!(saved.contains("0.2") && saved.contains("100"), "{saved}");
+
+    let out = stdout(&tokenburn(&root, &["--limits"]));
+    let line = |p: &str| {
+        out.lines()
+            .find(|l| l.starts_with(p))
+            .unwrap_or("")
+            .to_string()
+    };
+    assert!(
+        line("daily").contains("OVER") && line("daily").contains("125%"),
+        "{out}"
+    );
+    assert!(
+        line("weekly").contains("ok") && line("weekly").contains("0%"),
+        "{out}"
+    );
+    assert!(line("monthly").contains("WARNING"), "$0.25 of $0.30: {out}");
+    assert!(!out.contains("tool"), "no report table:\n{out}");
+
+    // 0 clears one; the rest stay.
+    tokenburn(&root, &["--limit-daily", "0"]);
+    let out = stdout(&tokenburn(&root, &["--limits", "--currency", "eur"]));
+    assert!(
+        !out.contains("daily") && out.contains("weekly") && out.contains('€'),
+        "{out}"
+    );
+}

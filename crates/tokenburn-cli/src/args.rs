@@ -52,9 +52,46 @@ pub struct Args {
     #[arg(long, value_name = "USD", value_parser = parse_price)]
     pub input_price: Option<f64>,
 
+    /// Show your daily / weekly / monthly spending limits and how much of each is used.
+    #[arg(long)]
+    pub limits: bool,
+
+    /// Set the daily spending limit in US dollars (0 clears it). Limits only inform
+    /// and alarm — nothing is ever blocked.
+    #[arg(long, value_name = "USD", value_parser = parse_limit)]
+    pub limit_daily: Option<f64>,
+
+    /// Set the weekly (Monday start) spending limit in US dollars (0 clears it).
+    #[arg(long, value_name = "USD", value_parser = parse_limit)]
+    pub limit_weekly: Option<f64>,
+
+    /// Set the monthly spending limit in US dollars (0 clears it).
+    #[arg(long, value_name = "USD", value_parser = parse_limit)]
+    pub limit_monthly: Option<f64>,
+
+    /// Keep running and raise a desktop notification when a limit is nearly
+    /// reached or exceeded, even with no TokenBurn window open. Optional check
+    /// interval in seconds (default 60).
+    #[arg(long, value_name = "SECS", num_args = 0..=1, default_missing_value = "60", value_parser = parse_secs)]
+    pub watch: Option<u64>,
+
     /// Print every supported currency and exit.
     #[arg(long)]
     pub list_currencies: bool,
+}
+
+fn parse_limit(s: &str) -> Result<f64, String> {
+    s.parse::<f64>()
+        .ok()
+        .filter(|p| p.is_finite() && *p >= 0.0)
+        .ok_or_else(|| format!("must be zero or a positive number (got '{s}')"))
+}
+
+fn parse_secs(s: &str) -> Result<u64, String> {
+    s.parse::<u64>()
+        .ok()
+        .filter(|n| *n >= 5)
+        .ok_or_else(|| format!("must be at least 5 seconds (got '{s}')"))
 }
 
 fn parse_price(s: &str) -> Result<f64, String> {
@@ -125,6 +162,25 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn limit_flags() {
+        let a = Args::parse_from(["tokenburn", "--limit-daily", "20", "--limit-monthly", "0"]);
+        assert_eq!(
+            (a.limit_daily, a.limit_weekly, a.limit_monthly),
+            (Some(20.0), None, Some(0.0))
+        );
+        assert!(Args::try_parse_from(["tokenburn", "--limit-daily", "-1"]).is_err());
+        assert!(Args::try_parse_from(["tokenburn", "--limit-daily", "x"]).is_err());
+        assert_eq!(Args::parse_from(["tokenburn", "--watch"]).watch, Some(60));
+        assert_eq!(
+            Args::parse_from(["tokenburn", "--watch", "30"]).watch,
+            Some(30)
+        );
+        assert!(Args::try_parse_from(["tokenburn", "--watch", "1"]).is_err());
+        assert!(Args::parse_from(["tokenburn", "--limits"]).limits);
+        assert!(Args::parse_from(["tokenburn"]).watch.is_none());
     }
 
     #[test]

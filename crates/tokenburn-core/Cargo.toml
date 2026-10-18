@@ -21,3 +21,4 @@ rusqlite   = { workspace = true }
 zstd       = { workspace = true }
 tracing    = { workspace = true }
 tempfile   = { workspace = true }   # atomic settings writes
+notify-rust = { workspace = true }  # desktop notifications (macOS, Linux, Windows)

@@ -56,3 +56,11 @@ async fn savings(cx: &Cx) -> Result<Json<tokenburn_core::Savings>> {
             .savings,
     ))
 }
+
+/// Spending limits and how much of each is used (US dollars): `/api/limits`.
+#[route(GET "/api/limits")]
+async fn limits() -> Result<Json<tokenburn_core::LimitCheck>> {
+    Ok(Json(
+        crate::data::check_limits(tokenburn_core::Currency::USD).await,
+    ))
+}

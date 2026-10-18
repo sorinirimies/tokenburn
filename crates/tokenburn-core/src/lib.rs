@@ -26,6 +26,12 @@ pub mod features;
 pub mod utils;
 
 pub use features::currency::{find as currency_by_code, Currency, CURRENCIES};
+pub use features::limits::{
+    alert_log_path, check as check_limits, check_at as check_limits_at, collect_rows as limit_rows,
+    notify as notify_alerts, pending as pending_alerts, run_check as run_limit_check, spent,
+    status_line as limit_status_line, statuses as limit_statuses, Alert, AlertLog, Level,
+    LimitCheck, LimitStatus, Limits, Period,
+};
 pub use features::report::{
     axis_label, axis_tokens, bucket_at, bucket_label_at, bucket_label_of, build_report, by_project,
     cards, chart_bucket, drill, drill_priced, nice_max, pie, project_key, projects_add_detail,

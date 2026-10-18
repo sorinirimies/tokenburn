@@ -60,6 +60,8 @@ fn boot() -> (TokenBurn, Task<Message>) {
     // remembered like --theme, otherwise the saved one is used.
     let settings = tokenburn_core::settings::load();
     state.input_price = settings.input_price();
+    state.limits = settings.limits.clone();
+    state.limit_inputs = tokenburn_gui::state::limit_texts(&state.limits);
     state.rates = settings.rates;
     match currency {
         Some(c) => state.set_currency(tokenburn_core::features::currency::index_of(c.code)),

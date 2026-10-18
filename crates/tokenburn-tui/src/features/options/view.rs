@@ -8,13 +8,14 @@ use ratatui::Frame;
 use tui_checkbox::Checkbox;
 use tui_slider::{Slider, SliderOrientation};
 
-use super::{OptionRow, Tab};
+use super::{OptionRow, Options, Tab};
 use crate::app::App;
 use crate::features::theme::UiTheme;
+use tokenburn_core::Period;
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let th = app.theme;
-    let popup = centered(area, 70, 16);
+    let popup = centered(area, 70, 22);
     frame.render_widget(Clear, popup);
 
     let block = Block::default()
@@ -69,7 +70,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     }
 
     frame.render_widget(
-        Paragraph::new("↑/↓ select · ␣/Enter toggle · ←/→ adjust · Esc close")
+        Paragraph::new("↑/↓ select · ␣/Enter toggle · ←/→ adjust (limits in US$ steps, never block) · Esc close")
             .style(Style::default().fg(th.muted)),
         rows[OptionRow::ALL.len()],
     );
@@ -157,7 +158,37 @@ fn render_row(app: &App, row: OptionRow, frame: &mut Frame, area: Rect) {
             body,
         ),
         OptionRow::TopN => slider(th, "Pie slices (top N)", &o.top_n, selected, frame, body),
+        OptionRow::NotifyLimits => checkbox(
+            th,
+            "Desktop notifications for limits",
+            o.limits.notify,
+            label_style,
+            frame,
+            body,
+        ),
+        OptionRow::LimitDaily | OptionRow::LimitWeekly | OptionRow::LimitMonthly => {
+            let period = Options::limit_period(row).unwrap_or(Period::Day);
+            let value = match o.limits.get(period) {
+                Some(usd) => app.currency.format(usd),
+                None => "off".to_string(),
+            };
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(format!("{:<9} limit  ", capitalised(period)), label_style),
+                    Span::styled(
+                        format!("‹ {value} ›"),
+                        Style::default().fg(if selected { th.accent } else { th.muted }),
+                    ),
+                ])),
+                body,
+            );
+        }
     }
+}
+
+fn capitalised(period: Period) -> String {
+    let l = period.label();
+    format!("{}{}", l[..1].to_uppercase(), &l[1..])
 }
 
 fn checkbox(

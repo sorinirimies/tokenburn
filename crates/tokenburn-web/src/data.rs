@@ -33,6 +33,8 @@ pub struct Dashboard {
     pub currency: Currency,
     /// Local wall-clock time the snapshot was taken (`HH:MM:SS`).
     pub updated_at: String,
+    /// Spending limits and how much of each is used (filled by [`load`]).
+    pub limits: tokenburn_core::LimitCheck,
 }
 
 /// Shape collected rows into a [`Dashboard`] scoped to `selection` (pure — no I/O).
@@ -67,6 +69,7 @@ pub fn build_dashboard(
         row_count: collected.rows.len(),
         updated_at: Local::now().format("%H:%M:%S").to_string(),
         warnings: collected.warnings,
+        limits: Default::default(),
     }
 }
 
@@ -83,13 +86,85 @@ pub async fn load(query: Query, selection: &Selection, currency: Currency) -> Da
                 warnings: vec![format!("loader failed: {e}")],
                 ..Default::default()
             });
-    build_dashboard(
+    let mut d = build_dashboard(
         query,
         collected,
         selection,
         currency,
         tokenburn_core::settings::input_price(),
-    )
+    );
+    d.limits = check_limits(currency).await;
+    d
+}
+
+/// Check the spending limits on a blocking thread, read-only: pages only *show* how
+/// much is used. The alarm (log + desktop notification) is the server's watcher.
+pub async fn check_limits(currency: Currency) -> tokenburn_core::LimitCheck {
+    tokio::task::spawn_blocking(move || {
+        tokenburn_core::run_limit_check(false, |v| currency.format(v))
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// How often the server looks for newly crossed limits, with or without a page open.
+pub const WATCH_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// One watcher pass: raise alerts nobody raised yet (logged, so the TUI, GUI and CLI
+/// stay quiet about them) as desktop notifications. Returns the alerts.
+pub async fn watch_limits() -> Vec<tokenburn_core::Alert> {
+    tokio::task::spawn_blocking(|| {
+        let currency = tokenburn_core::settings::currency();
+        tokenburn_core::run_limit_check(true, |v| currency.format(v)).alerts
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// The percent of a limit used, for a progress bar (0–100).
+pub fn bar_percent(s: &tokenburn_core::LimitStatus) -> u32 {
+    s.percent().min(100)
+}
+
+/// CSS class of a limit's state.
+pub fn level_class(level: tokenburn_core::Level) -> &'static str {
+    match level {
+        tokenburn_core::Level::Ok => "limit ok",
+        tokenburn_core::Level::Warn => "limit warn",
+        tokenburn_core::Level::Over => "limit over",
+    }
+}
+
+/// Apply submitted fields to `current`: empty or `0` clears a limit, anything that
+/// is not a non-negative number is an error (nothing changes).
+pub fn apply_limit_params(
+    current: &tokenburn_core::Limits,
+    p: &crate::params::LimitParams,
+) -> Result<tokenburn_core::Limits, String> {
+    use tokenburn_core::Period;
+    let mut out = current.clone();
+    for (period, text) in [
+        (Period::Day, &p.limit_daily),
+        (Period::Week, &p.limit_weekly),
+        (Period::Month, &p.limit_monthly),
+    ] {
+        let t = text.as_deref().unwrap_or("").trim();
+        if t.is_empty() {
+            out.set(period, None);
+        } else {
+            match t.parse::<f64>() {
+                Ok(v) if v.is_finite() && v >= 0.0 => out.set(period, Some(v)),
+                _ => {
+                    return Err(format!(
+                        "{} limit must be a number of US dollars (got '{t}')",
+                        period.label()
+                    ));
+                }
+            }
+        }
+    }
+    out.notify = p.notify.is_some();
+    Ok(out)
 }
 
 /// One printed row of the savings table.
@@ -491,5 +566,67 @@ mod tests {
         let d = build_dashboard(Query::default(), two_days(), &sel, Currency::USD, 10.0);
         assert_eq!(d.savings.sources.len(), 1);
         assert!((d.savings.usd - 9.0).abs() < 1e-9);
+    }
+
+    fn params(d: &str, w: &str, m: &str, notify: bool) -> crate::params::LimitParams {
+        crate::params::LimitParams {
+            save: Some("1".into()),
+            limit_daily: Some(d.into()),
+            limit_weekly: Some(w.into()),
+            limit_monthly: Some(m.into()),
+            notify: notify.then(|| "on".into()),
+        }
+    }
+
+    #[test]
+    fn limit_fields_parse_clear_and_reject() {
+        use tokenburn_core::{Limits, Period};
+        let cur = Limits::default();
+        let l = apply_limit_params(&cur, &params("20", " 100.5 ", "", true)).unwrap();
+        assert_eq!(
+            (
+                l.get(Period::Day),
+                l.get(Period::Week),
+                l.get(Period::Month)
+            ),
+            (Some(20.0), Some(100.5), None)
+        );
+        assert!(l.notify);
+        let l = apply_limit_params(&l, &params("0", "", "", false)).unwrap();
+        assert!(
+            l.is_empty() && !l.notify,
+            "0 and empty clear; unchecked = off"
+        );
+        for bad in ["abc", "-5", "inf", "NaN", "1e999"] {
+            let e = apply_limit_params(&cur, &params("1", bad, "", true)).unwrap_err();
+            assert!(e.contains("weekly limit must be a number"), "{bad}: {e}");
+        }
+        assert!(
+            apply_limit_params(&cur, &params("x", "", "", true))
+                .unwrap_err()
+                .contains("daily")
+        );
+    }
+
+    #[test]
+    fn bars_are_capped_and_levels_have_classes() {
+        use tokenburn_core::{Level, LimitStatus, Period};
+        let s = |spent: f64| LimitStatus {
+            period: Period::Day,
+            limit_usd: 10.0,
+            spent_usd: spent,
+            level: Level::Ok,
+        };
+        assert_eq!(
+            (
+                bar_percent(&s(0.0)),
+                bar_percent(&s(5.0)),
+                bar_percent(&s(99.0))
+            ),
+            (0, 50, 100)
+        );
+        assert_eq!(level_class(Level::Ok), "limit ok");
+        assert_eq!(level_class(Level::Warn), "limit warn");
+        assert_eq!(level_class(Level::Over), "limit over");
     }
 }

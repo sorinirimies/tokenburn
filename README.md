@@ -132,6 +132,17 @@ tokenburn --json           # machine-readable (always US dollars)
 
 Money is an **estimate**: saved tokens × your input price, `input_price_per_mtok` in `settings.json` (default `$3.00` per million). Shown in the TUI header and, with the `m` metric on *saved*, as a panel under the charts, as a GUI card + panel, a web card + table (JSON at `/api/savings`) and in the CLI with `tokenburn --savings [--input-price 15]`. In the GUI and web, the **chart** dropdown (tokens / cost / **saved**) plots savings per hour, day or month with the same bucket and window filters; that chart covers prompt cache and pi compaction per tool, while rtk (not attributable to a tool) is in the totals and the panel.
 
+### Limits and alarms
+
+Set a **daily, weekly (Monday start) and monthly spending limit** in US dollars. Limits never block anything: they show a progress bar (green → yellow at 80 % → red when exceeded) and raise a **desktop notification** (macOS, Linux, Windows) the first time a period reaches the warning level and again when it is exceeded. Each level alerts once per period, even with several front-ends running (they share `alerts.json` next to `settings.json`).
+
+* CLI: `tokenburn --limit-daily 20 --limit-weekly 100 --limit-monthly 300` (0 clears one), `tokenburn --limits` to see the state, and `tokenburn --watch [SECS]` to keep running and notify with no UI open.
+* TUI: a strip above the report, the terminal bell on a new alert, and the limit rows in the options popup (`o`: ←/→ steps $5 / $25 / $100).
+* GUI: bars and a dismissable banner under the toolbar; the fields are in Settings.
+* Web: bars above the figures, the form on the Settings page, `/api/limits`, and the server checks every 30 s and notifies while it runs.
+
+Only the cost the tools report counts (Zed logs none). `"limits": {"daily": 20, "weekly": null, "monthly": 300, "warn_at": 0.8, "notify": true}` in `settings.json` does the same by hand.
+
 **Metric.** The chart's *tokens / cost / saved* dropdown also picks what the headline cards show: token counts, spend (total, per turn, per 1M tokens) or savings (money, tokens, share, per source). The saved breakdown — and its per-interval list — appears only with *saved*, so it is out of the way by default.
 
 **Intervals.** Savings follow the same buckets as everything else — **minutely, hourly, daily or monthly** (`--minutely`, `--hourly`, … / the *bucket* filter / TUI keys `2`–`5`): the saved panel lists what was saved in each interval, rtk and pi compaction land in the minute they happened, and clicking a bar narrows the totals to that interval. A selected project keeps only its own cache savings, since rtk and compactions are not attributed to projects.

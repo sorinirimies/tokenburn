@@ -38,20 +38,19 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Option<Element<'_, Messag
                 .width(Length::FillPortion(2)),
         );
     }
-    head = head
-        .push(
-            text("total tokens")
-                .align_x(Horizontal::Right)
-                .width(Length::FillPortion(3)),
-        )
-        .push(
-            text("cost")
-                .align_x(Horizontal::Right)
-                .width(Length::FillPortion(3)),
-        );
+    head = head.push(
+        text("total tokens")
+            .align_x(Horizontal::Right)
+            .width(Length::FillPortion(3)),
+    );
     if !narrow {
         head = head.push(text("share").width(Length::FillPortion(4)));
     }
+    head = head.push(
+        text("cost")
+            .align_x(Horizontal::Right)
+            .width(Length::FillPortion(3)),
+    );
     let header = container(head.spacing(8).padding([6, 10])).style(container::rounded_box);
 
     let mut body = column![].spacing(2);
@@ -64,24 +63,23 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Option<Element<'_, Messag
                     .width(Length::FillPortion(2)),
             );
         }
-        line = line
-            .push(
-                text(thousands(s.total_tokens))
-                    .align_x(Horizontal::Right)
-                    .width(Length::FillPortion(3)),
-            )
-            .push(
-                text(state.currency.format(s.cost_usd))
-                    .align_x(Horizontal::Right)
-                    .width(Length::FillPortion(3))
-                    .style(text::success),
-            );
+        line = line.push(
+            text(thousands(s.total_tokens))
+                .align_x(Horizontal::Right)
+                .width(Length::FillPortion(3)),
+        );
         if !narrow {
             line = line.push(
                 container(progress_bar(0.0..=max_cost, s.cost_usd as f32).girth(10))
                     .width(Length::FillPortion(4)),
             );
         }
+        line = line.push(
+            text(state.currency.format(s.cost_usd))
+                .align_x(Horizontal::Right)
+                .width(Length::FillPortion(3))
+                .style(text::success),
+        );
         body =
             body.push(container(line.spacing(8).align_y(iced::Alignment::Center)).padding([4, 10]));
     }

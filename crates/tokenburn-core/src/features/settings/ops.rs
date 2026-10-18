@@ -90,6 +90,16 @@ pub fn save_currency(code: &str) -> Result<()> {
     save(&s)
 }
 
+/// Persist the spending limits.
+pub fn save_limits(limits: &crate::Limits) -> Result<()> {
+    let mut s = load();
+    if &s.limits == limits {
+        return Ok(());
+    }
+    s.limits = limits.clone();
+    save(&s)
+}
+
 /// Persist the theme at `index` (ignored when out of range).
 pub fn save_theme(index: usize) -> Result<()> {
     let Some(name) = THEME_NAMES.get(index) else {
