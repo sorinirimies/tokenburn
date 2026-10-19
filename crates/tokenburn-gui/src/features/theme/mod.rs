@@ -102,51 +102,6 @@ pub fn iced_theme(index: usize) -> Theme {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_theme_becomes_a_named_custom_iced_theme() {
-        for (i, name) in THEME_NAMES.iter().enumerate() {
-            let t = iced_theme(i);
-            assert_eq!(t.to_string(), *name);
-            let (r, g, b) = theme_by_index(i).accent.unit();
-            assert_eq!(t.palette().primary, Color::from_rgb(r, g, b), "{name}");
-        }
-    }
-
-    #[test]
-    fn choices_cover_every_theme_once_and_clamp() {
-        let all = ThemeChoice::all();
-        assert_eq!(all.len(), tokenburn_core::THEME_COUNT + 1);
-        assert_eq!(ThemeChoice::at(9999).index, all.len() - 2);
-        assert_eq!(all[0].to_string(), "System");
-        assert!(all[0].is_system() && !all[1].is_system());
-        assert_eq!(all[1].to_string(), "Default");
-    }
-
-    #[test]
-    fn selected_is_system_only_while_following() {
-        assert!(ThemeChoice::selected(5, true).is_system());
-        assert_eq!(ThemeChoice::selected(5, false), ThemeChoice::at(5));
-    }
-
-    #[test]
-    fn out_of_range_index_does_not_panic() {
-        let _ = iced_theme(usize::MAX);
-        let _ = chart_colors(usize::MAX);
-    }
-
-    #[test]
-    fn chart_colours_follow_the_theme() {
-        let (a, b) = (chart_colors(0), chart_colors(9));
-        assert_ne!(a.background, b.background);
-        assert_ne!(a.series, b.series);
-        assert_eq!(a.series.len(), 8);
-    }
-}
-
 /// Clearly outlined secondary button: accent-tinted fill and border, strong
 /// hover/press feedback, dimmed when disabled.
 pub fn action_button(
@@ -223,5 +178,50 @@ pub fn primary_button(
             radius: 7.0.into(),
         },
         ..Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_theme_becomes_a_named_custom_iced_theme() {
+        for (i, name) in THEME_NAMES.iter().enumerate() {
+            let t = iced_theme(i);
+            assert_eq!(t.to_string(), *name);
+            let (r, g, b) = theme_by_index(i).accent.unit();
+            assert_eq!(t.palette().primary, Color::from_rgb(r, g, b), "{name}");
+        }
+    }
+
+    #[test]
+    fn choices_cover_every_theme_once_and_clamp() {
+        let all = ThemeChoice::all();
+        assert_eq!(all.len(), tokenburn_core::THEME_COUNT + 1);
+        assert_eq!(ThemeChoice::at(9999).index, all.len() - 2);
+        assert_eq!(all[0].to_string(), "System");
+        assert!(all[0].is_system() && !all[1].is_system());
+        assert_eq!(all[1].to_string(), "Default");
+    }
+
+    #[test]
+    fn selected_is_system_only_while_following() {
+        assert!(ThemeChoice::selected(5, true).is_system());
+        assert_eq!(ThemeChoice::selected(5, false), ThemeChoice::at(5));
+    }
+
+    #[test]
+    fn out_of_range_index_does_not_panic() {
+        let _ = iced_theme(usize::MAX);
+        let _ = chart_colors(usize::MAX);
+    }
+
+    #[test]
+    fn chart_colours_follow_the_theme() {
+        let (a, b) = (chart_colors(0), chart_colors(9));
+        assert_ne!(a.background, b.background);
+        assert_ne!(a.series, b.series);
+        assert_eq!(a.series.len(), 8);
     }
 }
