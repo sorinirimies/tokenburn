@@ -4,6 +4,25 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.4](https://github.com/sorinirimies/tokenburn/compare/v0.3.3...v0.3.4) — 2026-10-19
+
+### ✨ Features
+
+- Caption the drop-downs; clearer web labels; update lockfile ([`ad119f0`](https://github.com/sorinirimies/tokenburn/commit/ad119f01447ca7efbdc4f1b7b0fe9b737bca240c))
+
+### 🐛 Bug fixes
+
+- **scripts:** Bump_version rejects versions equal to or older than the current one ([`87512c1`](https://github.com/sorinirimies/tokenburn/commit/87512c173013460b7ff812c48588f73daead162c))
+
+### 🔄 CI and release
+
+- Ignore unmaintained zbus stack advisories in cargo-deny ([`d993a60`](https://github.com/sorinirimies/tokenburn/commit/d993a60a7b03bb02b8dc2b841d1cb18c13fdcf96))
+
+### 💄 Style
+
+- Move button styles above test module (clippy) ([`a3ca74c`](https://github.com/sorinirimies/tokenburn/commit/a3ca74cbf18c0207cbd07c5ef9d020efb3f35582))
+- Highlight action buttons in GUI and web ([`1730d2c`](https://github.com/sorinirimies/tokenburn/commit/1730d2cf5b3060a907d8bf72e2a0b3ece5ed6c31))
+
 ## [0.3.3](https://github.com/sorinirimies/tokenburn/compare/v0.3.2...v0.3.3) — 2026-10-18
 
 ### 📦 Dependencies
