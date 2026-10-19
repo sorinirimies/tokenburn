@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.5](https://github.com/sorinirimies/tokenburn/compare/v0.3.4...v0.3.5) — 2026-10-19
+
+### 🔄 CI and release
+
+- Retry rustup install on transient network failures ([`1d8f0b4`](https://github.com/sorinirimies/tokenburn/commit/1d8f0b467185f14219c0d773324477fbdc378713))
+
 ## [0.3.4](https://github.com/sorinirimies/tokenburn/compare/v0.3.3...v0.3.4) — 2026-10-19
 
 ### ✨ Features
