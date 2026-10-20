@@ -4,16 +4,15 @@ name: Nightly Dependency Update
 #   update   `cargo update` (compatible bumps only); continue only if Cargo.lock changed
 #   verify   fmt + clippy + tests on Linux, and tests on macOS and Windows
 #   msrv     the declared minimum Rust version still builds
-#   release  commit the lockfile, bump the patch version, tag vX.Y.Z, push to main
-#            and start release.yml (all platforms + crates.io)
-# No changes => nothing is committed, tagged or released.
+#   release  commit the lockfile and push it to main. The version is NOT bumped and
+#            nothing is tagged or released.
+# No changes => nothing is committed.
 #
 # This host runs on its own: there is deliberately NO mirroring to Gitea. Gitea has
 # its own nightly (.gitea/workflows/deps-update.yml). If the two histories ever
 # diverge, force-push whichever one you want to keep.
 #
-# Secrets (all optional): GH_PAT — a PAT lets the tag push itself trigger release.yml
-# and bypass branch protection; without it the release is dispatched explicitly.
+# Secrets (all optional): GH_PAT — a PAT lets the push bypass branch protection.
 
 on:
   schedule:
@@ -21,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Bump the patch version, tag and release when dependencies changed"
+        description: "Commit and push the lockfile when dependencies changed (no version bump)"
         type: boolean
         default: true
 
@@ -161,14 +160,12 @@ jobs:
       - name: cargo check (MSRV)
         run: cargo check --locked --workspace --exclude tokenburn-web --all-targets
 
-  # ── 4. Commit, bump, tag, push, release ─────────────────────────────────────
+  # ── 4. Commit and push the lockfile ─────────────────────────────────────
   release:
-    name: Commit, tag and release
+    name: Commit lockfile
     needs: [update, verify, msrv]
     if: needs.update.outputs.changed == 'true' && (github.event_name == 'schedule' || inputs.release)
     runs-on: ubuntu-latest
-    env:
-      HAS_PAT: ${{ secrets.GH_PAT != '' }}
     steps:
       # Re-sync to the REAL tip of main: it may have moved while the checks ran.
       - uses: actions/checkout@v7
@@ -192,32 +189,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # `nu` is the crate name; install-action has no "nushell" tool (it fell back to
-      # a binstall of a crate called `nushell`, which does not exist). Use the setup
-      # action for nushell and install-action for git-cliff. Both are best-effort:
-      # the next step falls back to `cargo install` if either is unavailable.
-      - name: Install nushell
-        continue-on-error: true
-        uses: hustcer/setup-nu@v3
-        with:
-          version: "0.111.0"
-
-      - name: Install git-cliff
-        continue-on-error: true
-        uses: taiki-e/install-action@v2
-        with:
-          tool: git-cliff
-
-      - name: Ensure nu + git-cliff are installed
-        run: |
-          command -v nu >/dev/null || {
-            V=0.116.1
-            curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-            sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || { mkdir -p $HOME/.cargo/bin; install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu; }
-            nu --version
-          }
-          command -v git-cliff >/dev/null || cargo install git-cliff --locked
-
       - name: Commit updated Cargo.lock
         run: |
           git config user.name  "github-actions[bot]"
@@ -225,37 +196,8 @@ jobs:
           git add Cargo.lock
           git commit -m "chore(deps): nightly cargo update $(date -u '+%Y-%m-%d')"
 
-      - name: Compute next patch version
-        id: version
-        run: |
-          current=$(nu scripts/version.nu)
-          IFS='.' read -r major minor patch <<< "$current"
-          next="$major.$minor.$((patch + 1))"
-          # Never collide with an existing tag.
-          while git rev-parse -q --verify "refs/tags/v$next" >/dev/null; do
-            patch=$((patch + 1))
-            next="$major.$minor.$((patch + 1))"
-          done
-          echo "next=$next" >> "$GITHUB_OUTPUT"
-          echo "Releasing $current -> $next"
-
-      - name: Bump version, changelog, commit and tag
-        run: nu scripts/bump_version.nu --yes --skip-checks ${{ steps.version.outputs.next }}
-
-      # Fail loudly (no `|| true`): a failed push must show as a failed run.
-      - name: Push release commit and tag
-        run: |
-          git push origin HEAD:main
-          git push origin "v${{ steps.version.outputs.next }}"
+      # Lockfile only: no version bump, no tag, no release. Fail loudly on a failed push.
+      - name: Push lockfile update
+        run: git push origin HEAD:main
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      # Pushes authored by GITHUB_TOKEN do NOT trigger other workflows (GitHub's
-      # anti-recursion guard), so without a PAT dispatch release.yml explicitly.
-      # With a PAT the tag push already started it — dispatching again would
-      # only produce a duplicate run.
-      - name: Trigger release workflow for the new tag
-        if: env.HAS_PAT != 'true'
-        run: gh workflow run release.yml --repo "${{ github.repository }}" -f tag="v${{ steps.version.outputs.next }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
