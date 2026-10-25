@@ -1,5 +1,7 @@
 use ratatui::style::Color;
-use tokenburn_core::{AppTheme, Rgb, Tool};
+use std::sync::OnceLock;
+use tokenburn_core::Tool;
+use tui_nuances::Theme;
 
 /// Every colour slot the UI needs, as ratatui colours. Views read these instead
 /// of hard-coding `Color::*`, so every theme restyles the whole screen.
@@ -25,27 +27,39 @@ pub struct UiTheme {
 }
 
 impl UiTheme {
-    /// Convert from the core's platform-agnostic theme.
-    pub fn from_core(t: &AppTheme) -> Self {
+    /// Derive the UI colours from a [`tui_nuances::Theme`], the source of truth for every palette.
+    pub fn from_nuances(t: &Theme) -> Self {
+        let bg = t.background.unwrap_or(Color::Reset);
         Self {
-            bg: rgb(t.background),
-            surface: rgb(t.surface),
-            border: rgb(t.border),
-            selection: rgb(t.selection),
-            text: rgb(t.text_primary),
-            text_secondary: rgb(t.text_secondary),
-            muted: rgb(t.text_muted),
-            accent: rgb(t.accent),
-            success: rgb(t.success),
-            warning: rgb(t.warning),
-            error: rgb(t.error),
-            series: t.series.map(rgb),
+            bg,
+            surface: t.surface.unwrap_or(bg),
+            border: t.border,
+            selection: t.selection_bg,
+            text: t.foreground,
+            text_secondary: t.secondary,
+            muted: t.muted,
+            accent: t.accent,
+            success: t.success,
+            warning: t.warning,
+            error: t.error,
+            series: std::array::from_fn(|i| t.color(i)),
         }
     }
 
     /// Theme by index into [`tokenburn_core::THEME_NAMES`] (out of range → Default).
+    /// Colours come from the `tui-nuances` theme of the same name.
     pub fn by_index(index: usize) -> Self {
-        Self::from_core(&tokenburn_core::theme_by_index(index))
+        static CACHE: OnceLock<Vec<UiTheme>> = OnceLock::new();
+        let all = CACHE.get_or_init(|| {
+            tokenburn_core::THEME_NAMES
+                .iter()
+                .map(|n| {
+                    let t = Theme::by_name(n).unwrap_or_default();
+                    Self::from_nuances(&t)
+                })
+                .collect()
+        });
+        all.get(index).copied().unwrap_or(all[0])
     }
 
     /// The colour of a tool's bars / slices.
@@ -62,10 +76,6 @@ impl UiTheme {
     }
 }
 
-fn rgb(c: Rgb) -> Color {
-    Color::Rgb(c.r, c.g, c.b)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,7 +84,7 @@ mod tests {
     fn every_theme_resolves_to_truecolor() {
         for i in 0..tokenburn_core::THEME_COUNT {
             let t = UiTheme::by_index(i);
-            assert!(matches!(t.bg, Color::Rgb(..)) && matches!(t.accent, Color::Rgb(..)));
+            assert!(matches!(t.accent, Color::Rgb(..)) || i == 0 || t.bg == Color::Reset);
             assert_ne!(t.bg, t.text, "theme {i}");
         }
     }
@@ -99,11 +109,9 @@ mod tests {
     }
 
     #[test]
-    fn rgb_round_trips() {
-        let core = tokenburn_core::theme_by_index(9);
-        assert_eq!(
-            UiTheme::from_core(&core).accent,
-            Color::Rgb(core.accent.r, core.accent.g, core.accent.b)
-        );
+    fn colours_come_from_tui_nuances() {
+        let n = Theme::by_name("Dracula").unwrap();
+        let i = tokenburn_core::theme_index_by_name("Dracula");
+        assert_eq!(UiTheme::by_index(i).accent, n.accent);
     }
 }

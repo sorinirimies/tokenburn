@@ -5113,6 +5113,7 @@ dependencies = [
  "ratatui",
  "tokenburn-core",
  "tui-checkbox",
+ "tui-nuances",
  "tui-piechart",
  "tui-slider",
  "tui-spinner",
@@ -5714,6 +5715,15 @@ name = "tui-checkbox"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c58a691322aaf315585a8c6e4d61aff48900071fc00a5c1e5f84f5494fc59be"
+dependencies = [
+ "ratatui",
+]
+
+[[package]]
+name = "tui-nuances"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7e70d3c50ce49a2389f0c5a4265b8fc4350e815df0895fced2035f76829ad4"
 dependencies = [
  "ratatui",
 ]

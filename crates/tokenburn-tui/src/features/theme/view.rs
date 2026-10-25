@@ -5,7 +5,6 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState};
 use ratatui::Frame;
-use tokenburn_core::theme_by_index;
 
 use crate::app::App;
 use crate::features::options::view::centered;
@@ -20,17 +19,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             // A swatch of the theme's own accent + first series colours; "System"
             // previews the preset it currently resolves to.
             let preview = if i == 0 {
-                theme_by_index(tokenburn_core::current_system_theme_index())
+                super::UiTheme::by_index(tokenburn_core::current_system_theme_index())
             } else {
-                theme_by_index(i - 1)
+                super::UiTheme::by_index(i - 1)
             };
             let active = i == app.picker_index();
-            let swatch = |c: tokenburn_core::Rgb| {
-                Span::styled(
-                    "■",
-                    Style::default().fg(ratatui::style::Color::Rgb(c.r, c.g, c.b)),
-                )
-            };
+            let swatch = |c: ratatui::style::Color| Span::styled("■", Style::default().fg(c));
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{:>2} ", i + 1), Style::default().fg(t.muted)),
                 swatch(preview.accent),

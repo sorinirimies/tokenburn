@@ -50,6 +50,7 @@ tui-spinner  = "0.4"     # animated spinner (loading indicator)
 tui-checkbox = "0.4"     # options checkboxes
 tui-slider   = "0.3"     # options sliders
 tui-piechart = "1.0"     # cost / token share pie chart
+tui-nuances = "0.1.9"  # shared themes
 
 # Web (Topcoat)
 topcoat      = "0.10"
