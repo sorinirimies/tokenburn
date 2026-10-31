@@ -4,11 +4,22 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## [0.3.6](https://github.com/sorinirimies/tokenburn/compare/v0.3.5...v0.3.6) — 2026-10-20
+## [0.3.7](https://github.com/sorinirimies/tokenburn/compare/v0.3.5...v0.3.7) — 2026-10-31
+
+### ✨ Features
+
+- **tui:** Take theme colours from tui-nuances ([`f81cdbc`](https://github.com/sorinirimies/tokenburn/commit/f81cdbcf1590c01e129431967cb8fa7346ffa2b3))
 
 ### 📦 Dependencies
 
+- Bump tokio and zstd to patch RUSTSEC advisories ([`4e55941`](https://github.com/sorinirimies/tokenburn/commit/4e55941cae1cd22fa66731391dc31ee04e76c955))
+- Bump tui-nuances to 0.1.10 ([`ac80a81`](https://github.com/sorinirimies/tokenburn/commit/ac80a814a21d907a410f4cf0354bc03c5861bb6b))
 - Nightly cargo update 2026-10-20 ([`39bfa71`](https://github.com/sorinirimies/tokenburn/commit/39bfa71fc1e8e5747fd2f00e10ed99605b67e859))
+
+### 🔄 CI and release
+
+- Nightly merges lockfile-only updates; bump + release only when a Cargo.toml requirement changes ([`32f189f`](https://github.com/sorinirimies/tokenburn/commit/32f189fa14417c940d5fa8134b09da013ceda18e))
+- Nightly dependency update merges Cargo.lock only, no version bump or release ([`acd6cee`](https://github.com/sorinirimies/tokenburn/commit/acd6cee4bf9b16e7d2f82352b95d5ed5f9bce031))
 
 ## [0.3.5](https://github.com/sorinirimies/tokenburn/compare/v0.3.4...v0.3.5) — 2026-10-19
 
