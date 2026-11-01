@@ -74,7 +74,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     ));
     // Responsive: when the line overflows (leaving room for the menu keys where there
     // is a menu), shed the least useful chips first: theme, window, view.
-    let room_title = (area.width as usize).saturating_sub(2 + if narrow { 0 } else { 6 });
+    let room_title =
+        (area.width as usize).saturating_sub(2 + if narrow { 0 } else { COMPACT_MENU_W });
     for drop in [" theme:", " window:", " win:", " view:"] {
         let w: usize = title_spans.iter().map(|s| s.width()).sum();
         if w <= room_title {
@@ -159,6 +160,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
 }
+
+/// Width of the compact labelled menu (` o  Settings  i  About`); chips are shed until it fits.
+const COMPACT_MENU_W: usize = 22;
 
 fn chip(th: UiTheme, label: &str, value: &str) -> Span<'static> {
     Span::styled(format!(" {label}:{value} "), Style::default().fg(th.accent))
