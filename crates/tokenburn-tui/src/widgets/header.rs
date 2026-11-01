@@ -72,6 +72,16 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         if app.is_loading { " loading…" } else { "" },
         Style::default().fg(th.muted),
     ));
+    // Responsive: when the line overflows (leaving room for the menu keys where there
+    // is a menu), shed the least useful chips first: theme, window, view.
+    let room_title = (area.width as usize).saturating_sub(2 + if narrow { 0 } else { 6 });
+    for drop in [" theme:", " window:", " win:", " view:"] {
+        let w: usize = title_spans.iter().map(|s| s.width()).sum();
+        if w <= room_title {
+            break;
+        }
+        title_spans.retain(|s| !s.content.starts_with(drop));
+    }
     let title = Line::from(title_spans);
     let title_w = title.width();
 
@@ -116,21 +126,37 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(vec![title, totals]).block(block), area);
     // The menu, top right of the title line: settings and about (not on narrow
     // terminals, where the status bar lists the keys).
-    const MENU_W: usize = 22;
-    if !class.is_narrow() && title_w + MENU_W + 2 <= area.width as usize {
-        let menu = Line::from(vec![
-            Span::styled(" o ", Style::default().fg(th.bg).bg(th.accent)),
-            Span::styled(" Settings ", Style::default().fg(th.text)),
-            Span::styled(" i ", Style::default().fg(th.bg).bg(th.accent)),
-            Span::styled(" About ", Style::default().fg(th.text)),
-        ]);
-        let inner = Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: 1,
-        };
-        frame.render_widget(Paragraph::new(menu).alignment(Alignment::Right), inner);
+    // Responsive: the full menu when it fits, else a compact one (no padding), else
+    // just the two keys, else nothing.
+    if !class.is_narrow() {
+        let key =
+            |k: &str| Span::styled(format!(" {k} "), Style::default().fg(th.bg).bg(th.accent));
+        let label = |l: &str| Span::styled(l.to_string(), Style::default().fg(th.text));
+        let candidates = [
+            vec![key("o"), label(" Settings "), key("i"), label(" About ")],
+            vec![
+                key("o"),
+                label(" Settings"),
+                Span::raw(" "),
+                key("i"),
+                label(" About"),
+            ],
+            vec![key("o"), Span::raw(" "), key("i")],
+        ];
+        let room = (area.width as usize).saturating_sub(2);
+        let fit = candidates
+            .into_iter()
+            .map(Line::from)
+            .find(|m| title_w + m.width() <= room);
+        if let Some(menu) = fit {
+            let inner = Rect {
+                x: area.x + 1,
+                y: area.y + 1,
+                width: area.width.saturating_sub(2),
+                height: 1,
+            };
+            frame.render_widget(Paragraph::new(menu).alignment(Alignment::Right), inner);
+        }
     }
 }
 

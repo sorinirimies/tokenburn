@@ -937,4 +937,23 @@ mod tests {
         assert_eq!(app.limits.get(tokenburn_core::Period::Day), Some(5.0));
         assert!(!app.options.limits_dirty);
     }
+
+    /// Regression: the header and the report keep their essentials (currency chip,
+    /// cost figure) at every width, instead of being clipped mid-chip.
+    #[test]
+    fn every_width_keeps_the_currency_chip_and_the_cost() {
+        for w in MIN_WIDTH..=200 {
+            let mut app = app_with_rows();
+            let out = draw_at(&mut app, w, 30);
+            assert!(
+                out.contains("cur:USD"),
+                "currency clipped at {w} cols:\n{out}"
+            );
+            assert!(
+                out.contains("cost $0.50"),
+                "cost card missing at {w}:\n{out}"
+            );
+            assert!(out.contains("TOTAL"), "report missing at {w}:\n{out}");
+        }
+    }
 }
