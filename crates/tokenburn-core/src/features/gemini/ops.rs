@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{modified_since, num_any, read_lines, split_paths, walk_ext};
+use crate::utils::parallel::par_map;
 use crate::utils::time::parse_ts;
 
 /// `$GEMINI_DATA_DIR` (list) or `~/.gemini/tmp`.
@@ -49,15 +50,15 @@ pub(crate) fn collect_chats_from(
     let files = walk_ext(root, &["json", "jsonl"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !file.components().any(|c| c.as_os_str() == "chats") || !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(tool, root, &file, start));
-        rows.extend(parsed.iter().cloned());
+        let sig = Sig::of(&file, 0)?;
+        Some(CACHE.get_or_parse(&file, sig, || parse_file(tool, root, &file, start)))
+    });
+    for p in parsed.into_iter().flatten() {
+        rows.extend(p.iter().cloned());
     }
     CACHE.prune_under(root, &live);
     Ok(rows)

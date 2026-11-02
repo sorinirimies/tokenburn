@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{modified_since, num, split_paths};
+use crate::utils::parallel::par_map;
 
 /// VS Code family editors whose `User/globalStorage` may hold the extensions' data.
 const EDITORS: [&str; 6] = [
@@ -97,14 +98,12 @@ pub fn collect_cline_from(tool: Tool, root: &Path, start: DateTime<Utc>) -> Resu
     files.sort();
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = CACHE.get_or_parse(&file, sig, || {
+        let sig = Sig::of(&file, 0)?;
+        Some(CACHE.get_or_parse(&file, sig, || {
             let id = file
                 .parent()
                 .and_then(Path::file_name)
@@ -113,8 +112,10 @@ pub fn collect_cline_from(tool: Tool, root: &Path, start: DateTime<Utc>) -> Resu
             std::fs::read_to_string(&file)
                 .map(|text| parse_task(tool, &text, &id))
                 .unwrap_or_default()
-        });
-        rows.extend(parsed.iter().filter(|r| r.ts >= start).cloned());
+        }))
+    });
+    for p in parsed.into_iter().flatten() {
+        rows.extend(p.iter().filter(|r| r.ts >= start).cloned());
     }
     CACHE.prune_under(&tasks, &live);
     Ok(rows)

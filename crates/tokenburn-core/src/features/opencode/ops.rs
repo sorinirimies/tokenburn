@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{dir_basename, env_path, modified_since, num, walk_ext};
+use crate::utils::parallel::par_map;
 
 /// OpenCode data directories: `$OPENCODE_DATA_DIR`, else
 /// `$XDG_DATA_HOME/opencode` and `~/.local/share/opencode` (OpenCode uses the XDG
@@ -95,17 +96,15 @@ fn collect_dir(root: &Path, start: DateTime<Utc>, seen: &mut HashSet<String>) ->
     let messages = root.join("storage/message");
     let files = walk_ext(&messages, &["json"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
         let id = file
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
+        let sig = Sig::of(&file, 0)?;
         let parsed = FILE_CACHE.get_or_parse(&file, sig, || {
             let session = file
                 .parent()
@@ -116,6 +115,10 @@ fn collect_dir(root: &Path, start: DateTime<Utc>, seen: &mut HashSet<String>) ->
                 .ok()
                 .and_then(|text| parse_message(&text, &session, None))
         });
+        Some((id, parsed))
+    });
+    // `seen` is order-dependent, so de-duplicate after the parallel parse.
+    for (id, parsed) in parsed.into_iter().flatten() {
         if let Some(row) = parsed.as_ref().clone().filter(|_| seen.insert(id)) {
             rows.push(row);
         }

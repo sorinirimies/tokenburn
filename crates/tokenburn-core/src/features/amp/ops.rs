@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{env_path, modified_since, num, num_any, walk_ext};
+use crate::utils::parallel::par_map;
 use crate::utils::time::parse_ts;
 
 /// `$AMP_DATA_DIR` or `~/.local/share/amp` (plus the platform data dir).
@@ -48,14 +49,12 @@ pub fn collect_amp_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
     let files = walk_ext(&threads, &["json"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
     let mut rows = Vec::new();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = CACHE.get_or_parse(&file, sig, || {
+        let sig = Sig::of(&file, 0)?;
+        Some(CACHE.get_or_parse(&file, sig, || {
             let id = file
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
@@ -63,8 +62,10 @@ pub fn collect_amp_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
             std::fs::read_to_string(&file)
                 .map(|text| parse_thread(&text, &id))
                 .unwrap_or_default()
-        });
-        rows.extend(parsed.iter().filter(|r| r.ts >= start).cloned());
+        }))
+    });
+    for p in parsed.into_iter().flatten() {
+        rows.extend(p.iter().filter(|r| r.ts >= start).cloned());
     }
     CACHE.prune_under(&threads, &live);
     Ok(rows)
