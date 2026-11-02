@@ -4,22 +4,39 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## [0.3.7](https://github.com/sorinirimies/tokenburn/compare/v0.3.5...v0.3.7) — 2026-10-31
+## [0.3.11](https://github.com/sorinirimies/tokenburn/compare/v0.3.5...v0.3.11) — 2026-11-02
 
 ### ✨ Features
 
 - **tui:** Take theme colours from tui-nuances ([`f81cdbc`](https://github.com/sorinirimies/tokenburn/commit/f81cdbcf1590c01e129431967cb8fa7346ffa2b3))
 
+### 🐛 Bug fixes
+
+- **tui:** Reserve room for the labelled menu so long titles shed chips first ([`cedc82e`](https://github.com/sorinirimies/tokenburn/commit/cedc82e7cddd60e49e8b983e51013b9adb4af88b))
+- **tui:** Make the header responsive so the menu and chips never clip ([`d12a39a`](https://github.com/sorinirimies/tokenburn/commit/d12a39a789546d58087c50a872df104c710e2256))
+
+### 📚 Documentation
+
+- Drop the per-repo agent rules skill; the shared skills cover it ([`b96e820`](https://github.com/sorinirimies/tokenburn/commit/b96e82045b4b9660769b0b03b9607f8de1194b7d))
+- This repo's agent rules as a project skill in .agents/skills ([`ad27827`](https://github.com/sorinirimies/tokenburn/commit/ad27827271bf9822ea722bf3eebc2ee83204b5a8))
+- Move agent rules from .zed/rules.md to AGENTS.md ([`c60e01a`](https://github.com/sorinirimies/tokenburn/commit/c60e01a8af6a8bcd46f5f040631e44f53e3a6bda))
+
 ### 📦 Dependencies
 
+- Nightly cargo update 2026-11-02 ([`57f6d80`](https://github.com/sorinirimies/tokenburn/commit/57f6d80411ad8a914b9157c6ce7d86f80d9d064c))
 - Bump tokio and zstd to patch RUSTSEC advisories ([`4e55941`](https://github.com/sorinirimies/tokenburn/commit/4e55941cae1cd22fa66731391dc31ee04e76c955))
 - Bump tui-nuances to 0.1.10 ([`ac80a81`](https://github.com/sorinirimies/tokenburn/commit/ac80a814a21d907a410f4cf0354bc03c5861bb6b))
 - Nightly cargo update 2026-10-20 ([`39bfa71`](https://github.com/sorinirimies/tokenburn/commit/39bfa71fc1e8e5747fd2f00e10ed99605b67e859))
 
 ### 🔄 CI and release
 
+- **fuzz:** Fall back to an older nightly when the latest cannot build ([`dbe4913`](https://github.com/sorinirimies/tokenburn/commit/dbe4913bda9ff47647129b6e7ddd4560799dda3c))
 - Nightly merges lockfile-only updates; bump + release only when a Cargo.toml requirement changes ([`32f189f`](https://github.com/sorinirimies/tokenburn/commit/32f189fa14417c940d5fa8134b09da013ceda18e))
 - Nightly dependency update merges Cargo.lock only, no version bump or release ([`acd6cee`](https://github.com/sorinirimies/tokenburn/commit/acd6cee4bf9b16e7d2f82352b95d5ed5f9bce031))
+
+### 🔧 Chores
+
+- Remove AGENTS.md ([`b82065d`](https://github.com/sorinirimies/tokenburn/commit/b82065df0d932d045b5e5356c8d1bb99c8e3d5e2))
 
 ## [0.3.5](https://github.com/sorinirimies/tokenburn/compare/v0.3.4...v0.3.5) — 2026-10-19
 
