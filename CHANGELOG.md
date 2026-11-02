@@ -4,6 +4,13 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.13](https://github.com/sorinirimies/tokenburn/compare/v0.3.12...v0.3.13) — 2026-11-02
+
+### ✨ Features
+
+- **core:** Count pi-squeeze's savings log as a pi savings source ([`5ea0f7c`](https://github.com/sorinirimies/tokenburn/commit/5ea0f7cba2a91ca17dd3f864714a0a53dfc9344a))
+- **core:** Count pi-context-diet's savings log as a pi savings source ([`a8e65b5`](https://github.com/sorinirimies/tokenburn/commit/a8e65b5e2862faa690db376a14de133386b35277))
+
 ## [0.3.12](https://github.com/sorinirimies/tokenburn/compare/v0.3.11...v0.3.12) — 2026-11-02
 
 ### ⚡ Performance
