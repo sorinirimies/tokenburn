@@ -112,7 +112,7 @@ tokenburn --json           # machine-readable (always US dollars)
 
 ## Shared by every front-end
 
-**Always up to date.** Nothing to press — each front-end re-reads the logs itself, and only re-parses the files that changed, so leaving one open is cheap.
+**Always up to date.** Nothing to press — each front-end re-reads the logs itself, and only re-parses the files that changed, so leaving one open is cheap. A cold start spreads the transcripts over every CPU core (and each tool on its own thread); after that a refresh takes tens of milliseconds, so leaving one open is cheap. `just bench all` measures both.
 
 | | Refresh |
 |---|---|
