@@ -33,7 +33,7 @@ pub fn lines(app: &App) -> Vec<Line<'static>> {
     out.push(Line::raw(""));
     if sv.is_empty() {
         out.push(Line::from(Span::styled(
-            "Nothing saved in this view: no cache hits, rtk history or pi compactions.",
+            "Nothing saved in this view: no cache hits, rtk history, pi compactions or pi plugin savings.",
             text,
         )));
         return out;

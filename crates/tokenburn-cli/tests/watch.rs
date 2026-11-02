@@ -24,6 +24,7 @@ fn a_watch_pass_alerts_once_per_level() {
         "TOKENBURN_CONTEXT_DIET_LOG",
         root.join("context-diet.jsonl"),
     );
+    std::env::set_var("TOKENBURN_SQUEEZE_LOG", root.join("squeeze.jsonl"));
     std::env::set_var("TOKENBURN_CONFIG_DIR", root.join("config"));
 
     let eur = tokenburn_core::currency_by_code("USD").unwrap();

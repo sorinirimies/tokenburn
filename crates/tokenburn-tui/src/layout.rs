@@ -761,6 +761,8 @@ mod tests {
         let mut app = saved(app_with_savings());
         app.external.diet_tokens = 2_000_000;
         app.external.diet_requests = 12;
+        app.external.squeeze_tokens = 300_000;
+        app.external.squeeze_outputs = 5;
         app.rebuild();
         let out = draw_at(&mut app, 130, 40);
         for needle in [
@@ -772,6 +774,8 @@ mod tests {
             "2 compactions",
             "pi context-diet",
             "12 requests",
+            "pi squeeze",
+            "5 outputs",
             "total",
             "$9.00",
             "of what it would have cost",

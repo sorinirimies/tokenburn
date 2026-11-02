@@ -1,6 +1,6 @@
 //! What you *saved*, next to what you spent.
 //!
-//! Four sources, all read from local data (no network):
+//! Five sources, all read from local data (no network):
 //!
 //! * **Prompt cache** — tokens the provider served from its cache
 //!   (`cache_read`) instead of billing at the full input price. Every tool that
@@ -12,7 +12,10 @@
 //!   session log records the context size before it ([`crate::features::pi`]).
 //! * **pi context-diet** — [pi-context-diet](https://github.com/sorinirimies/pi-context-diet)
 //!   elides stale tool results and logs the tokens each request left out
-//!   (see [`context_diet`]).
+//!   (see [`pi_logs`]).
+//! * **pi squeeze** — [pi-squeeze](https://github.com/sorinirimies/pi-squeeze)
+//!   compacts bash output and logs the tokens each output lost, like rtk (see
+//!   [`pi_logs`]).
 //!
 //! The money figure prices every saved token at the user's input price
 //! ([`Settings::input_price_per_mtok`](crate::Settings)); prompt-cache hits are
@@ -21,8 +24,8 @@
 //! (mostly would-be cache reads) with [`CACHE_READ_PRICE_RATIO`] of it. All of
 //! it is an *estimate*.
 
-pub mod context_diet;
 pub mod ops;
+pub mod pi_logs;
 pub mod rtk;
 pub mod types;
 

@@ -24,6 +24,7 @@ fn the_check_reads_saved_limits_and_only_the_live_one_logs_alerts() {
         "TOKENBURN_CONTEXT_DIET_LOG",
         root.join("context-diet.jsonl"),
     );
+    std::env::set_var("TOKENBURN_SQUEEZE_LOG", root.join("squeeze.jsonl"));
     std::env::set_var("TOKENBURN_CONFIG_DIR", root.join("config"));
 
     // Nothing saved: nothing to check.

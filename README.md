@@ -130,8 +130,9 @@ tokenburn --json           # machine-readable (always US dollars)
 | [rtk](https://github.com/rtk-ai/rtk) | tokens rtk filtered out of command output, from its `history.db` (override: `TOKENBURN_RTK_DB`) | `tool=all` only — rtk cannot say which agent ran a command |
 | pi compaction | context removed by pi's compaction entries (size before vs. the next turn) | pi |
 | [pi context-diet](https://github.com/sorinirimies/pi-context-diet) | tokens it kept out of each request, from `~/.pi/agent/context-diet-savings.jsonl` (override: `TOKENBURN_CONTEXT_DIET_LOG`), credited at 10 % of the input price — they would mostly have been cache reads | pi |
+| [pi squeeze](https://github.com/sorinirimies/pi-squeeze) | tokens it cut from bash output, from `~/.pi/agent/squeeze-savings.jsonl` (override: `TOKENBURN_SQUEEZE_LOG`), credited at the full input price like rtk (rtk logs its own part when it ran the command) | pi |
 
-Money is an **estimate**: saved tokens × your input price, `input_price_per_mtok` in `settings.json` (default `$3.00` per million). Shown in the TUI header and, with the `m` metric on *saved*, as a panel under the charts, as a GUI card + panel, a web card + table (JSON at `/api/savings`) and in the CLI with `tokenburn --savings [--input-price 15]`. In the GUI and web, the **chart** dropdown (tokens / cost / **saved**) plots savings per hour, day or month with the same bucket and window filters; that chart covers prompt cache, pi compaction and pi context-diet per tool, while rtk (not attributable to a tool) is in the totals and the panel.
+Money is an **estimate**: saved tokens × your input price, `input_price_per_mtok` in `settings.json` (default `$3.00` per million). Shown in the TUI header and, with the `m` metric on *saved*, as a panel under the charts, as a GUI card + panel, a web card + table (JSON at `/api/savings`) and in the CLI with `tokenburn --savings [--input-price 15]`. In the GUI and web, the **chart** dropdown (tokens / cost / **saved**) plots savings per hour, day or month with the same bucket and window filters; that chart covers prompt cache, pi compaction, pi context-diet and pi squeeze per tool, while rtk (not attributable to a tool) is in the totals and the panel.
 
 ### Limits and alarms
 
@@ -146,7 +147,7 @@ Only the cost the tools report counts (Zed logs none). `"limits": {"daily": 20, 
 
 **Metric.** The chart's *tokens / cost / saved* dropdown also picks what the headline cards show: token counts, spend (total, per turn, per 1M tokens) or savings (money, tokens, share, per source). The saved breakdown — and its per-interval list — appears only with *saved*, so it is out of the way by default.
 
-**Intervals.** Savings follow the same buckets as everything else — **minutely, hourly, daily or monthly** (`--minutely`, `--hourly`, … / the *bucket* filter / TUI keys `2`–`5`): the saved panel lists what was saved in each interval, rtk, pi compaction and pi context-diet land in the minute they happened, and clicking a bar narrows the totals to that interval. A selected project keeps only its own cache savings, since rtk, compactions and context-diet are not attributed to projects.
+**Intervals.** Savings follow the same buckets as everything else — **minutely, hourly, daily or monthly** (`--minutely`, `--hourly`, … / the *bucket* filter / TUI keys `2`–`5`): the saved panel lists what was saved in each interval, rtk, pi compaction, pi context-diet and pi squeeze land in the minute they happened, and clicking a bar narrows the totals to that interval. A selected project keeps only its own cache savings, since rtk, compactions, context-diet and squeeze are not attributed to projects.
 
 **Charts.** Tokens or cost over time (one stacked bar per hour, day or month, one colour per tool) and a donut of the biggest projects. In the GUI and web dashboard they animate in, and clicking drills down:
 
@@ -230,7 +231,7 @@ No `python3` or `zstd` binary needed — sqlite and zstd are bundled.
 | `o` | options: auto-refresh and interval, bar chart, pie chart, pie slices |
 | `T`, `[`, `]` | theme picker / previous / next |
 | `C` | currency picker (preview as you move, saved) |
-| `v` | jump to the saved metric: prompt cache, rtk, pi compaction, pi context-diet |
+| `v` | jump to the saved metric: prompt cache, rtk, pi compaction, pi context-diet, pi squeeze |
 | `↑/↓`, `j/k`, `g/G` | scroll |
 | `q`, `Esc` | quit (`Esc` first clears an active filter) |
 

@@ -18,16 +18,19 @@ pub enum SavingsSource {
     /// pi context compaction.
     PiCompaction,
     /// pi-context-diet eliding stale tool results.
-    ContextDiet,
+    PiContextDiet,
+    /// pi-squeeze compacting bash output.
+    PiSqueeze,
 }
 
 impl SavingsSource {
     /// Every source, in display order.
-    pub const ALL: [SavingsSource; 4] = [
+    pub const ALL: [SavingsSource; 5] = [
         SavingsSource::PromptCache,
         SavingsSource::Rtk,
         SavingsSource::PiCompaction,
-        SavingsSource::ContextDiet,
+        SavingsSource::PiContextDiet,
+        SavingsSource::PiSqueeze,
     ];
 
     /// Short machine name.
@@ -36,7 +39,8 @@ impl SavingsSource {
             SavingsSource::PromptCache => "prompt_cache",
             SavingsSource::Rtk => "rtk",
             SavingsSource::PiCompaction => "pi_compaction",
-            SavingsSource::ContextDiet => "context_diet",
+            SavingsSource::PiContextDiet => "pi_context_diet",
+            SavingsSource::PiSqueeze => "pi_squeeze",
         }
     }
 
@@ -46,7 +50,8 @@ impl SavingsSource {
             SavingsSource::PromptCache => "Prompt cache",
             SavingsSource::Rtk => "rtk",
             SavingsSource::PiCompaction => "pi compaction",
-            SavingsSource::ContextDiet => "pi context-diet",
+            SavingsSource::PiContextDiet => "pi context-diet",
+            SavingsSource::PiSqueeze => "pi squeeze",
         }
     }
 
@@ -56,14 +61,15 @@ impl SavingsSource {
             SavingsSource::PromptCache => "turns",
             SavingsSource::Rtk => "commands",
             SavingsSource::PiCompaction => "compactions",
-            SavingsSource::ContextDiet => "requests",
+            SavingsSource::PiContextDiet => "requests",
+            SavingsSource::PiSqueeze => "outputs",
         }
     }
 }
 
 /// Savings reported by sources that are not part of the usage rows: rtk's
-/// history database, pi's compaction entries and pi-context-diet's savings log.
-/// Filled in by [`crate::collect`].
+/// history database, pi's compaction entries and the savings logs of
+/// pi-context-diet and pi-squeeze. Filled in by [`crate::collect`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalSavings {
     /// Tokens rtk removed from command output.
@@ -91,6 +97,15 @@ pub struct ExternalSavings {
     /// pi-context-diet's savings per minute: `(minute, tokens, requests)`.
     #[serde(skip)]
     pub diet_events: Vec<(chrono::DateTime<chrono::Utc>, u64, u64)>,
+    /// Estimated tokens pi-squeeze cut from bash output.
+    #[serde(default)]
+    pub squeeze_tokens: u64,
+    /// Bash outputs pi-squeeze shortened.
+    #[serde(default)]
+    pub squeeze_outputs: u64,
+    /// pi-squeeze's savings per minute: `(minute, tokens, outputs)`.
+    #[serde(skip)]
+    pub squeeze_events: Vec<(chrono::DateTime<chrono::Utc>, u64, u64)>,
 }
 
 impl ExternalSavings {
@@ -115,6 +130,12 @@ impl ExternalSavings {
             .filter(|(ts, _, _)| keep(*ts))
             .copied()
             .collect();
+        let squeeze_events: Vec<_> = self
+            .squeeze_events
+            .iter()
+            .filter(|(ts, _, _)| keep(*ts))
+            .copied()
+            .collect();
         ExternalSavings {
             rtk_tokens: rtk_events.iter().map(|e| e.1).sum(),
             rtk_commands: rtk_events.iter().map(|e| e.2).sum(),
@@ -122,9 +143,12 @@ impl ExternalSavings {
             compactions: compaction_events.len() as u64,
             diet_tokens: diet_events.iter().map(|e| e.1).sum(),
             diet_requests: diet_events.iter().map(|e| e.2).sum(),
+            squeeze_tokens: squeeze_events.iter().map(|e| e.1).sum(),
+            squeeze_outputs: squeeze_events.iter().map(|e| e.2).sum(),
             rtk_events,
             compaction_events,
             diet_events,
+            squeeze_events,
         }
     }
 }
@@ -200,12 +224,19 @@ impl Savings {
             events: external.compactions,
         };
         let diet = SourceSavings {
-            source: SavingsSource::ContextDiet,
+            source: SavingsSource::PiContextDiet,
             tokens: external.diet_tokens,
             usd: diet_usd(external.diet_tokens, price),
             events: external.diet_requests,
         };
-        Self::from_sources([cache, rtk, compaction, diet])
+        // Like rtk: bash output cut before the model ever saw it, at the full input price.
+        let squeeze = SourceSavings {
+            source: SavingsSource::PiSqueeze,
+            tokens: external.squeeze_tokens,
+            usd: usd_for(external.squeeze_tokens, price),
+            events: external.squeeze_outputs,
+        };
+        Self::from_sources([cache, rtk, compaction, diet, squeeze])
     }
 
     /// `true` when nothing was saved.
@@ -296,11 +327,28 @@ mod tests {
         let names: Vec<_> = SavingsSource::ALL.iter().map(|s| s.as_str()).collect();
         assert_eq!(
             names,
-            ["prompt_cache", "rtk", "pi_compaction", "context_diet"]
+            [
+                "prompt_cache",
+                "rtk",
+                "pi_compaction",
+                "pi_context_diet",
+                "pi_squeeze"
+            ]
         );
         assert_eq!(
-            serde_json::to_string(&SavingsSource::ContextDiet).unwrap(),
-            "\"context_diet\""
+            serde_json::to_string(&SavingsSource::PiSqueeze).unwrap(),
+            "\"pi_squeeze\""
+        );
+        assert_eq!(
+            (
+                SavingsSource::PiSqueeze.label(),
+                SavingsSource::PiSqueeze.event_noun()
+            ),
+            ("pi squeeze", "outputs")
+        );
+        assert_eq!(
+            serde_json::to_string(&SavingsSource::PiContextDiet).unwrap(),
+            "\"pi_context_diet\""
         );
         assert_eq!(
             serde_json::to_string(&SavingsSource::PiCompaction).unwrap(),

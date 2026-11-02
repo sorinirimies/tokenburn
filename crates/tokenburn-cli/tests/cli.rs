@@ -43,6 +43,7 @@ fn tokenburn(root: &Path, args: &[&str]) -> Output {
             "TOKENBURN_CONTEXT_DIET_LOG",
             root.join("context-diet.jsonl"),
         )
+        .env("TOKENBURN_SQUEEZE_LOG", root.join("squeeze.jsonl"))
         .env("TOKENBURN_CONFIG_DIR", root.join("config"));
     for v in [
         "PI_CODING_AGENT_SESSION_DIR",
@@ -172,7 +173,7 @@ fn unknown_currencies_are_rejected_and_the_list_is_printed() {
 }
 
 /// An rtk-shaped history database in the sandbox, plus a cached pi turn, a compaction
-/// and a pi-context-diet savings log.
+/// and the savings logs of pi-context-diet and pi-squeeze.
 fn add_savings_sources(root: &Path) {
     let db = rusqlite::Connection::open(root.join("rtk.db")).unwrap();
     db.execute_batch(
@@ -191,6 +192,11 @@ fn add_savings_sources(root: &Path) {
     std::fs::write(
         root.join("context-diet.jsonl"),
         "{\"ts\":\"2026-05-02T12:00:00Z\",\"tokens\":1000000}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("squeeze.jsonl"),
+        "{\"ts\":\"2026-05-02T13:00:00Z\",\"tokens\":100000,\"kind\":\"build\"}\n",
     )
     .unwrap();
 }
@@ -217,6 +223,10 @@ fn savings_are_listed_per_source_with_a_total() {
         out.contains("pi context-diet") && out.contains("(1 requests)"),
         "{out}"
     );
+    assert!(
+        out.contains("pi squeeze") && out.contains("(1 outputs)"),
+        "{out}"
+    );
     assert!(out.contains("of what it would have cost"), "{out}");
 }
 
@@ -239,11 +249,17 @@ fn savings_json_wraps_the_report_and_is_opt_in() {
         .collect();
     assert_eq!(
         names,
-        ["prompt_cache", "rtk", "pi_compaction", "context_diet"]
+        [
+            "prompt_cache",
+            "rtk",
+            "pi_compaction",
+            "pi_context_diet",
+            "pi_squeeze"
+        ]
     );
-    assert_eq!(v["savings"]["tokens"].as_u64().unwrap(), 4_000_000);
-    // $29 as before, plus 1M context-diet tokens × $10 × 0.1.
-    assert!((v["savings"]["usd"].as_f64().unwrap() - 30.0).abs() < 1e-9);
+    assert_eq!(v["savings"]["tokens"].as_u64().unwrap(), 4_100_000);
+    // $29 as before, plus 1M context-diet tokens × $10 × 0.1 and 100k squeezed × $10.
+    assert!((v["savings"]["usd"].as_f64().unwrap() - 31.0).abs() < 1e-9);
 }
 
 #[test]
@@ -271,24 +287,25 @@ fn bucketed_reports_also_list_savings_per_interval() {
             && daily[0].contains("$10.00")
             && daily[0].contains("rtk $10.00")
     );
-    assert!(daily[1].contains("2026-05-02") && daily[1].contains("$20.00"));
+    assert!(daily[1].contains("2026-05-02") && daily[1].contains("$21.00"));
     assert!(daily[1].contains("pi context-diet $1.00"), "{daily:?}");
+    assert!(daily[1].contains("pi squeeze $1.00"), "{daily:?}");
     assert!(daily[1].contains("Prompt cache $9.00") && daily[1].contains("pi compaction $10.00"));
 
-    // A compaction at 11:00, a cached turn at 10:00 and a context-diet request at
-    // 12:00 are different minutes and hours.
+    // A cached turn at 10:00, a compaction at 11:00, a context-diet request at 12:00
+    // and a squeezed output at 13:00 are different minutes and hours.
     for flag in ["--minutely", "--hourly"] {
         let rows = intervals(&run(flag));
         assert_eq!(
             rows.len(),
-            4,
-            "{flag}: rtk, cache, compaction, context-diet: {rows:?}"
+            5,
+            "{flag}: rtk, cache, compaction, context-diet, squeeze: {rows:?}"
         );
     }
 
     let monthly = intervals(&run("--monthly"));
     assert_eq!(monthly.len(), 1);
-    assert!(monthly[0].contains("2026-05") && monthly[0].contains("$30.00"));
+    assert!(monthly[0].contains("2026-05") && monthly[0].contains("$31.00"));
 
     let total = stdout(&tokenburn(
         &root,
@@ -308,7 +325,7 @@ fn savings_json_carries_by_bucket_only_for_bucketed_reports() {
     let b = v["savings"]["by_bucket"].as_array().unwrap();
     assert_eq!(b.len(), 2);
     assert_eq!(b[0]["label"], "2026-05-01");
-    assert!((b[1]["savings"]["usd"].as_f64().unwrap() - 20.0).abs() < 1e-9);
+    assert!((b[1]["savings"]["usd"].as_f64().unwrap() - 21.0).abs() < 1e-9);
     let v = json(&["--all", "--json", "-s"]);
     assert!(v["savings"].get("by_bucket").is_none());
 }

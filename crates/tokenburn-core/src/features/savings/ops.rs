@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use super::types::{
     diet_usd, sane_price, usd_for, BucketSavings, ExternalSavings, SavingsSource, SourceSavings,
 };
-use super::{context_diet, rtk, CACHE_READ_PRICE_RATIO};
+use super::{pi_logs, rtk, CACHE_READ_PRICE_RATIO};
 use crate::features::pi;
 use crate::features::report::{bucket_label_at, bucket_label_of, chart_bucket, Query};
 use crate::features::usage::{Row, Tool};
@@ -78,7 +78,7 @@ pub fn savings_by_bucket(
     for (ts, _) in &external.compaction_events {
         labels.insert(bucket_label_at(*ts, bucket));
     }
-    for (ts, ..) in &external.diet_events {
+    for (ts, ..) in external.diet_events.iter().chain(&external.squeeze_events) {
         labels.insert(bucket_label_at(*ts, bucket));
     }
     for l in &labels {
@@ -102,7 +102,8 @@ pub fn savings_by_bucket(
 /// Read the sources that live outside the usage rows, for `tool` since `start`.
 ///
 /// rtk cannot say which agent ran a command, so its saving is only counted when
-/// every tool is selected; pi's compactions belong to pi.
+/// every tool is selected; pi's compactions and the pi plugins' logs
+/// (context-diet, squeeze) belong to pi.
 pub fn collect_external(tool: ToolFilter, start: DateTime<Utc>) -> ExternalSavings {
     let mut ext = ExternalSavings::default();
     if tool == ToolFilter::All {
@@ -121,10 +122,14 @@ pub fn collect_external(tool: ToolFilter, start: DateTime<Utc>) -> ExternalSavin
             .filter(|c| c.saved() > 0)
             .map(|c| (c.ts, c.saved()))
             .collect();
-        let diet = context_diet::events_since(start);
+        let diet = pi_logs::CONTEXT_DIET.events_since(start);
         ext.diet_tokens = diet.iter().map(|e| e.1).sum();
         ext.diet_requests = diet.iter().map(|e| e.2).sum();
         ext.diet_events = diet;
+        let squeeze = pi_logs::SQUEEZE.events_since(start);
+        ext.squeeze_tokens = squeeze.iter().map(|e| e.1).sum();
+        ext.squeeze_outputs = squeeze.iter().map(|e| e.2).sum();
+        ext.squeeze_events = squeeze;
     }
     ext
 }
@@ -180,23 +185,29 @@ mod tests {
             compactions: 2,
             diet_tokens: 1_000_000,
             diet_requests: 9,
+            squeeze_tokens: 1_000_000,
+            squeeze_outputs: 5,
             ..Default::default()
         };
         let sv = Savings::build(&[row(1_000_000)], &ext, 3.0);
-        assert_eq!(sv.sources.len(), 4);
-        assert_eq!(sv.tokens, 5_000_000);
+        assert_eq!(sv.sources.len(), 5);
+        assert_eq!(sv.tokens, 6_000_000);
         // 1M×3×0.9 + 2M×3 + 1M×3 + 1M×3×0.1 (context-diet, priced as cache reads)
+        // + 1M×3 (squeeze, at the full input price like rtk)
         assert!(
-            (sv.usd - (2.7 + 6.0 + 3.0 + 0.3)).abs() < 1e-9,
+            (sv.usd - (2.7 + 6.0 + 3.0 + 0.3 + 3.0)).abs() < 1e-9,
             "{}",
             sv.usd
         );
         let rtk = sv.of(SavingsSource::Rtk).unwrap();
         assert_eq!((rtk.tokens, rtk.events), (2_000_000, 40));
-        let diet = sv.of(SavingsSource::ContextDiet).unwrap();
+        let diet = sv.of(SavingsSource::PiContextDiet).unwrap();
         assert_eq!((diet.tokens, diet.events), (1_000_000, 9));
+        let squeeze = sv.of(SavingsSource::PiSqueeze).unwrap();
+        assert_eq!((squeeze.tokens, squeeze.events), (1_000_000, 5));
         assert_eq!(sv.sources[0].source, SavingsSource::PromptCache);
-        assert_eq!(sv.sources[3].source, SavingsSource::ContextDiet);
+        assert_eq!(sv.sources[3].source, SavingsSource::PiContextDiet);
+        assert_eq!(sv.sources[4].source, SavingsSource::PiSqueeze);
     }
 
     #[test]
@@ -206,25 +217,36 @@ mod tests {
     }
 
     #[test]
-    fn context_diet_counts_for_pi_and_all_tools_only() {
-        // The env var is process-global: keep this the only test that sets it.
+    fn pi_plugin_logs_count_for_pi_and_all_tools_only() {
+        // The env vars are process-global: keep this the only test that sets them.
         let d = tempfile::tempdir().unwrap();
-        let log = d.path().join(super::context_diet::LOG_FILE);
+        let diet_log = d.path().join(super::pi_logs::CONTEXT_DIET.file);
         std::fs::write(
-            &log,
+            &diet_log,
             "{\"ts\":\"2026-05-01T10:00:00Z\",\"tokens\":500}\n{\"ts\":\"2026-05-01T10:00:30Z\",\"tokens\":20}\n",
         )
         .unwrap();
-        std::env::set_var("TOKENBURN_CONTEXT_DIET_LOG", &log);
+        let squeeze_log = d.path().join(super::pi_logs::SQUEEZE.file);
+        std::fs::write(
+            &squeeze_log,
+            "{\"ts\":\"2026-05-01T11:00:00Z\",\"tokens\":300,\"kind\":\"build\"}\n",
+        )
+        .unwrap();
+        std::env::set_var(super::pi_logs::CONTEXT_DIET.env_override, &diet_log);
+        std::env::set_var(super::pi_logs::SQUEEZE.env_override, &squeeze_log);
         let start = "2026-01-01T00:00:00Z".parse().unwrap();
         for tool in [ToolFilter::All, ToolFilter::Only(Tool::Pi)] {
             let e = collect_external(tool, start);
             assert_eq!((e.diet_tokens, e.diet_requests), (520, 2), "{tool:?}");
             assert_eq!(e.diet_events.len(), 1, "one minute");
+            assert_eq!((e.squeeze_tokens, e.squeeze_outputs), (300, 1), "{tool:?}");
+            assert_eq!(e.squeeze_events.len(), 1);
         }
         let claude = collect_external(ToolFilter::Only(Tool::Claude), start);
         assert_eq!((claude.diet_tokens, claude.diet_requests), (0, 0));
-        std::env::remove_var("TOKENBURN_CONTEXT_DIET_LOG");
+        assert_eq!((claude.squeeze_tokens, claude.squeeze_outputs), (0, 0));
+        std::env::remove_var(super::pi_logs::CONTEXT_DIET.env_override);
+        std::env::remove_var(super::pi_logs::SQUEEZE.env_override);
     }
 
     #[test]
@@ -281,6 +303,9 @@ mod tests {
             diet_tokens: 1_000_000,
             diet_requests: 4,
             diet_events: vec![(at("2026-05-02T09:00:00Z"), 1_000_000, 4)],
+            squeeze_tokens: 100_000,
+            squeeze_outputs: 2,
+            squeeze_events: vec![(at("2026-05-02T09:00:00Z"), 100_000, 2)],
         }
     }
 
@@ -301,6 +326,11 @@ mod tests {
         );
         let may2 = ext().within(|ts| ts == at("2026-05-02T09:00:00Z"));
         assert_eq!((may2.diet_tokens, may2.diet_requests), (1_000_000, 4));
+        assert_eq!((may2.squeeze_tokens, may2.squeeze_outputs), (100_000, 2));
+        assert_eq!(
+            (first_minute.squeeze_tokens, first_minute.squeeze_outputs),
+            (0, 0)
+        );
         let none = ext().within(|_| false);
         assert_eq!(none, ExternalSavings::default());
         assert_eq!(ext().within(|_| true), ext());
@@ -330,15 +360,20 @@ mod tests {
         assert_eq!(m[1].savings.sources.len(), 1, "rtk only");
 
         // A day: May 1 holds both rtk events and the cache; May 2 the compaction
-        // ($10) and the context-diet requests (1M × $10 × 0.1).
+        // ($10), the context-diet requests (1M × $10 × 0.1) and the squeezed
+        // outputs (100k × $10).
         let d = savings_by_bucket(&rows, &q(Bucket::Day), &ext(), 10.0);
         assert_eq!(d.len(), 2);
         assert_eq!(d[0].savings.of(SavingsSource::Rtk).unwrap().events, 3);
-        assert!((d[1].savings.usd - 11.0).abs() < 1e-9);
+        assert!((d[1].savings.usd - 12.0).abs() < 1e-9);
         assert_eq!(
-            d[1].savings.of(SavingsSource::ContextDiet).unwrap().events,
+            d[1].savings
+                .of(SavingsSource::PiContextDiet)
+                .unwrap()
+                .events,
             4
         );
+        assert_eq!(d[1].savings.of(SavingsSource::PiSqueeze).unwrap().events, 2);
 
         // A month: everything, and it adds up to the whole.
         let mo = savings_by_bucket(&rows, &q(Bucket::Month), &ext(), 10.0);

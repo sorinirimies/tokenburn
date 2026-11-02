@@ -170,7 +170,7 @@ pub fn time_series(rows: &[Row], query: &Query) -> TimeSeries {
 pub struct SavedInput<'a> {
     /// US dollars per million input tokens.
     pub price: f64,
-    /// The sources outside the usage rows; pi compactions and context-diet are charted under pi.
+    /// The sources outside the usage rows; pi compactions and the pi plugins' logs are charted under pi.
     pub external: Option<&'a crate::ExternalSavings>,
 }
 
@@ -216,6 +216,14 @@ pub fn time_series_priced(rows: &[Row], query: &Query, saved: &SavedInput) -> Ti
         if let Some(slot) = map.get_mut(&label(ts, bucket)) {
             slot.2[Tool::Pi.series_index()] +=
                 crate::features::savings::context_diet_usd(*tokens, saved.price);
+        }
+    }
+    let squeeze = saved.external.map_or(&[][..], |e| &e.squeeze_events[..]);
+    for (ts, tokens, _) in squeeze {
+        let ts = ts.with_timezone(&Local);
+        if let Some(slot) = map.get_mut(&label(ts, bucket)) {
+            slot.2[Tool::Pi.series_index()] +=
+                crate::features::savings::avoided_usd(*tokens, saved.price);
         }
     }
 
