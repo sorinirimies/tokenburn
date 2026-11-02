@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::features::usage::{Row, Tool};
 use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{modified_since, num_f, read_lines, walk_ext};
+use crate::utils::parallel::par_map;
 use crate::utils::time::parse_ts;
 
 /// Where pi stores its sessions, honouring pi's own overrides.
@@ -58,16 +59,16 @@ pub fn collect_pi_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
     let files = walk_ext(root, &["jsonl"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
 
-    let mut rows = Vec::new();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(&file));
-        rows.extend(parsed.iter().filter(|r| r.ts >= start).cloned());
+        let sig = Sig::of(&file, 0)?;
+        Some(CACHE.get_or_parse(&file, sig, || parse_file(&file)))
+    });
+    let mut rows = Vec::new();
+    for p in parsed.into_iter().flatten() {
+        rows.extend(p.iter().filter(|r| r.ts >= start).cloned());
     }
     CACHE.prune_under(root, &live);
     Ok(rows)
@@ -181,16 +182,16 @@ pub fn collect_compactions(start: DateTime<Utc>) -> Vec<Compaction> {
 pub fn collect_compactions_from(root: &Path, start: DateTime<Utc>) -> Vec<Compaction> {
     let files = walk_ext(root, &["jsonl"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
-    let mut out = Vec::new();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = COMPACTION_CACHE.get_or_parse(&file, sig, || parse_compactions(&file));
-        out.extend(parsed.iter().filter(|c| c.ts >= start).copied());
+        let sig = Sig::of(&file, 0)?;
+        Some(COMPACTION_CACHE.get_or_parse(&file, sig, || parse_compactions(&file)))
+    });
+    let mut out = Vec::new();
+    for p in parsed.into_iter().flatten() {
+        out.extend(p.iter().filter(|c| c.ts >= start).copied());
     }
     COMPACTION_CACHE.prune_under(root, &live);
     out

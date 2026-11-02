@@ -205,6 +205,22 @@ mod tests {
         );
     }
 
+    /// Regression: a long version label once pushed "Settings / About" out of the
+    /// header; chips must be shed instead, at every width where the menu is shown.
+    #[test]
+    fn menu_labels_survive_every_wide_width() {
+        let mut app = app_with_rows();
+        for width in 100..=160u16 {
+            let mut term = Terminal::new(TestBackend::new(width, 30)).unwrap();
+            term.draw(|f| render(&mut app, f)).unwrap();
+            let out = term.backend().to_string();
+            assert!(
+                out.contains("Settings") && out.contains("About"),
+                "width {width}:\n{out}"
+            );
+        }
+    }
+
     /// Two projects under one tool: the breakdown has something to add.
     fn two_projects_app() -> App {
         let mut app = day_app();

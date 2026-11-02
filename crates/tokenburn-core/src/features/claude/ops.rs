@@ -12,6 +12,7 @@ use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{
     env_path, modified_since, num, num_f, project_from_dirname, read_lines, split_paths, walk_ext,
 };
+use crate::utils::parallel::par_map;
 use crate::utils::time::parse_ts;
 
 /// Claude Code config roots (each holds a `projects/` directory).
@@ -91,14 +92,14 @@ static CACHE: LazyLock<FileCache<Vec<(String, Cand)>>> = LazyLock::new(FileCache
 fn scan(projects: &Path, start: DateTime<Utc>, all: &mut HashMap<String, Cand>) {
     let files = walk_ext(projects, &["jsonl"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = CACHE.get_or_parse(&file, sig, || parse_file(projects, &file));
+        let sig = Sig::of(&file, 0)?;
+        Some(CACHE.get_or_parse(&file, sig, || parse_file(projects, &file)))
+    });
+    for parsed in parsed.into_iter().flatten() {
         for (key, cand) in parsed.iter() {
             insert_best(all, key.clone(), cand.clone());
         }

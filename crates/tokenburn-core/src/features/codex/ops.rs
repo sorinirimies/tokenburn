@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::features::usage::{Row, Tool};
 use crate::utils::cache::{FileCache, Sig};
 use crate::utils::files::{dir_basename, env_path, modified_since, num, read_lines, walk_ext};
+use crate::utils::parallel::par_map;
 use crate::utils::time::parse_ts;
 
 /// `$CODEX_HOME` (default `~/.codex`) → its `sessions/` and `archived_sessions/`.
@@ -32,20 +33,20 @@ static CACHE: LazyLock<FileCache<Vec<Row>>> = LazyLock::new(FileCache::default);
 pub fn collect_codex_from(root: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
     let files = walk_ext(root, &["jsonl"]);
     let live: HashSet<PathBuf> = files.iter().cloned().collect();
-    let mut rows = Vec::new();
-    for file in files {
+    let parsed = par_map(files, |file| {
         if !modified_since(&file, start) {
-            continue;
+            return None;
         }
-        let Some(sig) = Sig::of(&file, 0) else {
-            continue;
-        };
-        let parsed = CACHE.get_or_parse(&file, sig, || {
+        let sig = Sig::of(&file, 0)?;
+        Some(CACHE.get_or_parse(&file, sig, || {
             read_lines(&file)
                 .map(|lines| parse_session(lines, &file))
                 .unwrap_or_default()
-        });
-        rows.extend(parsed.iter().cloned());
+        }))
+    });
+    let mut rows = Vec::new();
+    for p in parsed.into_iter().flatten() {
+        rows.extend(p.iter().cloned());
     }
     CACHE.prune_under(root, &live);
     Ok(rows)
