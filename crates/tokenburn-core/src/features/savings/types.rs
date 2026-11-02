@@ -17,14 +17,17 @@ pub enum SavingsSource {
     Rtk,
     /// pi context compaction.
     PiCompaction,
+    /// pi-context-diet eliding stale tool results.
+    ContextDiet,
 }
 
 impl SavingsSource {
     /// Every source, in display order.
-    pub const ALL: [SavingsSource; 3] = [
+    pub const ALL: [SavingsSource; 4] = [
         SavingsSource::PromptCache,
         SavingsSource::Rtk,
         SavingsSource::PiCompaction,
+        SavingsSource::ContextDiet,
     ];
 
     /// Short machine name.
@@ -33,6 +36,7 @@ impl SavingsSource {
             SavingsSource::PromptCache => "prompt_cache",
             SavingsSource::Rtk => "rtk",
             SavingsSource::PiCompaction => "pi_compaction",
+            SavingsSource::ContextDiet => "context_diet",
         }
     }
 
@@ -42,6 +46,7 @@ impl SavingsSource {
             SavingsSource::PromptCache => "Prompt cache",
             SavingsSource::Rtk => "rtk",
             SavingsSource::PiCompaction => "pi compaction",
+            SavingsSource::ContextDiet => "pi context-diet",
         }
     }
 
@@ -51,12 +56,14 @@ impl SavingsSource {
             SavingsSource::PromptCache => "turns",
             SavingsSource::Rtk => "commands",
             SavingsSource::PiCompaction => "compactions",
+            SavingsSource::ContextDiet => "requests",
         }
     }
 }
 
 /// Savings reported by sources that are not part of the usage rows: rtk's
-/// history database and pi's compaction entries. Filled in by [`crate::collect`].
+/// history database, pi's compaction entries and pi-context-diet's savings log.
+/// Filled in by [`crate::collect`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalSavings {
     /// Tokens rtk removed from command output.
@@ -75,6 +82,15 @@ pub struct ExternalSavings {
     /// savings-over-time chart.
     #[serde(skip)]
     pub compaction_events: Vec<(chrono::DateTime<chrono::Utc>, u64)>,
+    /// Estimated tokens pi-context-diet kept out of requests.
+    #[serde(default)]
+    pub diet_tokens: u64,
+    /// Requests pi-context-diet trimmed.
+    #[serde(default)]
+    pub diet_requests: u64,
+    /// pi-context-diet's savings per minute: `(minute, tokens, requests)`.
+    #[serde(skip)]
+    pub diet_events: Vec<(chrono::DateTime<chrono::Utc>, u64, u64)>,
 }
 
 impl ExternalSavings {
@@ -93,13 +109,22 @@ impl ExternalSavings {
             .filter(|(ts, _)| keep(*ts))
             .copied()
             .collect();
+        let diet_events: Vec<_> = self
+            .diet_events
+            .iter()
+            .filter(|(ts, _, _)| keep(*ts))
+            .copied()
+            .collect();
         ExternalSavings {
             rtk_tokens: rtk_events.iter().map(|e| e.1).sum(),
             rtk_commands: rtk_events.iter().map(|e| e.2).sum(),
             compaction_tokens: compaction_events.iter().map(|e| e.1).sum(),
             compactions: compaction_events.len() as u64,
+            diet_tokens: diet_events.iter().map(|e| e.1).sum(),
+            diet_requests: diet_events.iter().map(|e| e.2).sum(),
             rtk_events,
             compaction_events,
+            diet_events,
         }
     }
 }
@@ -174,7 +199,13 @@ impl Savings {
             usd: usd_for(external.compaction_tokens, price),
             events: external.compactions,
         };
-        Self::from_sources([cache, rtk, compaction])
+        let diet = SourceSavings {
+            source: SavingsSource::ContextDiet,
+            tokens: external.diet_tokens,
+            usd: diet_usd(external.diet_tokens, price),
+            events: external.diet_requests,
+        };
+        Self::from_sources([cache, rtk, compaction, diet])
     }
 
     /// `true` when nothing was saved.
@@ -206,6 +237,14 @@ pub(crate) fn sane_price(p: f64) -> f64 {
 
 pub(crate) fn usd_for(tokens: u64, price_per_mtok: f64) -> f64 {
     tokens as f64 * price_per_mtok / 1e6
+}
+
+/// What pi-context-diet's elided tokens would have cost. Between cold starts they
+/// would mostly have been prompt-cache reads, so they are priced as those
+/// ([`CACHE_READ_PRICE_RATIO`] of the input price): a deliberately low estimate
+/// that cannot double the prompt-cache saving.
+pub(crate) fn diet_usd(tokens: u64, price_per_mtok: f64) -> f64 {
+    usd_for(tokens, price_per_mtok) * CACHE_READ_PRICE_RATIO
 }
 
 #[cfg(test)]
@@ -255,7 +294,14 @@ mod tests {
     #[test]
     fn source_names_are_stable() {
         let names: Vec<_> = SavingsSource::ALL.iter().map(|s| s.as_str()).collect();
-        assert_eq!(names, ["prompt_cache", "rtk", "pi_compaction"]);
+        assert_eq!(
+            names,
+            ["prompt_cache", "rtk", "pi_compaction", "context_diet"]
+        );
+        assert_eq!(
+            serde_json::to_string(&SavingsSource::ContextDiet).unwrap(),
+            "\"context_diet\""
+        );
         assert_eq!(
             serde_json::to_string(&SavingsSource::PiCompaction).unwrap(),
             "\"pi_compaction\""

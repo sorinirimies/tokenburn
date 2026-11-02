@@ -759,6 +759,9 @@ mod tests {
     #[test]
     fn the_saved_panel_sits_below_the_charts_with_a_line_per_source() {
         let mut app = saved(app_with_savings());
+        app.external.diet_tokens = 2_000_000;
+        app.external.diet_requests = 12;
+        app.rebuild();
         let out = draw_at(&mut app, 130, 40);
         for needle in [
             "Saved",
@@ -767,6 +770,8 @@ mod tests {
             "7 commands",
             "pi compaction",
             "2 compactions",
+            "pi context-diet",
+            "12 requests",
             "total",
             "$9.00",
             "of what it would have cost",

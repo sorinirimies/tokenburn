@@ -40,8 +40,8 @@ pub use features::report::{
     ToolFilter, Window,
 };
 pub use features::savings::{
-    avoided_usd, cache_savings, cache_usd, collect_external, savings_by_bucket, BucketSavings,
-    ExternalSavings, Savings, SavingsSource, SourceSavings, CACHE_READ_PRICE_RATIO,
+    avoided_usd, cache_savings, cache_usd, collect_external, context_diet_usd, savings_by_bucket,
+    BucketSavings, ExternalSavings, Savings, SavingsSource, SourceSavings, CACHE_READ_PRICE_RATIO,
     DEFAULT_INPUT_PRICE_PER_MTOK,
 };
 pub use features::settings::{self, Settings};

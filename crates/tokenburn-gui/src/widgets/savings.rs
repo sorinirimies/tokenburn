@@ -193,6 +193,7 @@ mod tests {
                 // rtk on the second day, the compaction on the first.
                 rtk_events: vec![(at("2026-05-02T10:00:00Z"), 1_000_000, 4)],
                 compaction_events: vec![(at("2026-05-01T10:00:00Z"), 1_000_000)],
+                ..Default::default()
             },
             ..Default::default()
         });

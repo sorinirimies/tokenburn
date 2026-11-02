@@ -20,6 +20,10 @@ fn a_watch_pass_alerts_once_per_level() {
     std::env::set_var("TOKENBURN_PI_SESSIONS", root.join("sessions"));
     std::env::set_var("TOKENBURN_ZED_DB", root.join("none.db"));
     std::env::set_var("TOKENBURN_RTK_DB", root.join("rtk.db"));
+    std::env::set_var(
+        "TOKENBURN_CONTEXT_DIET_LOG",
+        root.join("context-diet.jsonl"),
+    );
     std::env::set_var("TOKENBURN_CONFIG_DIR", root.join("config"));
 
     let eur = tokenburn_core::currency_by_code("USD").unwrap();

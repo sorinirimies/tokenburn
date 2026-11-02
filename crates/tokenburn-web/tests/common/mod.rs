@@ -62,7 +62,7 @@ pub fn sandbox() -> &'static Sandbox {
             std::env::set_var("LOCALAPPDATA", root.join("localappdata"));
             std::env::set_var("TOKENBURN_PI_SESSIONS", &sessions);
             std::env::set_var("TOKENBURN_ZED_DB", root.join("none.db"));
-            std::env::set_var("TOKENBURN_RTK_DB", root.join("rtk.db"));
+            std::env::set_var("TOKENBURN_RTK_DB", root.join("rtk.db"));            std::env::set_var("TOKENBURN_CONTEXT_DIET_LOG", root.join("context-diet.jsonl"));
             std::env::set_var("TOKENBURN_CONFIG_DIR", &config);
             for v in [
                 "PI_CODING_AGENT_SESSION_DIR",

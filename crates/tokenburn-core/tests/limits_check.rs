@@ -20,6 +20,10 @@ fn the_check_reads_saved_limits_and_only_the_live_one_logs_alerts() {
     std::env::set_var("TOKENBURN_PI_SESSIONS", root.join("sessions"));
     std::env::set_var("TOKENBURN_ZED_DB", root.join("none.db"));
     std::env::set_var("TOKENBURN_RTK_DB", root.join("rtk.db"));
+    std::env::set_var(
+        "TOKENBURN_CONTEXT_DIET_LOG",
+        root.join("context-diet.jsonl"),
+    );
     std::env::set_var("TOKENBURN_CONFIG_DIR", root.join("config"));
 
     // Nothing saved: nothing to check.
