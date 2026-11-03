@@ -637,6 +637,11 @@ release-retrigger version:
 deps-update-now:
     gh workflow run deps-update.yml
 
+# Secrets anywhere in the git history (brew install gitleaks); CI runs it on every push.
+# A false positive goes in .gitleaksignore, by the fingerprint gitleaks prints.
+secrets:
+    gitleaks git --redact --no-banner .
+
 # Security: dependency vulnerability scan (needs `cargo install cargo-audit`)
 audit:
     cargo audit
