@@ -1,7 +1,7 @@
 //! Shared harness for the web end-to-end tests: a sandboxed environment and a tiny
 //! HTTP client. Each test *binary* gets its own sandbox (its own process), so tests
 //! that change saved settings can live in their own file without racing the others.
-#![allow(dead_code)]
+#![allow(dead_code)] // Shared by several test binaries; each uses only part of it.
 
 use std::{net::SocketAddr, path::PathBuf, sync::OnceLock};
 

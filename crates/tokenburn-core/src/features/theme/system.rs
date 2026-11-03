@@ -47,8 +47,6 @@ pub fn parse_windows(out: &str) -> Option<bool> {
     }
 }
 
-// Only the per-OS branches of `detect_system_dark` call this; other targets have none.
-#[allow(dead_code)]
 fn run(cmd: &str, args: &[&str]) -> Option<String> {
     let o = std::process::Command::new(cmd).args(args).output().ok()?;
     Some(String::from_utf8_lossy(&o.stdout).into_owned())

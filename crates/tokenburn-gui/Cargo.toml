@@ -25,7 +25,6 @@ iced               = { workspace = true }
 futures            = { workspace = true }
 chrono             = { workspace = true }
 clap               = { workspace = true }
-tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 # macOS: winit builds a menu bar with only the application menu, so the system's window
