@@ -4,6 +4,33 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.14](https://github.com/sorinirimies/tokenburn/compare/v0.3.13...v0.3.14) — 2026-11-10
+
+### ♻️ Refactor
+
+- Drop the unused tracing dependency and dead_code allows the build doesn't need; gate on unused dependencies ([`45cc8c4`](https://github.com/sorinirimies/tokenburn/commit/45cc8c44e5601592779c40162d60a889a0f7d432))
+
+### 📦 Dependencies
+
+- Bump tui-nuances to 0.1.11 ([`39cd583`](https://github.com/sorinirimies/tokenburn/commit/39cd5834c223637c966edc8bf08ceb37813cfcbf))
+- Nightly cargo update 2026-11-10 ([`422ffd6`](https://github.com/sorinirimies/tokenburn/commit/422ffd65532bab2ae403d959b6e09e417b6d726a))
+- Nightly cargo update 2026-11-09 ([`3acd2f7`](https://github.com/sorinirimies/tokenburn/commit/3acd2f7c8e398f55d3bf5b77b48cc3754357b4e0))
+- Nightly cargo update 2026-11-07 ([`0a93b15`](https://github.com/sorinirimies/tokenburn/commit/0a93b156190d21748edf90b9d58bdd9d3e1f4b34))
+- Nightly cargo update 2026-11-06 ([`b27a8b1`](https://github.com/sorinirimies/tokenburn/commit/b27a8b1972535eb4a9eecce4ae63498d53a7ef85))
+- Nightly cargo update 2026-11-05 ([`ccd59d3`](https://github.com/sorinirimies/tokenburn/commit/ccd59d3ca71286673bdf64c15ea4012ee92c28cd))
+- Nightly cargo update 2026-11-04 ([`b008e28`](https://github.com/sorinirimies/tokenburn/commit/b008e2856bd4192fe9abd6a227740145b1ade032))
+- Nightly cargo update 2026-11-03 ([`76cfc61`](https://github.com/sorinirimies/tokenburn/commit/76cfc61db5f4dfc850949fdb55f942714cee4e2b))
+
+### 🔄 CI and release
+
+- Download archives to a file so curl retries a dropped transfer, instead of piping into tar ([`fa291fd`](https://github.com/sorinirimies/tokenburn/commit/fa291fd6fa02de430ad4e5ce97e7648342b88388))
+- **release:** Queue release runs instead of cancelling one mid-publish ([`894d549`](https://github.com/sorinirimies/tokenburn/commit/894d5496b0d6007f212efaa61a30cd8c90d46c05))
+- Scan the git history for secrets with gitleaks ([`7d22635`](https://github.com/sorinirimies/tokenburn/commit/7d22635559e3d5c2ea1193fffaf93894f38d9fac))
+
+### 🔧 Chores
+
+- **deny:** List pin-utils (RUSTSEC-2026-0441) in deny.toml; no upgrade path ([`9805db8`](https://github.com/sorinirimies/tokenburn/commit/9805db84dbb5ea7a9e0171da2b7e567bc6d37a7c))
+
 ## [0.3.13](https://github.com/sorinirimies/tokenburn/compare/v0.3.12...v0.3.13) — 2026-11-02
 
 ### ✨ Features
@@ -16,6 +43,7 @@ All notable changes to this project are documented here. It is generated from
 ### ⚡ Performance
 
 - **core:** Parse amp, cline, gemini, copilot and opencode files in parallel ([`a3716eb`](https://github.com/sorinirimies/tokenburn/commit/a3716eb9c17bc2d4ab134fcf5cbea25b64fb1512))
+- **core:** Parse session files in parallel; test(tui): menu survives every wide width; chore: dev profile, document dead_code allow ([`7d04d10`](https://github.com/sorinirimies/tokenburn/commit/7d04d10192aecad132d19ba22498bcbcc3275703))
 
 ### 📚 Documentation
 
@@ -27,10 +55,6 @@ All notable changes to this project are documented here. It is generated from
 
 - **tui:** Reserve room for the labelled menu so long titles shed chips first ([`cedc82e`](https://github.com/sorinirimies/tokenburn/commit/cedc82e7cddd60e49e8b983e51013b9adb4af88b))
 - **tui:** Make the header responsive so the menu and chips never clip ([`d12a39a`](https://github.com/sorinirimies/tokenburn/commit/d12a39a789546d58087c50a872df104c710e2256))
-
-### ⚡ Performance
-
-- **core:** Parse session files in parallel; test(tui): menu survives every wide width; chore: dev profile, document dead_code allow ([`7d04d10`](https://github.com/sorinirimies/tokenburn/commit/7d04d10192aecad132d19ba22498bcbcc3275703))
 
 ### 📚 Documentation
 
@@ -50,7 +74,7 @@ All notable changes to this project are documented here. It is generated from
 
 - Remove AGENTS.md ([`b82065d`](https://github.com/sorinirimies/tokenburn/commit/b82065df0d932d045b5e5356c8d1bb99c8e3d5e2))
 
-## [0.3.7](https://github.com/sorinirimies/tokenburn/compare/v0.3.5...v0.3.7) — 2026-10-31
+## [0.3.7](https://github.com/sorinirimies/tokenburn/compare/v0.3.6...v0.3.7) — 2026-10-31
 
 ### ✨ Features
 
@@ -60,12 +84,17 @@ All notable changes to this project are documented here. It is generated from
 
 - Bump tokio and zstd to patch RUSTSEC advisories ([`4e55941`](https://github.com/sorinirimies/tokenburn/commit/4e55941cae1cd22fa66731391dc31ee04e76c955))
 - Bump tui-nuances to 0.1.10 ([`ac80a81`](https://github.com/sorinirimies/tokenburn/commit/ac80a814a21d907a410f4cf0354bc03c5861bb6b))
-- Nightly cargo update 2026-10-20 ([`39bfa71`](https://github.com/sorinirimies/tokenburn/commit/39bfa71fc1e8e5747fd2f00e10ed99605b67e859))
 
 ### 🔄 CI and release
 
 - Nightly merges lockfile-only updates; bump + release only when a Cargo.toml requirement changes ([`32f189f`](https://github.com/sorinirimies/tokenburn/commit/32f189fa14417c940d5fa8134b09da013ceda18e))
 - Nightly dependency update merges Cargo.lock only, no version bump or release ([`acd6cee`](https://github.com/sorinirimies/tokenburn/commit/acd6cee4bf9b16e7d2f82352b95d5ed5f9bce031))
+
+## [0.3.6](https://github.com/sorinirimies/tokenburn/compare/v0.3.5...v0.3.6) — 2026-10-20
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-10-20 ([`39bfa71`](https://github.com/sorinirimies/tokenburn/commit/39bfa71fc1e8e5747fd2f00e10ed99605b67e859))
 
 ## [0.3.5](https://github.com/sorinirimies/tokenburn/compare/v0.3.4...v0.3.5) — 2026-10-19
 
