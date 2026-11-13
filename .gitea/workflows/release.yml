@@ -151,7 +151,7 @@ jobs:
       # depend on crate name + source path, not on the target, so the
       # host-built bundle matches the cross-compiled binary.
       - name: Install Topcoat CLI
-        run: cargo install topcoat-cli --locked
+        run: cargo install topcoat-cli --version 0.10.0 --locked
 
       - name: Bundle web runtime assets
         run: bash scripts/ci/bundle_web.sh
@@ -263,7 +263,7 @@ jobs:
       # The bundler builds the web crate for the (Linux) host; asset IDs do not
       # depend on the target, so it matches the cross-compiled .exe.
       - name: Install Topcoat CLI
-        run: cargo install topcoat-cli --locked
+        run: cargo install topcoat-cli --version 0.10.0 --locked
 
       - name: Bundle web runtime assets
         run: bash scripts/ci/bundle_web.sh

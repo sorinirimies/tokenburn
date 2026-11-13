@@ -166,7 +166,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Topcoat CLI
-        run: cargo install topcoat-cli --locked
+        run: cargo install topcoat-cli --version 0.10.0 --locked
 
       - name: Bundle web runtime assets
         run: bash scripts/ci/bundle_web.sh dist/web-assets

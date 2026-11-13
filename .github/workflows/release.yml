@@ -177,7 +177,7 @@ jobs:
       # (archives, installers, packages) — without it tokenburn-web still
       # works, in static mode.
       - name: Install Topcoat CLI
-        run: cargo install topcoat-cli --locked
+        run: cargo install topcoat-cli --version 0.10.0 --locked
 
       - name: Bundle web runtime assets
         shell: bash

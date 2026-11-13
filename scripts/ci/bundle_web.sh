@@ -11,11 +11,14 @@ set -euo pipefail
 # also matches a cross-compiled binary built from the same checkout on the
 # same machine. That is why this runs in the same CI job as the target build.
 #
-# Requires: `cargo install topcoat-cli --locked`
+# Requires the topcoat-cli that matches the topcoat runtime in Cargo.lock (0.10.x).
+# A newer CLI (0.12) bundles asset ids the 0.10 runtime cannot resolve → panic at
+# startup. Keep the pin in the workflows in step with `topcoat` in Cargo.lock.
+# Requires: `cargo install topcoat-cli --version 0.10.0 --locked`
 OUT="${1:-dist/web-assets}"
 
 if ! command -v topcoat >/dev/null 2>&1; then
-    echo "❌ topcoat CLI not found. Install: cargo install topcoat-cli --locked"
+    echo "❌ topcoat CLI not found. Install: cargo install topcoat-cli --version 0.10.0 --locked"
     exit 1
 fi
 
