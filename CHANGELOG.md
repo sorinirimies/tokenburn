@@ -4,6 +4,22 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.4.0](https://github.com/sorinirimies/tokenburn/compare/v0.3.15...v0.4.0) — 2026-11-15
+
+### ✨ Features
+
+- Savings detail by source, type and origin (core, CLI --savings-detail, GUI Savings view) ([`d751d56`](https://github.com/sorinirimies/tokenburn/commit/d751d56ef5ad1a754338a5ee0e66d57aba4198c9))
+
+### 🐛 Bug fixes
+
+- **gui:** Never squeeze the Settings/About menu; drop-downs fill the rest and wrap ([`98e4785`](https://github.com/sorinirimies/tokenburn/commit/98e478581ddbe81adf8798500dc0f891833f5b65))
+- **ci:** Pin topcoat-cli to 0.10.0 to match the topcoat runtime ([`8de4857`](https://github.com/sorinirimies/tokenburn/commit/8de4857352067d5644d232e02310dc4853f1e515))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-14 ([`f837ca0`](https://github.com/sorinirimies/tokenburn/commit/f837ca04feb580b7538cad73e78e305439ce79b7))
+- Nightly cargo update 2026-11-13 ([`b5d74ba`](https://github.com/sorinirimies/tokenburn/commit/b5d74ba5d86336d25f86145baae2860271cd973b))
+
 ## [0.3.15](https://github.com/sorinirimies/tokenburn/compare/v0.3.14...v0.3.15) — 2026-11-12
 
 ### 📦 Dependencies
