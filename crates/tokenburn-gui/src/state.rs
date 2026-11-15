@@ -41,10 +41,17 @@ pub enum View {
     Report,
     Settings,
     About,
+    /// Every saving by source, type and origin.
+    SavingsDetail,
 }
 
 impl View {
-    pub const ALL: [View; 3] = [View::Report, View::Settings, View::About];
+    pub const ALL: [View; 4] = [
+        View::Report,
+        View::Settings,
+        View::About,
+        View::SavingsDetail,
+    ];
 
     /// Whether the view shows usage data (so the totals cards belong above it).
     pub fn is_data(self) -> bool {
@@ -68,6 +75,7 @@ impl fmt::Display for View {
             View::Report => "Report",
             View::Settings => "Settings",
             View::About => "About",
+            View::SavingsDetail => "Savings detail",
         })
     }
 }
@@ -107,6 +115,8 @@ pub struct TokenBurn {
     pub total: Summary,
     /// Savings from rtk and pi compaction, as of the last load.
     pub external: ExternalSavings,
+    /// Every saving event, for the detail view.
+    pub detail: tokenburn_core::SavingsDetail,
     /// US dollars per million input tokens, to value the savings.
     pub input_price: f64,
     /// Everything saved in the current selection.
@@ -172,6 +182,7 @@ impl TokenBurn {
             selection: Selection::default(),
             total: Summary::default(),
             external: ExternalSavings::default(),
+            detail: tokenburn_core::SavingsDetail::default(),
             input_price: tokenburn_core::DEFAULT_INPUT_PRICE_PER_MTOK,
             savings: Savings::default(),
             limits: tokenburn_core::Limits::default(),
@@ -298,6 +309,7 @@ impl TokenBurn {
         self.rows = collected.rows;
         self.warnings = collected.warnings;
         self.external = collected.external;
+        self.detail = collected.detail;
         self.error_message = None;
         self.recompute();
         // Grow the charts in the first time a view appears — not on every refresh.

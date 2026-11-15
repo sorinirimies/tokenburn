@@ -49,6 +49,15 @@ pub fn run(args: &Args, out: &mut impl Write) -> Result<()> {
         eprintln!("tokenburn: {w}");
     }
 
+    if args.savings_detail {
+        if args.json {
+            writeln!(out, "{}", serde_json::to_string_pretty(&collected.detail)?)?;
+        } else {
+            write!(out, "{}", render::savings_detail(&collected.detail))?;
+        }
+        return Ok(());
+    }
+
     let report = build_report(&collected.rows, &query);
     let savings = args.savings.then(|| {
         let price = args

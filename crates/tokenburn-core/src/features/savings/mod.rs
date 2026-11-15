@@ -24,11 +24,13 @@
 //! (mostly would-be cache reads) with [`CACHE_READ_PRICE_RATIO`] of it. All of
 //! it is an *estimate*.
 
+pub mod detail;
 pub mod ops;
 pub mod pi_logs;
 pub mod rtk;
 pub mod types;
 
+pub use detail::{collect_detail, DetailEvent, DetailGroup, SavingsDetail};
 pub use ops::{
     avoided_usd, cache_savings, cache_usd, collect_external, context_diet_usd, savings_by_bucket,
 };

@@ -139,6 +139,47 @@ pub fn savings_by_bucket(buckets: &[BucketSavings], currency: &Currency) -> Stri
     out
 }
 
+/// How many of the latest events the detail lists.
+const DETAIL_RECENT: usize = 15;
+
+/// The savings detail as text: by type, by origin, then the latest events.
+pub fn savings_detail(d: &tokenburn_core::SavingsDetail) -> String {
+    use std::fmt::Write as _;
+    if d.is_empty() {
+        return "No savings found.\n".to_string();
+    }
+    let mut out = String::new();
+    let group = |out: &mut String, title: &str, groups: Vec<tokenburn_core::DetailGroup>| {
+        let _ = writeln!(out, "{title}");
+        for g in groups {
+            let _ = writeln!(
+                out,
+                "  {:<16} {:<40} {:>12} tok {:>7} {}",
+                g.source.label(),
+                g.key,
+                thousands(g.tokens),
+                thousands(g.events),
+                g.source.event_noun()
+            );
+        }
+    };
+    group(&mut out, "Saved by type", d.by_kind());
+    group(&mut out, "\nSaved by origin", d.by_origin());
+    let _ = writeln!(out, "\nLatest savings");
+    for e in d.events.iter().take(DETAIL_RECENT) {
+        let _ = writeln!(
+            out,
+            "  {} {:<16} {:<18} {:>9} tok  {}",
+            e.ts.format("%Y-%m-%d %H:%M"),
+            e.source.label(),
+            e.kind,
+            thousands(e.tokens),
+            e.note
+        );
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +265,36 @@ mod tests {
     fn savings_block_when_nothing_was_saved() {
         let t = savings(&Savings::default(), &Currency::USD, 1.0);
         assert!(t.starts_with("saved: nothing"));
+    }
+
+    #[test]
+    fn savings_detail_lists_types_origins_and_latest_events() {
+        use tokenburn_core::{DetailEvent, SavingsDetail, SavingsSource};
+        assert_eq!(
+            savings_detail(&SavingsDetail::default()),
+            "No savings found.\n"
+        );
+        let d = SavingsDetail {
+            events: vec![DetailEvent {
+                ts: "2026-01-02T10:00:00Z".parse().unwrap(),
+                source: SavingsSource::Rtk,
+                kind: "git".into(),
+                origin: "/p".into(),
+                tokens: 1234,
+                note: "git log".into(),
+            }],
+        };
+        let t = savings_detail(&d);
+        for want in [
+            "Saved by type",
+            "Saved by origin",
+            "Latest savings",
+            "rtk",
+            "git",
+            "/p",
+            "1,234",
+        ] {
+            assert!(t.contains(want), "{want} missing in:\n{t}");
+        }
     }
 }

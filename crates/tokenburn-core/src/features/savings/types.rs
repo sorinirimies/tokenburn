@@ -8,7 +8,7 @@ pub const DEFAULT_INPUT_PRICE_PER_MTOK: f64 = 3.0;
 pub const CACHE_READ_PRICE_RATIO: f64 = 0.1;
 
 /// Where a saving came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SavingsSource {
     /// Provider-side prompt cache hits.

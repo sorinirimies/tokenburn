@@ -47,6 +47,12 @@ pub struct Args {
     #[arg(long, short = 's')]
     pub savings: bool,
 
+    /// Show every saving in detail: which tool saved the tokens (rtk, pi-squeeze,
+    /// pi-context-diet, pi compaction), of what type and where (directory), plus the
+    /// latest events. With `--json` the output is the raw event list.
+    #[arg(long)]
+    pub savings_detail: bool,
+
     /// US dollars per million input tokens, used to value the savings (default:
     /// `input_price_per_mtok` from settings.json, else 3.0).
     #[arg(long, value_name = "USD", value_parser = parse_price)]

@@ -40,8 +40,9 @@ pub use features::report::{
     ToolFilter, Window,
 };
 pub use features::savings::{
-    avoided_usd, cache_savings, cache_usd, collect_external, context_diet_usd, savings_by_bucket,
-    BucketSavings, ExternalSavings, Savings, SavingsSource, SourceSavings, CACHE_READ_PRICE_RATIO,
+    avoided_usd, cache_savings, cache_usd, collect_detail, collect_external, context_diet_usd,
+    savings_by_bucket, BucketSavings, DetailEvent, DetailGroup, ExternalSavings, Savings,
+    SavingsDetail, SavingsSource, SourceSavings, CACHE_READ_PRICE_RATIO,
     DEFAULT_INPUT_PRICE_PER_MTOK,
 };
 pub use features::settings::{self, Settings};
@@ -64,6 +65,8 @@ pub struct Collected {
     pub warnings: Vec<String>,
     /// Savings from sources outside the usage rows (rtk, pi compaction).
     pub external: ExternalSavings,
+    /// The same savings event by event: source, kind and origin.
+    pub detail: SavingsDetail,
 }
 
 /// Collect rows for `tool` from the default on-disk locations, keeping only
@@ -118,5 +121,6 @@ pub fn collect(tool: ToolFilter, start: DateTime<Utc>) -> Collected {
     out.rows.retain(|r| r.ts >= start);
     out.rows.sort_by_key(|r| r.ts);
     out.external = collect_external(tool, start);
+    out.detail = collect_detail(tool, start);
     out
 }

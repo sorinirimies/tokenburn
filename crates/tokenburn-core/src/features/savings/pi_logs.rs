@@ -78,6 +78,46 @@ impl PluginLog {
     }
 }
 
+/// One logged saving with the fields the detail view shows.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct LogEntry {
+    pub ts: DateTime<Utc>,
+    #[serde(default)]
+    pub tokens: u64,
+    /// Working directory of the pi session.
+    #[serde(default)]
+    pub cwd: String,
+    /// pi-squeeze's output kind (`search`, `generic`…).
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// pi-context-diet: tool results elided from the request.
+    #[serde(default)]
+    pub results: Option<u64>,
+    /// pi-context-diet: tool-call arguments elided from the request.
+    #[serde(default)]
+    pub args: Option<u64>,
+}
+
+impl PluginLog {
+    /// Every logged saving since `start`, newest first.
+    pub fn entries_since(self, start: DateTime<Utc>) -> Vec<LogEntry> {
+        self.path().map_or_else(Vec::new, |p| {
+            std::fs::read_to_string(p).map_or_else(|_| Vec::new(), |t| parse_entries(&t, start))
+        })
+    }
+}
+
+/// The entries in the log's `text` since `start`, newest first; bad lines are skipped.
+pub fn parse_entries(text: &str, start: DateTime<Utc>) -> Vec<LogEntry> {
+    let mut out: Vec<LogEntry> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str::<LogEntry>(l).ok())
+        .filter(|e| e.ts >= start && e.tokens > 0)
+        .collect();
+    out.sort_by_key(|e| std::cmp::Reverse(e.ts));
+    out
+}
+
 #[derive(Deserialize)]
 struct Line {
     ts: DateTime<Utc>,
@@ -123,6 +163,21 @@ mod tests {
                 .find(|(n, _)| *n == k)
                 .map(|(_, v)| OsString::from(*v))
         }
+    }
+
+    #[test]
+    fn entries_keep_kind_and_origin_newest_first() {
+        let text = concat!(
+            "{\"ts\":\"2026-01-02T09:00:00Z\",\"tokens\":10,\"cwd\":\"/a\",\"kind\":\"search\"}\n",
+            "garbage\n",
+            "{\"ts\":\"2026-01-02T10:00:00Z\",\"tokens\":20,\"cwd\":\"/b\",\"results\":3,\"args\":1}\n",
+            "{\"ts\":\"2026-01-02T11:00:00Z\",\"tokens\":0}\n",
+            "{\"ts\":\"2025-01-02T11:00:00Z\",\"tokens\":5}\n",
+        );
+        let got = parse_entries(text, at(0, 0, 0));
+        assert_eq!(got.len(), 2);
+        assert_eq!((got[0].cwd.as_str(), got[0].results), ("/b", Some(3)));
+        assert_eq!(got[1].kind.as_deref(), Some("search"));
     }
 
     #[test]
