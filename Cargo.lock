@@ -5093,7 +5093,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokenburn"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5105,7 +5105,7 @@ dependencies = [
 
 [[package]]
 name = "tokenburn-core"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5121,7 +5121,7 @@ dependencies = [
 
 [[package]]
 name = "tokenburn-gui"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "clap",
@@ -5136,7 +5136,7 @@ dependencies = [
 
 [[package]]
 name = "tokenburn-tui"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5153,7 +5153,7 @@ dependencies = [
 
 [[package]]
 name = "tokenburn-web"
-version = "0.3.15"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "clap",
