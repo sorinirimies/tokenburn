@@ -24,6 +24,7 @@ impl TokenBurn {
             View::Report => report::view::view(self, layout),
             View::Settings => about::view::settings(self),
             View::About => about::view::about(self),
+            View::SavingsDetail => crate::widgets::savings_detail::view(self),
         };
 
         let status: Element<'_, Message> = if let Some(e) = &self.error_message {
@@ -119,7 +120,7 @@ mod tests {
 
     #[test]
     fn settings_and_about_build_and_the_menu_toggles_back_to_the_report() {
-        for view in [View::Settings, View::About] {
+        for view in [View::Settings, View::About, View::SavingsDetail] {
             let mut app = loaded();
             app.view = view;
             build_all(&app);

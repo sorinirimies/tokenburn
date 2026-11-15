@@ -79,6 +79,77 @@ pub fn saved_events_in(db: &Path, start: DateTime<Utc>) -> Option<Vec<SavedEvent
     Some(out)
 }
 
+/// One command rtk filtered, as recorded in its ledger.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RtkEntry {
+    pub ts: DateTime<Utc>,
+    /// The command as the agent asked for it.
+    pub original_cmd: String,
+    /// What rtk ran instead (`rtk git status`).
+    pub rtk_cmd: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub saved_tokens: u64,
+    /// Directory the command ran in; empty on older rtk versions.
+    pub project_path: String,
+}
+
+/// Every command that saved tokens since `start`, newest first, from the first
+/// rtk database found.
+pub fn entries_since(start: DateTime<Utc>) -> Option<Vec<RtkEntry>> {
+    db_candidates()
+        .iter()
+        .find(|p| p.is_file())
+        .and_then(|p| entries_in(p, start))
+}
+
+/// [`entries_since`] for a specific database; `None` if it cannot be read. Older
+/// databases without a `project_path` column give empty paths.
+pub fn entries_in(db: &Path, start: DateTime<Utc>) -> Option<Vec<RtkEntry>> {
+    let conn = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    let from = start.format("%Y-%m-%dT%H:%M:%S").to_string();
+    let run = |sql: &str| -> Option<Vec<RtkEntry>> {
+        let mut stmt = conn.prepare(sql).ok()?;
+        let rows = stmt
+            .query_map([&from], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, i64>(4)?,
+                    r.get::<_, i64>(5)?,
+                    r.get::<_, String>(6)?,
+                ))
+            })
+            .ok()?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (ts, original_cmd, rtk_cmd, input, output, saved, project_path) = row.ok()?;
+            let Ok(ts) = DateTime::parse_from_rfc3339(&ts) else {
+                continue;
+            };
+            out.push(RtkEntry {
+                ts: ts.with_timezone(&Utc),
+                original_cmd,
+                rtk_cmd,
+                input_tokens: input.max(0) as u64,
+                output_tokens: output.max(0) as u64,
+                saved_tokens: saved.max(0) as u64,
+                project_path,
+            });
+        }
+        Some(out)
+    };
+    run("SELECT timestamp, original_cmd, rtk_cmd, input_tokens, output_tokens, saved_tokens, \
+         COALESCE(project_path, '') FROM commands WHERE timestamp >= ?1 AND saved_tokens > 0 \
+         ORDER BY timestamp DESC")
+    .or_else(|| {
+        run("SELECT timestamp, original_cmd, rtk_cmd, input_tokens, output_tokens, saved_tokens, '' \
+             FROM commands WHERE timestamp >= ?1 AND saved_tokens > 0 ORDER BY timestamp DESC")
+    })
+}
+
 /// `(tokens saved, commands filtered)` since `start`, from the first rtk database found.
 pub fn saved_since(start: DateTime<Utc>) -> Option<(u64, u64)> {
     saved_events_since(start).map(|e| totals(&e))
@@ -117,6 +188,27 @@ pub(crate) mod tests {
             )
             .unwrap();
         }
+    }
+
+    #[test]
+    fn entries_list_commands_newest_first_with_their_origin() {
+        let d = tempfile::tempdir().unwrap();
+        let db = d.path().join("history.db");
+        make_db(
+            &db,
+            &[
+                ("2026-10-01T00:00:00.1+00:00", 200),
+                ("2026-10-02T00:00:00+00:00", 50),
+                ("2026-10-03T00:00:00+00:00", 0),
+            ],
+        );
+        let all = "1970-01-01T00:00:00Z".parse().unwrap();
+        let e = entries_in(&db, all).unwrap();
+        // The test table has no project_path column: the fallback query gives "".
+        assert_eq!(e.len(), 2);
+        assert_eq!((e[0].saved_tokens, e[0].project_path.as_str()), (50, ""));
+        assert_eq!(e[1].rtk_cmd, "rtk ls");
+        assert!(entries_in(&d.path().join("nope.db"), all).is_none());
     }
 
     #[test]

@@ -144,9 +144,13 @@ fn menu(state: &TokenBurn) -> Element<'_, Message> {
             })
             .on_press(Message::ViewSelected(view.toggled(state.view)))
     };
-    row![item(View::Settings, "Settings"), item(View::About, "About")]
-        .spacing(6)
-        .into()
+    row![
+        item(View::SavingsDetail, "Savings"),
+        item(View::Settings, "Settings"),
+        item(View::About, "About")
+    ]
+    .spacing(6)
+    .into()
 }
 
 /// A drop-down with a small caption above it, so it says what it chooses.
@@ -193,7 +197,7 @@ mod tests {
     #[test]
     fn the_toolbar_builds_with_captions_in_every_layout_and_view() {
         use tokenburn_core::LayoutClass;
-        for view in [View::Report, View::Settings, View::About] {
+        for view in View::ALL {
             for layout in [LayoutClass::Narrow, LayoutClass::Medium, LayoutClass::Wide] {
                 let mut app = TokenBurn::default();
                 app.view = view;
