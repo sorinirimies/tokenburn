@@ -1,7 +1,7 @@
 //! Top toolbar: title + query pickers (the data refreshes itself).
 
-use iced::widget::{button, column, pick_list, row, space, text};
-use iced::Element;
+use iced::widget::{button, column, container, pick_list, row, space, text};
+use iced::{Element, Length};
 use tokenburn_core::{Bucket, LayoutClass, Metric, ToolFilter, Window};
 
 use crate::features::currency::CurrencyChoice;
@@ -104,23 +104,29 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     }
 
     let menu = menu(state);
-    if layout.is_wide() {
-        // One toolbar: the title on the left, the filters, then the menu on the right.
-        row![title, space::horizontal(), text(spin).size(18)]
-            .extend(pickers)
-            .push(menu)
-            .spacing(10)
-            .align_y(iced::Alignment::Center)
-            .into()
-    } else {
-        // Title and menu on one line; the filters wrap underneath as far as they must.
+    // The title and the menu keep their natural size and are laid out first; the
+    // drop-downs take whatever width is left (`Fill`) and wrap onto more lines when
+    // it is short. The menu is never squeezed, whatever the font metrics or window
+    // width. A narrow window puts the drop-downs on their own line under the title.
+    let pickers = row(pickers).spacing(8).wrap().align_x(iced::Alignment::End);
+    if layout.is_narrow() {
         column![
             row![title, space::horizontal(), text(spin).size(18), menu]
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
-            row(pickers).spacing(8).wrap(),
+            pickers,
         ]
         .spacing(8)
+        .into()
+    } else {
+        row![
+            title,
+            container(pickers).width(Length::Fill),
+            text(spin).size(18),
+            menu
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center)
         .into()
     }
 }
@@ -166,6 +172,15 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted.len(), all.len(), "no two drop-downs share a caption");
+    }
+
+    #[test]
+    fn the_toolbar_builds_with_the_menu_in_every_layout() {
+        // Regression: the menu was squeezed on Linux when the drop-downs were laid
+        // out before it; it now comes before the `Fill` drop-down container.
+        for layout in [LayoutClass::Narrow, LayoutClass::Medium, LayoutClass::Wide] {
+            let _ = super::view(&TokenBurn::default(), layout);
+        }
     }
 
     #[test]
