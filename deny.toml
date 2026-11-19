@@ -8,12 +8,12 @@ ignore = [
     # Unmaintained transitive deps of the iced GUI stack (cosmic-text/fontdb, wgpu); no safe upgrade.
     "RUSTSEC-2026-0192", # ttf-parser unmaintained
     "RUSTSEC-2024-0436", # paste unmaintained (transitive)
+    # chrono unmaintained (workspace dep, used across crates); no safe upgrade available.
+    "RUSTSEC-2026-0543", # chrono unmaintained
     # zbus stack (via notify-rust, iced_winit/mundy); no safe upgrade.
     "RUSTSEC-2026-0370", # zvariant unmaintained
     "RUSTSEC-2026-0371", # zbus_names unmaintained
     "RUSTSEC-2026-0372", # zvariant_derive unmaintained
-    # iced_futures → wasmtimer (web timers); its latest release still depends on pin-utils.
-    "RUSTSEC-2026-0441", # pin-utils unmaintained
 ]
 
 [licenses]
