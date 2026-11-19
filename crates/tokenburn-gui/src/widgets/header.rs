@@ -25,13 +25,23 @@ pub fn captions(data_view: bool) -> Vec<&'static str> {
 
 const SPINNER: [&str; 4] = ["◐", "◓", "◑", "◒"];
 
-pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
-    let spin = if state.is_loading {
+/// Loading indicator in a fixed-size slot that is always laid out, so showing or
+/// hiding the glyph never changes the header's size or moves its neighbours.
+fn spinner(state: &TokenBurn) -> Element<'_, Message> {
+    let glyph = if state.is_loading {
         SPINNER[(state.tick / 2) as usize % SPINNER.len()]
     } else {
         ""
     };
+    container(text(glyph).size(13).style(text::secondary))
+        .width(16)
+        .height(22)
+        .center_x(16)
+        .center_y(22)
+        .into()
+}
 
+pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     let title = row![
         text("🔥 TokenBurn").size(22).style(text::primary),
         text(tokenburn_core::appinfo::version_label())
@@ -111,7 +121,7 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
     let pickers = row(pickers).spacing(8).wrap().align_x(iced::Alignment::End);
     if layout.is_narrow() {
         column![
-            row![title, space::horizontal(), text(spin).size(18), menu]
+            row![title, space::horizontal(), spinner(state), menu]
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
             pickers,
@@ -122,7 +132,7 @@ pub fn view(state: &TokenBurn, layout: LayoutClass) -> Element<'_, Message> {
         row![
             title,
             container(pickers).width(Length::Fill),
-            text(spin).size(18),
+            spinner(state),
             menu
         ]
         .spacing(10)
