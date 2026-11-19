@@ -4,19 +4,25 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## [0.4.0](https://github.com/sorinirimies/tokenburn/compare/v0.3.15...v0.4.0) — 2026-11-15
+## [0.4.1](https://github.com/sorinirimies/tokenburn/compare/v0.3.15...v0.4.1) — 2026-11-19
 
 ### ✨ Features
 
-- Savings detail by source, type and origin (core, CLI --savings-detail, GUI Savings view) ([`d751d56`](https://github.com/sorinirimies/tokenburn/commit/d751d56ef5ad1a754338a5ee0e66d57aba4198c9))
+- Savings detail by source, type and origin (core, CLI --savings-detail, GUI Savings view) ([`fb49714`](https://github.com/sorinirimies/tokenburn/commit/fb49714c0e692100f1bfc11bec8a42b9066d6749))
 
 ### 🐛 Bug fixes
 
-- **gui:** Never squeeze the Settings/About menu; drop-downs fill the rest and wrap ([`98e4785`](https://github.com/sorinirimies/tokenburn/commit/98e478581ddbe81adf8798500dc0f891833f5b65))
+- **gui:** Keep loading spinner in a fixed-size header slot so the header never reflows ([`56f8fe2`](https://github.com/sorinirimies/tokenburn/commit/56f8fe2f85ff94d274099cae93f07dcc95876c7f))
+- **deny:** Ignore RUSTSEC-2026-0543 (chrono unmaintained), drop stale pin-utils ignore ([`16964a0`](https://github.com/sorinirimies/tokenburn/commit/16964a0a3a7144030a7a07bab4846fbf890521b9))
+- **gui:** Never squeeze the Settings/About menu; drop-downs fill the rest and wrap ([`a1113ee`](https://github.com/sorinirimies/tokenburn/commit/a1113ee1cc8f18d5831a0ba6b0051c80ff8f0c0e))
 - **ci:** Pin topcoat-cli to 0.10.0 to match the topcoat runtime ([`8de4857`](https://github.com/sorinirimies/tokenburn/commit/8de4857352067d5644d232e02310dc4853f1e515))
 
 ### 📦 Dependencies
 
+- Nightly cargo update 2026-11-18 ([`9fa4919`](https://github.com/sorinirimies/tokenburn/commit/9fa4919031ca6e97134926f54c6e337b917be2c7))
+- Nightly cargo update 2026-11-18 ([`238f34e`](https://github.com/sorinirimies/tokenburn/commit/238f34e8497ba943e75ca1b069e61d5c38de2a58))
+- Nightly cargo update 2026-11-17 ([`6381c80`](https://github.com/sorinirimies/tokenburn/commit/6381c80e54fa74fa3e1a09115dbff5ced306e9b4))
+- Nightly cargo update 2026-11-16 ([`2ca5658`](https://github.com/sorinirimies/tokenburn/commit/2ca56580707f83f163530740e4d4a9cdcbb7b45a))
 - Nightly cargo update 2026-11-14 ([`f837ca0`](https://github.com/sorinirimies/tokenburn/commit/f837ca04feb580b7538cad73e78e305439ce79b7))
 - Nightly cargo update 2026-11-13 ([`b5d74ba`](https://github.com/sorinirimies/tokenburn/commit/b5d74ba5d86336d25f86145baae2860271cd973b))
 
