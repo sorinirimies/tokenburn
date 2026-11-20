@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TokenBurn model prices",
+  "description": "US dollars per million tokens, by model. The built-in table is prices.json; your own prices.json in the TokenBurn config directory adds to it or replaces entries (a model set to null is removed). Used to estimate the cost of usage whose log has no dollar cost (Zed).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "models": {
+      "type": "object",
+      "description": "Keyed by model id. Case, dots vs dashes, a ':latest' or '-latest' suffix and a trailing -YYYYMMDD date do not matter: claude-sonnet-5.5 is claude-sonnet-5-5.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "null",
+            "description": "Remove this model from the table."
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "input",
+              "output"
+            ],
+            "properties": {
+              "input": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Input tokens, per million."
+              },
+              "output": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Output tokens, per million."
+              },
+              "cache_write": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Tokens written to the prompt cache. Default: 1.25 x input (the 5-minute rate)."
+              },
+              "cache_read": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Tokens read from the prompt cache. Default: 0.1 x input."
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

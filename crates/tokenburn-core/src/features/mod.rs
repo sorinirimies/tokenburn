@@ -2,7 +2,7 @@
 //!
 //! Collectors (one per supported tool): `pi`, `zed`, `claude`, `codex`,
 //! `copilot`, `gemini`, `opencode`, `amp`, `cline` (+ Roo/Kilo), `qwen`. Aggregation: `report`. Shared data
-//! types: `usage`.
+//! types: `usage`. Model prices for usage that logs no cost: `pricing`.
 
 pub mod amp;
 pub mod claude;
@@ -14,6 +14,7 @@ pub mod gemini;
 pub mod limits;
 pub mod opencode;
 pub mod pi;
+pub mod pricing;
 pub mod qwen;
 pub mod report;
 pub mod savings;

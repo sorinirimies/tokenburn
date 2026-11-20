@@ -8,13 +8,16 @@ use rusqlite::{Connection, OpenFlags};
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::features::pricing::Prices;
 use crate::features::usage::{Row, Tool};
 use crate::utils::files::num_f;
 use crate::utils::time::parse_ts;
 
 /// Known `threads.db` locations, most specific first.
 ///
-/// * `TOKENBURN_ZED_DB` — explicit override (a path to `threads.db`)
+/// * `TOKENBURN_ZED_DB` — explicit override (a path to `threads.db`); when set it is
+///   the only candidate, so pointing it at a missing file means "no Zed data"
+///   (the sandbox the tests use) instead of falling back to the real database
 /// * macOS: `~/Library/Application Support/Zed/threads/threads.db`
 /// * Windows: `%LOCALAPPDATA%\Zed\threads\threads.db`
 /// * Linux: `$XDG_DATA_HOME/zed/threads/threads.db` (default `~/.local/share`),
@@ -24,15 +27,23 @@ use crate::utils::time::parse_ts;
 /// Every platform's candidates are listed on every OS — only ones that exist
 /// are used, which also covers e.g. a Windows home mounted under WSL.
 pub fn db_candidates() -> Vec<PathBuf> {
-    let over = std::env::var_os("TOKENBURN_ZED_DB")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from);
-    let mut out: Vec<PathBuf> = over.into_iter().collect();
-    out.extend(candidates_from(
+    candidates_with(
+        std::env::var_os("TOKENBURN_ZED_DB").as_deref(),
         dirs::home_dir().as_deref(),
         dirs::data_local_dir().as_deref(),
-    ));
-    out
+    )
+}
+
+/// [`db_candidates`] with the override and the directories given.
+pub(crate) fn candidates_with(
+    over: Option<&std::ffi::OsStr>,
+    home: Option<&Path>,
+    data_local: Option<&Path>,
+) -> Vec<PathBuf> {
+    match over.filter(|v| !v.is_empty()) {
+        Some(path) => vec![PathBuf::from(path)],
+        None => candidates_from(home, data_local),
+    }
 }
 
 /// Platform candidates for a given home and per-user local data directory
@@ -88,8 +99,27 @@ fn threads() -> std::sync::MutexGuard<'static, ThreadMap> {
 /// Collect one row per thread created at or after `start` from `db`.
 ///
 /// Zed stores only `cumulative_token_usage` per thread (no per-message
-/// timestamp and no `$` cost), so cost is always `0`.
+/// timestamp and no `$` cost), so the cost is an *estimate*: the thread's tokens
+/// at the model's published price (see [`crate::features::pricing`]; the built-in
+/// table plus the user's `prices.json`). A model without a price keeps cost `0`.
 pub fn collect_zed_from(db: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
+    collect_zed_priced(db, start, &Prices::load())
+}
+
+/// [`collect_zed_from`] with an explicit price table.
+pub fn collect_zed_priced(db: &Path, start: DateTime<Utc>, prices: &Prices) -> Result<Vec<Row>> {
+    let mut rows = collect_threads(db, start)?;
+    for row in &mut rows {
+        // Priced here, not when a thread is decoded: decoded threads are cached
+        // while unchanged, and a price edit must apply to them too.
+        if let Some(price) = prices.get(&row.project) {
+            row.cost = price.cost(row.input, row.output, row.cache_write, row.cache_read);
+        }
+    }
+    Ok(rows)
+}
+
+fn collect_threads(db: &Path, start: DateTime<Utc>) -> Result<Vec<Row>> {
     let conn = Connection::open_with_flags(
         db,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -152,7 +182,7 @@ pub(crate) fn cached_threads(db: &Path) -> usize {
     threads().keys().filter(|k| k.0 == db).count()
 }
 
-/// The two things tokenburn needs from a Zed thread document; the (large)
+/// What tokenburn needs from a Zed thread document (the model and its usage); the (large)
 /// conversation itself is skipped while parsing, never allocated.
 #[derive(Deserialize)]
 struct Thread {
@@ -164,6 +194,8 @@ struct Thread {
 struct ThreadUsage {
     input_tokens: Option<f64>,
     output_tokens: Option<f64>,
+    cache_creation_input_tokens: Option<f64>,
+    cache_read_input_tokens: Option<f64>,
 }
 
 /// Compressed blobs larger than this are decompressed as a stream instead of in one
@@ -220,8 +252,8 @@ fn decode_thread_with(
         ts,
         input: num_f(usage.as_ref().and_then(|u| u.input_tokens)),
         output: num_f(usage.as_ref().and_then(|u| u.output_tokens)),
-        cache_read: 0,
-        cache_write: 0,
+        cache_read: num_f(usage.as_ref().and_then(|u| u.cache_read_input_tokens)),
+        cache_write: num_f(usage.as_ref().and_then(|u| u.cache_creation_input_tokens)),
         cost: 0.0,
     })
 }
@@ -254,6 +286,27 @@ mod tests {
     }
 
     #[test]
+    fn an_explicit_database_is_the_only_candidate() {
+        let home = Path::new("/home/u");
+        let over = std::ffi::OsStr::new("/tmp/none.db");
+        assert_eq!(
+            candidates_with(Some(over), Some(home), None),
+            [PathBuf::from("/tmp/none.db")],
+            "a missing override means no data, not the real database"
+        );
+        let empty = std::ffi::OsStr::new("");
+        assert_eq!(
+            candidates_with(Some(empty), Some(home), None),
+            candidates_from(Some(home), None),
+            "an empty override is no override"
+        );
+        assert_eq!(
+            candidates_with(None, Some(home), None),
+            candidates_from(Some(home), None)
+        );
+    }
+
+    #[test]
     fn windows_style_local_appdata_is_used() {
         let c = candidates_from(None, Some(Path::new("C:/Users/u/AppData/Local")));
         assert_eq!(
@@ -272,6 +325,90 @@ mod tests {
         let packed = zstd::encode_all(JSON.as_bytes(), 0).unwrap();
         let z = decode_thread("b".into(), ts, Some("zstd"), &packed).unwrap();
         assert_eq!((z.input, z.output), (7, 3));
+    }
+
+    const PRICED: &str = r#"{"model":{"provider":"zed.dev","model":"claude-sonnet-5-5"},"cumulative_token_usage":{"input_tokens":1000000,"output_tokens":1000000,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":1000000}}"#;
+
+    fn db_with(threads: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("threads.db");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, created_at TEXT, updated_at TEXT, data_type TEXT, data BLOB)",
+            [],
+        )
+        .unwrap();
+        for (id, json) in threads {
+            conn.execute(
+                "INSERT INTO threads VALUES (?1, '2026-05-01T10:00:00Z', 'u', 'json', ?2)",
+                rusqlite::params![id, json.as_bytes()],
+            )
+            .unwrap();
+        }
+        (dir, db)
+    }
+
+    fn start() -> DateTime<Utc> {
+        "2026-01-01T00:00:00Z".parse().unwrap()
+    }
+
+    #[test]
+    fn the_cache_tokens_of_a_thread_are_kept() {
+        let ts = "2026-05-01T10:00:00Z".parse().unwrap();
+        let r = decode_thread("a".into(), ts, Some("json"), PRICED.as_bytes()).unwrap();
+        assert_eq!(
+            (r.input, r.output, r.cache_write, r.cache_read),
+            (1_000_000, 1_000_000, 1_000_000, 1_000_000)
+        );
+        let none = decode_thread("b".into(), ts, Some("json"), JSON.as_bytes()).unwrap();
+        assert_eq!(
+            (none.cache_write, none.cache_read),
+            (0, 0),
+            "absent means 0"
+        );
+    }
+
+    #[test]
+    fn a_thread_with_a_priced_model_gets_an_estimated_cost() {
+        // The "Zed shows $0.00" regression: Zed logs tokens and no dollars.
+        let (_dir, db) = db_with(&[("t", PRICED)]);
+        let rows = collect_zed_priced(&db, start(), &Prices::builtin()).unwrap();
+        // 1M of each kind at sonnet 5.5's $2 / $10 / $2.50 / $0.10 per million.
+        assert!((rows[0].cost - 14.6).abs() < 1e-9, "{}", rows[0].cost);
+    }
+
+    #[test]
+    fn the_models_own_spelling_does_not_matter() {
+        let dotted = PRICED.replace("claude-sonnet-5-5", "claude-sonnet-5.5");
+        let (_dir, db) = db_with(&[("t", &dotted)]);
+        let rows = collect_zed_priced(&db, start(), &Prices::builtin()).unwrap();
+        assert!((rows[0].cost - 14.6).abs() < 1e-9, "{}", rows[0].cost);
+    }
+
+    #[test]
+    fn an_unpriced_model_keeps_cost_zero_and_its_tokens() {
+        let local = PRICED.replace("claude-sonnet-5-5", "qwen3:latest");
+        let (_dir, db) = db_with(&[("t", &local)]);
+        let rows = collect_zed_priced(&db, start(), &Prices::builtin()).unwrap();
+        assert_eq!(rows[0].cost, 0.0);
+        assert_eq!(rows[0].input, 1_000_000);
+    }
+
+    #[test]
+    fn a_price_change_applies_to_threads_that_are_already_cached() {
+        let (_dir, db) = db_with(&[("t", PRICED)]);
+        let before = collect_zed_priced(&db, start(), &Prices::builtin()).unwrap();
+        assert!((before[0].cost - 14.6).abs() < 1e-9);
+
+        let prices_dir = tempfile::tempdir().unwrap();
+        let file = prices_dir.path().join("prices.json");
+        std::fs::write(
+            &file,
+            r#"{"models":{"claude-sonnet-5-5":{"input":1,"output":1,"cache_write":1,"cache_read":1}}}"#,
+        )
+        .unwrap();
+        let after = collect_zed_priced(&db, start(), &Prices::load_from(&file)).unwrap();
+        assert!((after[0].cost - 4.0).abs() < 1e-9, "{}", after[0].cost);
     }
 
     #[test]
@@ -294,7 +431,12 @@ mod tests {
         ins("t1", "u1", JSON);
         ins("t2", "u1", JSON);
         let start = "2026-01-01T00:00:00Z".parse().unwrap();
-        assert_eq!(collect_zed_from(&db, start).unwrap().len(), 2);
+        assert_eq!(
+            collect_zed_priced(&db, start, &Prices::builtin())
+                .unwrap()
+                .len(),
+            2
+        );
         assert_eq!(cached_threads(&db), 2);
 
         // Corrupt t1's blob WITHOUT bumping updated_at: a cached thread is not re-read, so
@@ -305,7 +447,7 @@ mod tests {
             "u2",
             r#"{"cumulative_token_usage":{"input_tokens":100,"output_tokens":1}}"#,
         );
-        let rows = collect_zed_from(&db, start).unwrap();
+        let rows = collect_zed_priced(&db, start, &Prices::builtin()).unwrap();
         assert_eq!(rows.len(), 2);
         let t1 = rows.iter().find(|r| r.id == "t1").unwrap();
         let t2 = rows.iter().find(|r| r.id == "t2").unwrap();
@@ -318,7 +460,12 @@ mod tests {
         // Deleting a thread drops it from the results and from the cache.
         conn.execute("DELETE FROM threads WHERE id = 't1'", [])
             .unwrap();
-        assert_eq!(collect_zed_from(&db, start).unwrap().len(), 1);
+        assert_eq!(
+            collect_zed_priced(&db, start, &Prices::builtin())
+                .unwrap()
+                .len(),
+            1
+        );
         assert_eq!(cached_threads(&db), 1);
     }
 
@@ -341,7 +488,7 @@ mod tests {
         drop(conn);
 
         let start = "2026-01-01T00:00:00Z".parse().unwrap();
-        let rows = collect_zed_from(&db, start).unwrap();
+        let rows = collect_zed_priced(&db, start, &Prices::builtin()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "t1");
     }

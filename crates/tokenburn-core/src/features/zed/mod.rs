@@ -2,4 +2,4 @@
 
 pub mod ops;
 
-pub use ops::{collect_zed, collect_zed_from, db_candidates};
+pub use ops::{collect_zed, collect_zed_from, collect_zed_priced, db_candidates};

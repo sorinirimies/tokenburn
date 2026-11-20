@@ -94,7 +94,7 @@ tokenburn --json           # machine-readable (always US dollars)
 | `--tool` | Tool | Where it reads (default) | `$` cost |
 |----------|------|--------------------------|:---:|
 | `pi` | [pi](https://github.com/earendil-works/pi-coding-agent) | `~/.pi/agent/sessions/**/*.jsonl` (`$TOKENBURN_PI_SESSIONS`, `$PI_CODING_AGENT_DIR`) | ✅ |
-| `zed` | Zed agent panel | `threads.db` (sqlite + zstd JSON; `$TOKENBURN_ZED_DB`) | – |
+| `zed` | Zed agent panel | `threads.db` (sqlite + zstd JSON; `$TOKENBURN_ZED_DB`) | estimated, see [Prices](#model-prices) |
 | `claude` | Claude Code | `~/.claude/projects/**/*.jsonl` (`$CLAUDE_CONFIG_DIR`) | when logged |
 | `codex` | OpenAI Codex CLI | `~/.codex/sessions/**/*.jsonl` (`$CODEX_HOME`) | – |
 | `copilot` | GitHub Copilot CLI | `~/.copilot/session-state` (`$COPILOT_HOME`) | – |
@@ -134,6 +134,24 @@ tokenburn --json           # machine-readable (always US dollars)
 
 Money is an **estimate**: saved tokens × your input price, `input_price_per_mtok` in `settings.json` (default `$3.00` per million). Shown in the TUI header and, with the `m` metric on *saved*, as a panel under the charts, as a GUI card + panel, a web card + table (JSON at `/api/savings`) and in the CLI with `tokenburn --savings [--input-price 15]`. In the GUI and web, the **chart** dropdown (tokens / cost / **saved**) plots savings per hour, day or month with the same bucket and window filters; that chart covers prompt cache, pi compaction, pi context-diet and pi squeeze per tool, while rtk (not attributable to a tool) is in the totals and the panel.
 
+### Model prices
+
+Zed records tokens per thread but no dollars, so TokenBurn **estimates** its cost: the thread's input, output, cache-write and cache-read tokens at the model's published price. The built-in table covers the Claude models (Anthropic's list prices, per million tokens); a model that is not in it, such as a local `qwen3`, a `gpt-…` or anything new, keeps cost `$0.00` and its tokens still count. Costs a tool logs itself (pi, Claude Code) are never replaced.
+
+Prices are data. To add a model or correct one, create `prices.json` next to `settings.json`; its entries win over the built-in ones, and `null` removes a model:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/sorinirimies/tokenburn/main/crates/tokenburn-core/src/features/pricing/prices.schema.json",
+  "models": {
+    "gpt-5.6-terra": { "input": 1.25, "output": 10 },
+    "claude-sonnet-5.5": { "input": 2, "output": 10, "cache_write": 2.5, "cache_read": 0.1 }
+  }
+}
+```
+
+`cache_write` and `cache_read` default to 1.25 × and 0.1 × the input price. Spelling does not matter (`Claude-Sonnet-5.5`, `claude-sonnet-5-5-20260101` and `anthropic/claude-sonnet-5.5` are one model). A broken file is ignored and the built-in table is used. Haiku 5.5 charges more for prompts over 100 000 tokens; a thread only has totals, so its short-prompt price is used and the figure is a lower bound.
+
 ### Limits and alarms
 
 Set a **daily, weekly (Monday start) and monthly spending limit** in US dollars. Limits never block anything: they show a progress bar (green → yellow at 80 % → red when exceeded) and raise a **desktop notification** (macOS, Linux, Windows) the first time a period reaches the warning level and again when it is exceeded. Each level alerts once per period, even with several front-ends running (they share `alerts.json` next to `settings.json`).
@@ -143,7 +161,7 @@ Set a **daily, weekly (Monday start) and monthly spending limit** in US dollars.
 * GUI: bars and a dismissable banner under the toolbar; the fields are in Settings.
 * Web: bars above the figures, the form on the Settings page, `/api/limits`, and the server checks every 30 s and notifies while it runs.
 
-Only the cost the tools report counts (Zed logs none). `"limits": {"daily": 20, "weekly": null, "monthly": 300, "warn_at": 0.8, "notify": true}` in `settings.json` does the same by hand.
+Only the cost the tools report counts, plus the [estimate](#model-prices) for Zed. `"limits": {"daily": 20, "weekly": null, "monthly": 300, "warn_at": 0.8, "notify": true}` in `settings.json` does the same by hand.
 
 **Metric.** The chart's *tokens / cost / saved* dropdown also picks what the headline cards show: token counts, spend (total, per turn, per 1M tokens) or savings (money, tokens, share, per source). The saved breakdown — and its per-interval list — appears only with *saved*, so it is out of the way by default.
 

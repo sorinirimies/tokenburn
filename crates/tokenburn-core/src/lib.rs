@@ -5,7 +5,8 @@
 //! * [pi](https://github.com/earendil-works/pi-coding-agent) session files,
 //!   `~/.pi/agent/sessions/**/*.jsonl` — one row per assistant turn.
 //! * Zed's agent thread database (`threads.db`, sqlite + zstd JSON blobs) —
-//!   one row per thread (input/output tokens only, no `$` cost).
+//!   one row per thread (tokens only; the `$` cost is estimated from the model's
+//!   price, see [`features::pricing`]).
 //! * Claude Code, Codex CLI, Copilot CLI, Gemini CLI, OpenCode and Amp — see
 //!   [`Tool`] and `features/<tool>/`.
 //!
