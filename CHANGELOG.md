@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.4.2](https://github.com/sorinirimies/tokenburn/compare/v0.4.1...v0.4.2) — 2026-11-20
+
+### ✨ Features
+
+- **core:** Estimate the cost of Zed threads from model prices ([`a5755d9`](https://github.com/sorinirimies/tokenburn/commit/a5755d9ccb9b312d679c6cef924cfccb098f51e1))
+
 ## [0.4.1](https://github.com/sorinirimies/tokenburn/compare/v0.3.15...v0.4.1) — 2026-11-19
 
 ### ✨ Features
