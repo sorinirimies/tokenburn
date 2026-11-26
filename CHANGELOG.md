@@ -4,6 +4,20 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.4.4](https://github.com/sorinirimies/tokenburn/compare/v0.4.3...v0.4.4) — 2026-11-26
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-24 ([`1fc37be`](https://github.com/sorinirimies/tokenburn/commit/1fc37be787e46d698ea7aa50254ba9055232ecb7))
+- Nightly cargo update 2026-11-24 ([`13d37ff`](https://github.com/sorinirimies/tokenburn/commit/13d37ffdaca729376691f74af6a3625363b1d1ee))
+- Update cookie/url/rustix for RUSTSEC-2026-0594, -0592, -0486 ([`e9e9ee3`](https://github.com/sorinirimies/tokenburn/commit/e9e9ee39ccff1d016735d3d93314f12ca7ede816))
+
+### 🔄 CI and release
+
+- **deps-update:** Delete deps.tar after extracting so bump_version sees a clean tree ([`cf60b54`](https://github.com/sorinirimies/tokenburn/commit/cf60b5455057ff4e4dc66b298c930d9ea6babdf7))
+- Move the nightly failure notice into scripts/ci/notify_failure.nu ([`328aabc`](https://github.com/sorinirimies/tokenburn/commit/328aabc9ce7ac2c05b2c72820b6235c71da68740))
+- Open an issue when the nightly fails; fix header comment ([`e177fe9`](https://github.com/sorinirimies/tokenburn/commit/e177fe98da92e960c9911e86af73a2038c026aea))
+
 ## [0.4.2](https://github.com/sorinirimies/tokenburn/compare/v0.4.1...v0.4.2) — 2026-11-20
 
 ### ✨ Features
