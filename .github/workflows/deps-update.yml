@@ -223,7 +223,7 @@ jobs:
 
       - name: Apply the updated lockfile and manifests
         shell: bash
-        run: tar xf deps.tar
+        run: tar xf deps.tar && rm deps.tar   # untracked file would make the tree dirty for bump_version.nu
 
       # Fails (safely) if main's manifests changed in the meantime and the
       # verified lockfile no longer matches them.
